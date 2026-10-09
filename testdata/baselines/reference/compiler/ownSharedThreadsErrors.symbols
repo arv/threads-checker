@@ -1,0 +1,548 @@
+//// [tests/cases/compiler/ownSharedThreadsErrors.ts] ////
+
+=== own.d.ts ===
+// Library surface for the "own and shared threads" examples.
+//
+// `sending T` marks a value whose ownership moves to the receiver: the sender must not use it
+// afterwards. `shared T` marks a deeply immutable value that any number of threads may read at the
+// same time. Cells such as Slots and Barrier are created shared: they synchronize internally, so all
+// threads may call their methods.
+
+/** One slot per thread. A thread publishes into its own slot; everyone can read every slot. */
+interface SlotsCell<T> {
+>SlotsCell : Symbol(SlotsCell, Decl(own.d.ts, 0, 0))
+>T : Symbol(T, Decl(own.d.ts, 8, 20))
+
+    /** Publishes `value` in slot `index`, replacing what was there. */
+    set(index: number, value: T): void;
+>set : Symbol(SlotsCell.set, Decl(own.d.ts, 8, 24))
+>index : Symbol(index, Decl(own.d.ts, 10, 8))
+>value : Symbol(value, Decl(own.d.ts, 10, 22))
+>T : Symbol(T, Decl(own.d.ts, 8, 20))
+
+    /** Gets the value in slot `index`. Values published in a shared cell are shared. */
+    get(index: number): shared T;
+>get : Symbol(SlotsCell.get, Decl(own.d.ts, 10, 39))
+>index : Symbol(index, Decl(own.d.ts, 12, 8))
+>T : Symbol(T, Decl(own.d.ts, 8, 20))
+
+    /** Concatenates the arrays in all slots, in slot order. */
+    flat(): shared (T extends readonly (infer E)[] ? E : T)[];
+>flat : Symbol(SlotsCell.flat, Decl(own.d.ts, 12, 33))
+>T : Symbol(T, Decl(own.d.ts, 8, 20))
+>E : Symbol(E, Decl(own.d.ts, 14, 45))
+>E : Symbol(E, Decl(own.d.ts, 14, 45))
+>T : Symbol(T, Decl(own.d.ts, 8, 20))
+}
+declare const Slots: new <T>(count: number) => shared SlotsCell<T>;
+>Slots : Symbol(Slots, Decl(own.d.ts, 16, 13))
+>T : Symbol(T, Decl(own.d.ts, 16, 26))
+>count : Symbol(count, Decl(own.d.ts, 16, 29))
+>SlotsCell : Symbol(SlotsCell, Decl(own.d.ts, 0, 0))
+>T : Symbol(T, Decl(own.d.ts, 16, 26))
+
+/** A reusable barrier for a fixed number of threads. */
+interface BarrierCell {
+>BarrierCell : Symbol(BarrierCell, Decl(own.d.ts, 16, 67))
+
+    /** Blocks until all threads have called `wait`. */
+    wait(): void;
+>wait : Symbol(BarrierCell.wait, Decl(own.d.ts, 19, 23))
+}
+declare const Barrier: new (threads: number) => shared BarrierCell;
+>Barrier : Symbol(Barrier, Decl(own.d.ts, 23, 13))
+>threads : Symbol(threads, Decl(own.d.ts, 23, 28))
+>BarrierCell : Symbol(BarrierCell, Decl(own.d.ts, 16, 67))
+
+/** Freezes a value the caller owns into a deeply immutable, shareable value. */
+declare function share<T>(value: sending T): shared T;
+>share : Symbol(share, Decl(own.d.ts, 23, 67))
+>T : Symbol(T, Decl(own.d.ts, 26, 23))
+>value : Symbol(value, Decl(own.d.ts, 26, 26))
+>T : Symbol(T, Decl(own.d.ts, 26, 23))
+>T : Symbol(T, Decl(own.d.ts, 26, 23))
+
+/** A thread started inside a `scope`; joining it hands back the thread's result. */
+interface Thread<R> {
+>Thread : Symbol(Thread, Decl(own.d.ts, 26, 54))
+>R : Symbol(R, Decl(own.d.ts, 29, 17))
+
+    join(): sending R;
+>join : Symbol(Thread.join, Decl(own.d.ts, 29, 21))
+>R : Symbol(R, Decl(own.d.ts, 29, 17))
+}
+
+/** Spawns threads that cannot outlive the scope. Every argument is sent to the new thread. */
+interface Scope {
+>Scope : Symbol(Scope, Decl(own.d.ts, 31, 1))
+
+    spawn<A extends unknown[], R>(f: (...args: A) => sending R, ...args: sending A): shared Thread<R>;
+>spawn : Symbol(Scope.spawn, Decl(own.d.ts, 34, 17))
+>A : Symbol(A, Decl(own.d.ts, 35, 10))
+>R : Symbol(R, Decl(own.d.ts, 35, 30))
+>f : Symbol(f, Decl(own.d.ts, 35, 34))
+>args : Symbol(args, Decl(own.d.ts, 35, 38))
+>A : Symbol(A, Decl(own.d.ts, 35, 10))
+>R : Symbol(R, Decl(own.d.ts, 35, 30))
+>args : Symbol(args, Decl(own.d.ts, 35, 63))
+>A : Symbol(A, Decl(own.d.ts, 35, 10))
+>Thread : Symbol(Thread, Decl(own.d.ts, 26, 54))
+>R : Symbol(R, Decl(own.d.ts, 35, 30))
+}
+
+/** Runs `body` and joins every thread it spawned before returning. */
+declare function scope<R>(body: (s: shared Scope) => R): R;
+>scope : Symbol(scope, Decl(own.d.ts, 36, 1))
+>R : Symbol(R, Decl(own.d.ts, 39, 23))
+>body : Symbol(body, Decl(own.d.ts, 39, 26))
+>s : Symbol(s, Decl(own.d.ts, 39, 33))
+>Scope : Symbol(Scope, Decl(own.d.ts, 31, 1))
+>R : Symbol(R, Decl(own.d.ts, 39, 23))
+>R : Symbol(R, Decl(own.d.ts, 39, 23))
+
+/** Splits an owned array into `parts` owned, disjoint chunks of nearly equal size. */
+declare function partition<T>(items: sending T[], parts: number): (sending T[])[];
+>partition : Symbol(partition, Decl(own.d.ts, 39, 59))
+>T : Symbol(T, Decl(own.d.ts, 42, 27))
+>items : Symbol(items, Decl(own.d.ts, 42, 30))
+>T : Symbol(T, Decl(own.d.ts, 42, 27))
+>parts : Symbol(parts, Decl(own.d.ts, 42, 49))
+>T : Symbol(T, Decl(own.d.ts, 42, 27))
+
+/**
+ * Takes element `index` out of an array of owned values (a destructive read: the element leaves the
+ * array), so the caller owns it. Trusted: the analysis believes the `sending` return type.
+ */
+declare function take<T>(items: (sending T)[], index: number): sending T;
+>take : Symbol(take, Decl(own.d.ts, 42, 82))
+>T : Symbol(T, Decl(own.d.ts, 48, 22))
+>items : Symbol(items, Decl(own.d.ts, 48, 25))
+>T : Symbol(T, Decl(own.d.ts, 48, 22))
+>index : Symbol(index, Decl(own.d.ts, 48, 46))
+>T : Symbol(T, Decl(own.d.ts, 48, 22))
+
+/**
+ * Placeholder runtime support for `shared struct Name { a: T; b: U }`, which currently compiles to
+ * `const Name = __sharedStruct("Name", ["a", "b"])`. TODO: replace with a SharedArrayBuffer layout.
+ */
+declare function __sharedStruct(name: string, fields: readonly (string | number)[]): any;
+>__sharedStruct : Symbol(__sharedStruct, Decl(own.d.ts, 48, 73))
+>name : Symbol(name, Decl(own.d.ts, 54, 32))
+>fields : Symbol(fields, Decl(own.d.ts, 54, 45))
+
+=== nbody.ts ===
+type Body = { x: number; y: number; z: number; vx: number; vy: number; vz: number; m: number };
+>Body : Symbol(Body, Decl(nbody.ts, 0, 0))
+>x : Symbol(x, Decl(nbody.ts, 0, 13))
+>y : Symbol(y, Decl(nbody.ts, 0, 24))
+>z : Symbol(z, Decl(nbody.ts, 0, 35))
+>vx : Symbol(vx, Decl(nbody.ts, 0, 46))
+>vy : Symbol(vy, Decl(nbody.ts, 0, 58))
+>vz : Symbol(vz, Decl(nbody.ts, 0, 70))
+>m : Symbol(m, Decl(nbody.ts, 0, 82))
+
+type Pos = { x: number; y: number; z: number; m: number };
+>Pos : Symbol(Pos, Decl(nbody.ts, 0, 95))
+>x : Symbol(x, Decl(nbody.ts, 1, 12))
+>y : Symbol(y, Decl(nbody.ts, 1, 23))
+>z : Symbol(z, Decl(nbody.ts, 1, 34))
+>m : Symbol(m, Decl(nbody.ts, 1, 45))
+
+declare const STEPS: number;
+>STEPS : Symbol(STEPS, Decl(nbody.ts, 2, 13))
+
+declare function makeBodies(): sending Body[];
+>makeBodies : Symbol(makeBodies, Decl(nbody.ts, 2, 28))
+>Body : Symbol(Body, Decl(nbody.ts, 0, 0))
+
+declare function accelerate(mine: Body[], all: readonly shared Pos[]): void;
+>accelerate : Symbol(accelerate, Decl(nbody.ts, 3, 46))
+>mine : Symbol(mine, Decl(nbody.ts, 4, 28))
+>Body : Symbol(Body, Decl(nbody.ts, 0, 0))
+>all : Symbol(all, Decl(nbody.ts, 4, 41))
+>Pos : Symbol(Pos, Decl(nbody.ts, 0, 95))
+
+declare function move(mine: Body[]): void;
+>move : Symbol(move, Decl(nbody.ts, 4, 76))
+>mine : Symbol(mine, Decl(nbody.ts, 5, 22))
+>Body : Symbol(Body, Decl(nbody.ts, 0, 0))
+
+declare function energy(bodies: Body[]): number;
+>energy : Symbol(energy, Decl(nbody.ts, 5, 42))
+>bodies : Symbol(bodies, Decl(nbody.ts, 6, 24))
+>Body : Symbol(Body, Decl(nbody.ts, 0, 0))
+
+function worker(t: number, mine: sending Body[], board: shared SlotsCell<Pos[]>, barrier: shared BarrierCell): sending Body[] {
+>worker : Symbol(worker, Decl(nbody.ts, 6, 48))
+>t : Symbol(t, Decl(nbody.ts, 8, 16))
+>mine : Symbol(mine, Decl(nbody.ts, 8, 26))
+>Body : Symbol(Body, Decl(nbody.ts, 0, 0))
+>board : Symbol(board, Decl(nbody.ts, 8, 48))
+>SlotsCell : Symbol(SlotsCell, Decl(own.d.ts, 0, 0))
+>Pos : Symbol(Pos, Decl(nbody.ts, 0, 95))
+>barrier : Symbol(barrier, Decl(nbody.ts, 8, 80))
+>BarrierCell : Symbol(BarrierCell, Decl(own.d.ts, 16, 67))
+>Body : Symbol(Body, Decl(nbody.ts, 0, 0))
+
+  for (let s = 0; s < STEPS; s++) {
+>s : Symbol(s, Decl(nbody.ts, 9, 10))
+>s : Symbol(s, Decl(nbody.ts, 9, 10))
+>STEPS : Symbol(STEPS, Decl(nbody.ts, 2, 13))
+>s : Symbol(s, Decl(nbody.ts, 9, 10))
+
+    board.set(t, share(mine.map(b => ({ x: b.x, y: b.y, z: b.z, m: b.m }))));
+>board.set : Symbol(SlotsCell.set, Decl(own.d.ts, 8, 24))
+>board : Symbol(board, Decl(nbody.ts, 8, 48))
+>set : Symbol(SlotsCell.set, Decl(own.d.ts, 8, 24))
+>t : Symbol(t, Decl(nbody.ts, 8, 16))
+>share : Symbol(share, Decl(own.d.ts, 23, 67))
+>mine.map : Symbol(Array.map, Decl(lib.es5.d.ts, --, --))
+>mine : Symbol(mine, Decl(nbody.ts, 8, 26))
+>map : Symbol(Array.map, Decl(lib.es5.d.ts, --, --))
+>b : Symbol(b, Decl(nbody.ts, 10, 32))
+>x : Symbol(x, Decl(nbody.ts, 10, 39))
+>b.x : Symbol(x, Decl(nbody.ts, 0, 13))
+>b : Symbol(b, Decl(nbody.ts, 10, 32))
+>x : Symbol(x, Decl(nbody.ts, 0, 13))
+>y : Symbol(y, Decl(nbody.ts, 10, 47))
+>b.y : Symbol(y, Decl(nbody.ts, 0, 24))
+>b : Symbol(b, Decl(nbody.ts, 10, 32))
+>y : Symbol(y, Decl(nbody.ts, 0, 24))
+>z : Symbol(z, Decl(nbody.ts, 10, 55))
+>b.z : Symbol(z, Decl(nbody.ts, 0, 35))
+>b : Symbol(b, Decl(nbody.ts, 10, 32))
+>z : Symbol(z, Decl(nbody.ts, 0, 35))
+>m : Symbol(m, Decl(nbody.ts, 10, 63))
+>b.m : Symbol(m, Decl(nbody.ts, 0, 82))
+>b : Symbol(b, Decl(nbody.ts, 10, 32))
+>m : Symbol(m, Decl(nbody.ts, 0, 82))
+
+    barrier.wait();
+>barrier.wait : Symbol(BarrierCell.wait, Decl(own.d.ts, 19, 23))
+>barrier : Symbol(barrier, Decl(nbody.ts, 8, 80))
+>wait : Symbol(BarrierCell.wait, Decl(own.d.ts, 19, 23))
+
+    accelerate(mine, board.flat());
+>accelerate : Symbol(accelerate, Decl(nbody.ts, 3, 46))
+>mine : Symbol(mine, Decl(nbody.ts, 8, 26))
+>board.flat : Symbol(SlotsCell.flat, Decl(own.d.ts, 12, 33))
+>board : Symbol(board, Decl(nbody.ts, 8, 48))
+>flat : Symbol(SlotsCell.flat, Decl(own.d.ts, 12, 33))
+
+    barrier.wait();
+>barrier.wait : Symbol(BarrierCell.wait, Decl(own.d.ts, 19, 23))
+>barrier : Symbol(barrier, Decl(nbody.ts, 8, 80))
+>wait : Symbol(BarrierCell.wait, Decl(own.d.ts, 19, 23))
+
+    move(mine);
+>move : Symbol(move, Decl(nbody.ts, 4, 76))
+>mine : Symbol(mine, Decl(nbody.ts, 8, 26))
+  }
+  return mine;
+>mine : Symbol(mine, Decl(nbody.ts, 8, 26))
+}
+
+function simulate(threads: number): number {
+>simulate : Symbol(simulate, Decl(nbody.ts, 17, 1))
+>threads : Symbol(threads, Decl(nbody.ts, 19, 18))
+
+  const board = new Slots<Pos[]>(threads), barrier = new Barrier(threads);
+>board : Symbol(board, Decl(nbody.ts, 20, 7))
+>Slots : Symbol(Slots, Decl(own.d.ts, 16, 13))
+>Pos : Symbol(Pos, Decl(nbody.ts, 0, 95))
+>threads : Symbol(threads, Decl(nbody.ts, 19, 18))
+>barrier : Symbol(barrier, Decl(nbody.ts, 20, 42))
+>Barrier : Symbol(Barrier, Decl(own.d.ts, 23, 13))
+>threads : Symbol(threads, Decl(nbody.ts, 19, 18))
+
+  return scope(s => {
+>scope : Symbol(scope, Decl(own.d.ts, 36, 1))
+>s : Symbol(s, Decl(nbody.ts, 21, 15))
+
+    const parts = partition(makeBodies(), threads);
+>parts : Symbol(parts, Decl(nbody.ts, 22, 9))
+>partition : Symbol(partition, Decl(own.d.ts, 39, 59))
+>makeBodies : Symbol(makeBodies, Decl(nbody.ts, 2, 28))
+>threads : Symbol(threads, Decl(nbody.ts, 19, 18))
+
+    const ts: (shared Thread<Body[]>)[] = [];
+>ts : Symbol(ts, Decl(nbody.ts, 23, 9))
+>Thread : Symbol(Thread, Decl(own.d.ts, 26, 54))
+>Body : Symbol(Body, Decl(nbody.ts, 0, 0))
+
+    for (let t = 0; t < threads; t++) {
+>t : Symbol(t, Decl(nbody.ts, 24, 12))
+>t : Symbol(t, Decl(nbody.ts, 24, 12))
+>threads : Symbol(threads, Decl(nbody.ts, 19, 18))
+>t : Symbol(t, Decl(nbody.ts, 24, 12))
+
+      ts.push(s.spawn(worker, t, take(parts, t), board, barrier));
+>ts.push : Symbol(Array.push, Decl(lib.es5.d.ts, --, --))
+>ts : Symbol(ts, Decl(nbody.ts, 23, 9))
+>push : Symbol(Array.push, Decl(lib.es5.d.ts, --, --))
+>s.spawn : Symbol(Scope.spawn, Decl(own.d.ts, 34, 17))
+>s : Symbol(s, Decl(nbody.ts, 21, 15))
+>spawn : Symbol(Scope.spawn, Decl(own.d.ts, 34, 17))
+>worker : Symbol(worker, Decl(nbody.ts, 6, 48))
+>t : Symbol(t, Decl(nbody.ts, 24, 12))
+>take : Symbol(take, Decl(own.d.ts, 42, 82))
+>parts : Symbol(parts, Decl(nbody.ts, 22, 9))
+>t : Symbol(t, Decl(nbody.ts, 24, 12))
+>board : Symbol(board, Decl(nbody.ts, 20, 7))
+>barrier : Symbol(barrier, Decl(nbody.ts, 20, 42))
+    }
+    return energy(ts.flatMap(th => th.join()));
+>energy : Symbol(energy, Decl(nbody.ts, 5, 42))
+>ts.flatMap : Symbol(Array.flatMap, Decl(lib.es2019.array.d.ts, --, --))
+>ts : Symbol(ts, Decl(nbody.ts, 23, 9))
+>flatMap : Symbol(Array.flatMap, Decl(lib.es2019.array.d.ts, --, --))
+>th : Symbol(th, Decl(nbody.ts, 27, 29))
+>th.join : Symbol(Thread.join, Decl(own.d.ts, 29, 21))
+>th : Symbol(th, Decl(nbody.ts, 27, 29))
+>join : Symbol(Thread.join, Decl(own.d.ts, 29, 21))
+
+  });
+}
+
+shared struct Counter { n: number; total: number }
+>Counter : Symbol(Counter, Decl(nbody.ts, 29, 1))
+>n : Symbol(Counter.n, Decl(nbody.ts, 31, 23))
+>total : Symbol(Counter.total, Decl(nbody.ts, 31, 34))
+
+=== errors.ts ===
+// Programs that the ownership analysis rejects, one per kind of error, and one that it accepts.
+// Compile with `tsgo -p tsconfig.errors.json`; nbody.ts provides `worker`, `Body` and `Pos`.
+
+// 1. Use after send, through another variable that shares objects with the sent one.
+function sendHalf(bodies: sending Body[], s: shared Scope, board: shared SlotsCell<Pos[]>, barrier: shared BarrierCell) {
+>sendHalf : Symbol(sendHalf, Decl(errors.ts, 0, 0))
+>bodies : Symbol(bodies, Decl(errors.ts, 4, 18))
+>Body : Symbol(Body, Decl(nbody.ts, 0, 0))
+>s : Symbol(s, Decl(errors.ts, 4, 41))
+>Scope : Symbol(Scope, Decl(own.d.ts, 31, 1))
+>board : Symbol(board, Decl(errors.ts, 4, 58))
+>SlotsCell : Symbol(SlotsCell, Decl(own.d.ts, 0, 0))
+>Pos : Symbol(Pos, Decl(nbody.ts, 0, 95))
+>barrier : Symbol(barrier, Decl(errors.ts, 4, 90))
+>BarrierCell : Symbol(BarrierCell, Decl(own.d.ts, 16, 67))
+
+  const half = bodies.slice(0, 400);
+>half : Symbol(half, Decl(errors.ts, 5, 7))
+>bodies.slice : Symbol(Array.slice, Decl(lib.es5.d.ts, --, --))
+>bodies : Symbol(bodies, Decl(errors.ts, 4, 18))
+>slice : Symbol(Array.slice, Decl(lib.es5.d.ts, --, --))
+
+  s.spawn(worker, 0, half, board, barrier);   // half shares bodies' region: sends it
+>s.spawn : Symbol(Scope.spawn, Decl(own.d.ts, 34, 17))
+>s : Symbol(s, Decl(errors.ts, 4, 41))
+>spawn : Symbol(Scope.spawn, Decl(own.d.ts, 34, 17))
+>worker : Symbol(worker, Decl(nbody.ts, 6, 48))
+>half : Symbol(half, Decl(errors.ts, 5, 7))
+>board : Symbol(board, Decl(errors.ts, 4, 58))
+>barrier : Symbol(barrier, Decl(errors.ts, 4, 90))
+
+  bodies[0].x = 1;                            // error: 'bodies' shares objects with 'half', which was sent
+>bodies[0].x : Symbol(x, Decl(nbody.ts, 0, 13))
+>bodies : Symbol(bodies, Decl(errors.ts, 4, 18))
+>x : Symbol(x, Decl(nbody.ts, 0, 13))
+}
+
+// 1. Use after consume: share() turns its argument into a shared value.
+function snapshot(snap: sending Pos[]) {
+>snapshot : Symbol(snapshot, Decl(errors.ts, 8, 1))
+>snap : Symbol(snap, Decl(errors.ts, 11, 18))
+>Pos : Symbol(Pos, Decl(nbody.ts, 0, 95))
+
+  const p = share(snap);
+>p : Symbol(p, Decl(errors.ts, 12, 7))
+>share : Symbol(share, Decl(own.d.ts, 23, 67))
+>snap : Symbol(snap, Decl(errors.ts, 11, 18))
+
+  snap[0].x = 2;                              // error: 'snap' was consumed by 'share'
+>snap[0].x : Symbol(x, Decl(nbody.ts, 1, 12))
+>snap : Symbol(snap, Decl(errors.ts, 11, 18))
+>x : Symbol(x, Decl(nbody.ts, 1, 12))
+
+  // 4. Writes through a shared value.
+  p[0].x = 3;                                 // error: p[0] is shared
+>p[0].x : Symbol(x, Decl(nbody.ts, 1, 12))
+>p : Symbol(p, Decl(errors.ts, 12, 7))
+>x : Symbol(x, Decl(nbody.ts, 1, 12))
+
+  p.push({ x: 0, y: 0, z: 0, m: 0 });         // error: p is shared
+>p.push : Symbol(Array.push, Decl(lib.es5.d.ts, --, --))
+>p : Symbol(p, Decl(errors.ts, 12, 7))
+>push : Symbol(Array.push, Decl(lib.es5.d.ts, --, --))
+>x : Symbol(x, Decl(errors.ts, 16, 10))
+>y : Symbol(y, Decl(errors.ts, 16, 16))
+>z : Symbol(z, Decl(errors.ts, 16, 22))
+>m : Symbol(m, Decl(errors.ts, 16, 28))
+}
+
+// 1. Sent in one iteration, used in the next.
+function spawnInLoop(s: shared Scope, board: shared SlotsCell<Pos[]>, barrier: shared BarrierCell) {
+>spawnInLoop : Symbol(spawnInLoop, Decl(errors.ts, 17, 1))
+>s : Symbol(s, Decl(errors.ts, 20, 21))
+>Scope : Symbol(Scope, Decl(own.d.ts, 31, 1))
+>board : Symbol(board, Decl(errors.ts, 20, 37))
+>SlotsCell : Symbol(SlotsCell, Decl(own.d.ts, 0, 0))
+>Pos : Symbol(Pos, Decl(nbody.ts, 0, 95))
+>barrier : Symbol(barrier, Decl(errors.ts, 20, 69))
+>BarrierCell : Symbol(BarrierCell, Decl(own.d.ts, 16, 67))
+
+  const mine = makeBodies();
+>mine : Symbol(mine, Decl(errors.ts, 21, 7))
+>makeBodies : Symbol(makeBodies, Decl(nbody.ts, 2, 28))
+
+  for (let t = 0; t < 4; t++) {
+>t : Symbol(t, Decl(errors.ts, 22, 10))
+>t : Symbol(t, Decl(errors.ts, 22, 10))
+>t : Symbol(t, Decl(errors.ts, 22, 10))
+
+    s.spawn(worker, t, mine, board, barrier); // error on the second iteration: 'mine' may have been sent
+>s.spawn : Symbol(Scope.spawn, Decl(own.d.ts, 34, 17))
+>s : Symbol(s, Decl(errors.ts, 20, 21))
+>spawn : Symbol(Scope.spawn, Decl(own.d.ts, 34, 17))
+>worker : Symbol(worker, Decl(nbody.ts, 6, 48))
+>t : Symbol(t, Decl(errors.ts, 22, 10))
+>mine : Symbol(mine, Decl(errors.ts, 21, 7))
+>board : Symbol(board, Decl(errors.ts, 20, 37))
+>barrier : Symbol(barrier, Decl(errors.ts, 20, 69))
+  }
+}
+
+// 2. Sending a value the caller still references.
+function sendParameter(xs: Body[], s: shared Scope, board: shared SlotsCell<Pos[]>, barrier: shared BarrierCell) {
+>sendParameter : Symbol(sendParameter, Decl(errors.ts, 25, 1))
+>xs : Symbol(xs, Decl(errors.ts, 28, 23))
+>Body : Symbol(Body, Decl(nbody.ts, 0, 0))
+>s : Symbol(s, Decl(errors.ts, 28, 34))
+>Scope : Symbol(Scope, Decl(own.d.ts, 31, 1))
+>board : Symbol(board, Decl(errors.ts, 28, 51))
+>SlotsCell : Symbol(SlotsCell, Decl(own.d.ts, 0, 0))
+>Pos : Symbol(Pos, Decl(nbody.ts, 0, 95))
+>barrier : Symbol(barrier, Decl(errors.ts, 28, 83))
+>BarrierCell : Symbol(BarrierCell, Decl(own.d.ts, 16, 67))
+
+  s.spawn(worker, 0, xs, board, barrier);     // error: declare xs 'sending'
+>s.spawn : Symbol(Scope.spawn, Decl(own.d.ts, 34, 17))
+>s : Symbol(s, Decl(errors.ts, 28, 34))
+>spawn : Symbol(Scope.spawn, Decl(own.d.ts, 34, 17))
+>worker : Symbol(worker, Decl(nbody.ts, 6, 48))
+>xs : Symbol(xs, Decl(errors.ts, 28, 23))
+>board : Symbol(board, Decl(errors.ts, 28, 51))
+>barrier : Symbol(barrier, Decl(errors.ts, 28, 83))
+}
+
+// 2. Sending a value captured from an outer scope.
+const everyone = makeBodies();
+>everyone : Symbol(everyone, Decl(errors.ts, 33, 5))
+>makeBodies : Symbol(makeBodies, Decl(nbody.ts, 2, 28))
+
+function sendCaptured(s: shared Scope, board: shared SlotsCell<Pos[]>, barrier: shared BarrierCell) {
+>sendCaptured : Symbol(sendCaptured, Decl(errors.ts, 33, 30))
+>s : Symbol(s, Decl(errors.ts, 34, 22))
+>Scope : Symbol(Scope, Decl(own.d.ts, 31, 1))
+>board : Symbol(board, Decl(errors.ts, 34, 38))
+>SlotsCell : Symbol(SlotsCell, Decl(own.d.ts, 0, 0))
+>Pos : Symbol(Pos, Decl(nbody.ts, 0, 95))
+>barrier : Symbol(barrier, Decl(errors.ts, 34, 70))
+>BarrierCell : Symbol(BarrierCell, Decl(own.d.ts, 16, 67))
+
+  s.spawn(worker, 0, everyone, board, barrier); // error: captured
+>s.spawn : Symbol(Scope.spawn, Decl(own.d.ts, 34, 17))
+>s : Symbol(s, Decl(errors.ts, 34, 22))
+>spawn : Symbol(Scope.spawn, Decl(own.d.ts, 34, 17))
+>worker : Symbol(worker, Decl(nbody.ts, 6, 48))
+>everyone : Symbol(everyone, Decl(errors.ts, 33, 5))
+>board : Symbol(board, Decl(errors.ts, 34, 38))
+>barrier : Symbol(barrier, Decl(errors.ts, 34, 70))
+}
+
+// 3. Returning a caller's value as `sending`.
+function giveBack(xs: Body[]): sending Body[] {
+>giveBack : Symbol(giveBack, Decl(errors.ts, 36, 1))
+>xs : Symbol(xs, Decl(errors.ts, 39, 18))
+>Body : Symbol(Body, Decl(nbody.ts, 0, 0))
+>Body : Symbol(Body, Decl(nbody.ts, 0, 0))
+
+  return xs;                                  // error: the caller still references xs
+>xs : Symbol(xs, Decl(errors.ts, 39, 18))
+}
+
+// No errors: a fresh literal is sent, a map builds fresh objects that are then shared, and a value
+// is only used before it is sent.
+function fine(bodies: Body[], s: shared Scope, board: shared SlotsCell<Pos[]>, barrier: shared BarrierCell) {
+>fine : Symbol(fine, Decl(errors.ts, 41, 1))
+>bodies : Symbol(bodies, Decl(errors.ts, 45, 14))
+>Body : Symbol(Body, Decl(nbody.ts, 0, 0))
+>s : Symbol(s, Decl(errors.ts, 45, 29))
+>Scope : Symbol(Scope, Decl(own.d.ts, 31, 1))
+>board : Symbol(board, Decl(errors.ts, 45, 46))
+>SlotsCell : Symbol(SlotsCell, Decl(own.d.ts, 0, 0))
+>Pos : Symbol(Pos, Decl(nbody.ts, 0, 95))
+>barrier : Symbol(barrier, Decl(errors.ts, 45, 78))
+>BarrierCell : Symbol(BarrierCell, Decl(own.d.ts, 16, 67))
+
+  s.spawn(worker, 0, [{ x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, m: 1 }], board, barrier);
+>s.spawn : Symbol(Scope.spawn, Decl(own.d.ts, 34, 17))
+>s : Symbol(s, Decl(errors.ts, 45, 29))
+>spawn : Symbol(Scope.spawn, Decl(own.d.ts, 34, 17))
+>worker : Symbol(worker, Decl(nbody.ts, 6, 48))
+>x : Symbol(x, Decl(errors.ts, 46, 23))
+>y : Symbol(y, Decl(errors.ts, 46, 29))
+>z : Symbol(z, Decl(errors.ts, 46, 35))
+>vx : Symbol(vx, Decl(errors.ts, 46, 41))
+>vy : Symbol(vy, Decl(errors.ts, 46, 48))
+>vz : Symbol(vz, Decl(errors.ts, 46, 55))
+>m : Symbol(m, Decl(errors.ts, 46, 62))
+>board : Symbol(board, Decl(errors.ts, 45, 46))
+>barrier : Symbol(barrier, Decl(errors.ts, 45, 78))
+
+  const positions = share(bodies.map(b => ({ x: b.x, y: b.y, z: b.z, m: b.m })));
+>positions : Symbol(positions, Decl(errors.ts, 47, 7))
+>share : Symbol(share, Decl(own.d.ts, 23, 67))
+>bodies.map : Symbol(Array.map, Decl(lib.es5.d.ts, --, --))
+>bodies : Symbol(bodies, Decl(errors.ts, 45, 14))
+>map : Symbol(Array.map, Decl(lib.es5.d.ts, --, --))
+>b : Symbol(b, Decl(errors.ts, 47, 37))
+>x : Symbol(x, Decl(errors.ts, 47, 44))
+>b.x : Symbol(x, Decl(nbody.ts, 0, 13))
+>b : Symbol(b, Decl(errors.ts, 47, 37))
+>x : Symbol(x, Decl(nbody.ts, 0, 13))
+>y : Symbol(y, Decl(errors.ts, 47, 52))
+>b.y : Symbol(y, Decl(nbody.ts, 0, 24))
+>b : Symbol(b, Decl(errors.ts, 47, 37))
+>y : Symbol(y, Decl(nbody.ts, 0, 24))
+>z : Symbol(z, Decl(errors.ts, 47, 60))
+>b.z : Symbol(z, Decl(nbody.ts, 0, 35))
+>b : Symbol(b, Decl(errors.ts, 47, 37))
+>z : Symbol(z, Decl(nbody.ts, 0, 35))
+>m : Symbol(m, Decl(errors.ts, 47, 68))
+>b.m : Symbol(m, Decl(nbody.ts, 0, 82))
+>b : Symbol(b, Decl(errors.ts, 47, 37))
+>m : Symbol(m, Decl(nbody.ts, 0, 82))
+
+  accelerate(bodies, positions);
+>accelerate : Symbol(accelerate, Decl(nbody.ts, 3, 46))
+>bodies : Symbol(bodies, Decl(errors.ts, 45, 14))
+>positions : Symbol(positions, Decl(errors.ts, 47, 7))
+
+  const before = makeBodies();
+>before : Symbol(before, Decl(errors.ts, 49, 7))
+>makeBodies : Symbol(makeBodies, Decl(nbody.ts, 2, 28))
+
+  move(before);
+>move : Symbol(move, Decl(nbody.ts, 4, 76))
+>before : Symbol(before, Decl(errors.ts, 49, 7))
+
+  s.spawn(worker, 1, before, board, barrier);
+>s.spawn : Symbol(Scope.spawn, Decl(own.d.ts, 34, 17))
+>s : Symbol(s, Decl(errors.ts, 45, 29))
+>spawn : Symbol(Scope.spawn, Decl(own.d.ts, 34, 17))
+>worker : Symbol(worker, Decl(nbody.ts, 6, 48))
+>before : Symbol(before, Decl(errors.ts, 49, 7))
+>board : Symbol(board, Decl(errors.ts, 45, 46))
+>barrier : Symbol(barrier, Decl(errors.ts, 45, 78))
+}
+
