@@ -71,6 +71,7 @@ func (p *Parser) nextTokenStartsOperandOfOwnershipTypeOperator() bool {
 func (p *Parser) parseOwnershipTypeOperator() *ast.Node {
 	pos := p.nodePos()
 	isSending := p.scanner.TokenValue() == sendingKeywordText
+	p.sourceFlags |= ast.NodeFlagsPossiblyContainsOwnershipSyntax
 	p.nextToken()
 	operand := p.parseTypeOperatorOrHigher()
 	var result *ast.Node
@@ -105,6 +106,7 @@ func (p *Parser) nextTokenIsOperandOfConsumeExpression() bool {
 
 func (p *Parser) parseConsumeExpression() *ast.Node {
 	pos := p.nodePos()
+	p.sourceFlags |= ast.NodeFlagsPossiblyContainsOwnershipSyntax
 	p.nextToken()
 	return p.finishNode(p.factory.NewConsumeExpression(p.parseIdentifier()), pos)
 }
@@ -127,6 +129,7 @@ func (p *Parser) nextTokensAreStructAndNameOnSameLine() bool {
 }
 
 func (p *Parser) parseSharedStructDeclaration(pos int, jsdoc jsdocScannerInfo, modifiers *ast.ModifierList) *ast.Node {
+	p.sourceFlags |= ast.NodeFlagsPossiblyContainsOwnershipSyntax
 	p.nextToken() // shared
 	p.nextToken() // struct
 	name := p.parseIdentifier()

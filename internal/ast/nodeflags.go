@@ -45,6 +45,11 @@ const (
 	NodeFlagsPossiblyContainsDeprecatedTag NodeFlags = 1 << 26 // Set during parse if comment text contains '@deprecated'; must confirm via JSDoc lookup
 	NodeFlagsUnreachable                   NodeFlags = 1 << 27 // If node is unreachable according to the binder
 	NodeFlagsReparserTransformedLiteral    NodeFlags = 1 << 28 // If node was transformed during parsing, making its' naive text source not match the AST
+	// Set on a SourceFile during parse when it may contain syntax of the own/shared threads extension
+	// (`sending T`, `shared T`, `consume x` or `shared struct`). Like PossiblyContainsDynamicImport it is
+	// an over-approximation (set during speculative parses too) that lets the checker skip the ownership
+	// analysis entirely for programs that do not use the extension.
+	NodeFlagsPossiblyContainsOwnershipSyntax NodeFlags = 1 << 29
 
 	NodeFlagsBlockScoped = NodeFlagsLet | NodeFlagsConst | NodeFlagsUsing
 	NodeFlagsConstant    = NodeFlagsConst | NodeFlagsUsing
@@ -62,7 +67,7 @@ const (
 	// Represents all flags that are potentially set once and
 	// never cleared on SourceFiles which get re-used in between incremental parses.
 	// See the comment above on `PossiblyContainsDynamicImport` and `PossiblyContainsImportMeta`.
-	NodeFlagsPermanentlySetIncrementalFlags NodeFlags = NodeFlagsPossiblyContainsDynamicImport | NodeFlagsPossiblyContainsImportMeta
+	NodeFlagsPermanentlySetIncrementalFlags NodeFlags = NodeFlagsPossiblyContainsDynamicImport | NodeFlagsPossiblyContainsImportMeta | NodeFlagsPossiblyContainsOwnershipSyntax
 
 	// The following flags repurpose other NodeFlags as different meanings for Identifier nodes
 	NodeFlagsIdentifierHasExtendedUnicodeEscape NodeFlags = NodeFlagsContainsThis      // Indicates whether the identifier contains an extended unicode escape sequence

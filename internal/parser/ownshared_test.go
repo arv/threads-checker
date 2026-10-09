@@ -347,3 +347,18 @@ shared struct Counter { n: number; total: number }
 	assert.Equal(t, counts[ast.KindConsumeExpression], 1)
 	assert.Equal(t, counts[ast.KindSharedStructDeclaration], 1)
 }
+
+func TestOwnSharedSourceFlag(t *testing.T) {
+	t.Parallel()
+	for _, source := range []string{
+		"let a: sending T;",
+		"let a: shared T;",
+		"f(consume x);",
+		"shared struct S { x: number }",
+	} {
+		file := parseOwnShared(t, source)
+		assert.Assert(t, file.Flags&ast.NodeFlagsPossiblyContainsOwnershipSyntax != 0, source)
+	}
+	file := parseOwnShared(t, "type shared<T> = T; let sending: shared<number> = 1; consume(sending); let struct = 0;")
+	assert.Assert(t, file.Flags&ast.NodeFlagsPossiblyContainsOwnershipSyntax == 0)
+}
