@@ -92,6 +92,8 @@ func (tx *TypeEraserTransformer) visit(node *ast.Node) *ast.Node {
 		ast.KindIndexedAccessType,
 		ast.KindMappedType,
 		ast.KindLiteralType,
+		ast.KindSendingType,
+		ast.KindSharedType,
 		// TypeScript index signatures are elided.
 		ast.KindIndexSignature:
 		return nil
@@ -260,7 +262,9 @@ func (tx *TypeEraserTransformer) visit(node *ast.Node) *ast.Node {
 		n := node.AsTaggedTemplateExpression()
 		return tx.Factory().UpdateTaggedTemplateExpression(n, tx.Visitor().VisitNode(n.Tag), n.QuestionDotToken, nil, tx.Visitor().VisitNode(n.Template), n.Flags)
 
-	case ast.KindNonNullExpression, ast.KindTypeAssertionExpression, ast.KindAsExpression, ast.KindSatisfiesExpression:
+	case ast.KindNonNullExpression, ast.KindTypeAssertionExpression, ast.KindAsExpression, ast.KindSatisfiesExpression,
+		// `consume x` is emitted as `x`.
+		ast.KindConsumeExpression:
 		partial := tx.Factory().NewPartiallyEmittedExpression(tx.Visitor().VisitNode(node.Expression()))
 		tx.EmitContext().SetOriginal(partial, node)
 		partial.Loc = node.Loc
@@ -270,7 +274,7 @@ func (tx *TypeEraserTransformer) visit(node *ast.Node) *ast.Node {
 		if !ast.IsJSDocTypeAssertion(node) {
 			n := node.AsParenthesizedExpression()
 			expression := ast.SkipOuterExpressions(n.Expression, ast.OEKAllExceptAssertionsOrExpressionsWithTypeArguments)
-			if ast.IsAssertionExpression(expression) || ast.IsSatisfiesExpression(expression) {
+			if ast.IsAssertionExpression(expression) || ast.IsSatisfiesExpression(expression) || ast.IsConsumeExpression(expression) {
 				partial := tx.Factory().NewPartiallyEmittedExpression(tx.Visitor().VisitNode(n.Expression))
 				tx.EmitContext().SetOriginal(partial, node)
 				partial.Loc = node.Loc

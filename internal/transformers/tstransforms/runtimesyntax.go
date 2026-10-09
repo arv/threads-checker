@@ -97,6 +97,8 @@ func (tx *RuntimeSyntaxTransformer) visit(node *ast.Node) *ast.Node {
 		node = nil
 	case ast.KindEnumDeclaration:
 		node = tx.visitEnumDeclaration(node.AsEnumDeclaration())
+	case ast.KindSharedStructDeclaration:
+		node = tx.visitSharedStructDeclaration(node.AsSharedStructDeclaration())
 	case ast.KindModuleDeclaration:
 		node = tx.visitModuleDeclaration(node.AsModuleDeclaration())
 	case ast.KindClassDeclaration:
@@ -619,6 +621,69 @@ func (tx *RuntimeSyntaxTransformer) visitVariableStatement(node *ast.VariableSta
 		return statement
 	}
 	return tx.Visitor().VisitEachChild(node.AsNode())
+}
+
+// The runtime function that a shared struct declaration is lowered to a call of.
+const sharedStructRuntimeFunctionName = "__sharedStruct"
+
+// Lowers a shared struct declaration
+//
+//	export shared struct Name { a: T; readonly b: U }
+//
+// to a placeholder runtime call that lists the field names in declaration order:
+//
+//	export const Name = __sharedStruct("Name", ["a", "b"]);
+//
+// TODO(own-shared): replace the placeholder with a real lowering that lays the fields out in a
+// SharedArrayBuffer and generates typed accessors. Until then `__sharedStruct` must be provided by
+// the runtime; it is not an emit helper.
+func (tx *RuntimeSyntaxTransformer) visitSharedStructDeclaration(node *ast.SharedStructDeclaration) *ast.Node {
+	f := tx.Factory()
+	var fieldNames []*ast.Expression
+	for _, member := range node.Members.Nodes {
+		if fieldName := tx.getSharedStructFieldName(member); fieldName != nil {
+			fieldNames = append(fieldNames, fieldName)
+		}
+	}
+	name := node.Name()
+	call := f.NewCallExpression(
+		f.NewIdentifier(sharedStructRuntimeFunctionName),
+		nil, /*questionDotToken*/
+		nil, /*typeArguments*/
+		f.NewNodeList([]*ast.Expression{
+			f.NewStringLiteral(name.Text(), ast.TokenFlagsNone),
+			f.NewArrayLiteralExpression(f.NewNodeList(fieldNames), false /*multiLine*/),
+		}),
+		ast.NodeFlagsNone,
+	)
+	declaration := f.NewVariableDeclaration(name, nil /*exclamationToken*/, nil /*typeNode*/, call)
+	tx.EmitContext().SetOriginal(declaration, node.AsNode())
+	statement := f.NewVariableStatement(
+		transformers.ExtractModifiers(tx.EmitContext(), node.Modifiers(), ast.ModifierFlagsExport),
+		f.NewVariableDeclarationList(f.NewNodeList([]*ast.Node{declaration}), ast.NodeFlagsConst),
+	)
+	tx.EmitContext().SetOriginal(statement, node.AsNode())
+	tx.EmitContext().AssignCommentAndSourceMapRanges(statement, node.AsNode())
+	// Handle `export` inside a namespace like any other exported variable.
+	return tx.visitVariableStatement(statement.AsVariableStatement())
+}
+
+// Gets an expression for the name of a shared struct field: `"a"` for `a: T` and `"a"` and `1` for
+// `"a": T` and `1: T`. Members that are not fields (a parse error) are skipped.
+func (tx *RuntimeSyntaxTransformer) getSharedStructFieldName(member *ast.Node) *ast.Expression {
+	if !ast.IsPropertySignatureDeclaration(member) {
+		return nil
+	}
+	name := member.Name()
+	switch name.Kind {
+	case ast.KindIdentifier, ast.KindStringLiteral, ast.KindNoSubstitutionTemplateLiteral:
+		return tx.Factory().NewStringLiteral(name.Text(), ast.TokenFlagsNone)
+	case ast.KindNumericLiteral:
+		return tx.Factory().NewNumericLiteral(name.Text(), ast.TokenFlagsNone)
+	case ast.KindComputedPropertyName:
+		return tx.Visitor().VisitNode(name.Expression())
+	}
+	return nil
 }
 
 // createNamespaceExportExpression creates an assignment to a namespace member for use as a
