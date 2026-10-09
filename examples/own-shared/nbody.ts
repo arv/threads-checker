@@ -6,7 +6,7 @@ declare function accelerate(mine: Body[], all: readonly shared Pos[]): void;
 declare function move(mine: Body[]): void;
 declare function energy(bodies: Body[]): number;
 
-function worker(t: number, mine: sending Body[], board: Slots<shared Pos[]>, barrier: Barrier): sending Body[] {
+function worker(t: number, mine: sending Body[], board: shared SlotsCell<Pos[]>, barrier: shared BarrierCell): sending Body[] {
   for (let s = 0; s < STEPS; s++) {
     board.set(t, share(mine.map(b => ({ x: b.x, y: b.y, z: b.z, m: b.m }))));
     barrier.wait();
@@ -18,10 +18,13 @@ function worker(t: number, mine: sending Body[], board: Slots<shared Pos[]>, bar
 }
 
 function simulate(threads: number): number {
-  const board = new Slots<shared Pos[]>(threads), barrier = new Barrier(threads);
+  const board = new Slots<Pos[]>(threads), barrier = new Barrier(threads);
   return scope(s => {
     const parts = partition(makeBodies(), threads);
-    const ts = parts.map((part, t) => s.spawn(worker, t, consume part, board, barrier));
+    const ts: (shared Thread<Body[]>)[] = [];
+    for (let t = 0; t < threads; t++) {
+      ts.push(s.spawn(worker, t, take(parts, t), board, barrier));
+    }
     return energy(ts.flatMap(th => th.join()));
   });
 }
