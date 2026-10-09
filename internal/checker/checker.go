@@ -579,6 +579,7 @@ var nextCheckerID atomic.Uint32
 
 type Checker struct {
 	id                                          uint32
+	ownershipSyntaxState                        uint8 // 0: not computed, 1: the program uses the own/shared syntax, 2: it does not
 	program                                     Program
 	compilerOptions                             *core.CompilerOptions
 	files                                       []*ast.SourceFile
@@ -2198,6 +2199,9 @@ func (c *Checker) checkSourceFile(ctx context.Context, sourceFile *ast.SourceFil
 		}
 		if !sourceFile.IsDeclarationFile && !c.isCanceled() {
 			c.checkUnusedRenamedBindingElements()
+		}
+		if !sourceFile.IsDeclarationFile && !c.isCanceled() && c.programUsesOwnershipSyntax() {
+			c.checkOwnership(sourceFile)
 		}
 		c.saveDeferredDiagnostics = false
 		c.produceDeferredDiagnostics()

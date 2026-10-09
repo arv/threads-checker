@@ -1,0 +1,222 @@
+ownSharedFlow.ts(14,9): error TS96002: 'a' cannot be used here: it may have been sent to 'send' on line 13.
+ownSharedFlow.ts(17,9): error TS96001: 'b' cannot be used here: it was sent to 'send' on line 16.
+ownSharedFlow.ts(21,9): error TS96003: 'd' cannot be used here: it shares objects with 'e', which was sent to 'send' on line 20.
+ownSharedFlow.ts(24,9): error TS96002: 'f' cannot be used here: it may have been sent to 'send' on line 23.
+ownSharedFlow.ts(34,9): error TS96002: 'a' cannot be used here: it may have been sent to 'send' on line 30.
+ownSharedFlow.ts(40,13): error TS96002: 'a' cannot be used here: it may have been sent to 'send' on line 41.
+ownSharedFlow.ts(41,14): error TS96002: 'a' cannot be used here: it may have been sent to 'send' on line 41.
+ownSharedFlow.ts(55,36): error TS96002: 'x' cannot be used here: it may have been sent to 'send' on line 55.
+ownSharedFlow.ts(60,39): error TS96008: 'e' cannot be sent: it is captured from an outer scope.
+ownSharedFlow.ts(60,59): error TS96002: 'a' cannot be used here: it may have been sent to 'send' on line 60.
+ownSharedFlow.ts(66,9): error TS96003: 'q' cannot be used here: it shares objects with 'p', which was sent to 'send' on line 65.
+ownSharedFlow.ts(72,9): error TS96005: 'x' was consumed by 'consume' on line 70.
+ownSharedFlow.ts(74,9): error TS96005: 'y' was consumed by 'send' on line 73.
+ownSharedFlow.ts(79,16): error TS96007: 'this.f' cannot be sent: it may be referenced by the caller. Declare the parameter 'sending' to take ownership.
+ownSharedFlow.ts(80,20): error TS96008: 'this.f' cannot be sent: it is captured from an outer scope.
+ownSharedFlow.ts(87,9): error TS96003: 'a' cannot be used here: it shares objects with 'f', which was sent to 'send' on line 86.
+ownSharedFlow.ts(89,32): error TS96008: 'c' cannot be sent: it is captured from an outer scope.
+ownSharedFlow.ts(98,10): error TS96007: 'aliased' cannot be sent: it may be referenced by the caller. Declare the parameter 'sending' to take ownership.
+ownSharedFlow.ts(100,10): error TS96007: 'filtered' cannot be sent: it may be referenced by the caller. Declare the parameter 'sending' to take ownership.
+ownSharedFlow.ts(104,5): error TS96010: Cannot change 'p[0]': it is a shared value, which is immutable.
+ownSharedFlow.ts(105,5): error TS96010: Cannot change 'p[0]': it is a shared value, which is immutable.
+ownSharedFlow.ts(106,12): error TS96010: Cannot change 'p[0]': it is a shared value, which is immutable.
+ownSharedFlow.ts(107,5): error TS96010: Cannot change 'p': it is a shared value, which is immutable.
+ownSharedFlow.ts(110,5): error TS96010: Cannot change 's': it is a shared value, which is immutable.
+ownSharedFlow.ts(121,50): error TS96009: 'x' cannot be returned as 'sending': it may be referenced by the caller.
+ownSharedFlow.ts(126,5): error TS96001: 'top' cannot be used here: it was sent to 'send' on line 125.
+
+
+==== ownSharedFlow.ts (26 errors) ====
+    // Control flow, closures and the map rule of the ownership analysis of the "own and shared
+    // threads" extension. Lines marked "error" are expected to be reported.
+    
+    type Box = { v: number; next?: Box };
+    declare function send<T>(x: sending T): void;
+    declare function share<T>(x: sending T): shared T;
+    declare function make(): sending Box;
+    declare function use(x: unknown): void;
+    declare const flag: boolean;
+    
+    export function joins() {
+        const a = make();
+        if (flag) { send(a); }
+        use(a);                                   // error: may have been sent
+            ~
+!!! error TS96002: 'a' cannot be used here: it may have been sent to 'send' on line 13.
+!!! related TS96011 ownSharedFlow.ts:13:22: 'a' is sent here.
+        const b = make();
+        if (flag) { send(b); } else { send(b); }
+        use(b);                                   // error: sent on both paths
+            ~
+!!! error TS96001: 'b' cannot be used here: it was sent to 'send' on line 16.
+!!! related TS96011 ownSharedFlow.ts:16:22: 'b' is sent here.
+        const c = make(), d = make();
+        const e = flag ? c : d;
+        send(e);
+        use(d);                                   // error: d shares objects with e
+            ~
+!!! error TS96003: 'd' cannot be used here: it shares objects with 'e', which was sent to 'send' on line 20.
+!!! related TS96011 ownSharedFlow.ts:20:10: 'e' is sent here.
+        const f = make();
+        flag && send(f);
+        use(f);                                   // error: may have been sent
+            ~
+!!! error TS96002: 'f' cannot be used here: it may have been sent to 'send' on line 23.
+!!! related TS96011 ownSharedFlow.ts:23:18: 'f' is sent here.
+    }
+    
+    export function switches(k: number) {
+        const a = make();
+        switch (k) {
+            case 0: send(a); break;
+            case 1: use(a);
+            default: break;
+        }
+        use(a);                                   // error: may have been sent
+            ~
+!!! error TS96002: 'a' cannot be used here: it may have been sent to 'send' on line 30.
+!!! related TS96011 ownSharedFlow.ts:30:22: 'a' is sent here.
+    }
+    
+    export function loops() {
+        const a = make();
+        for (let i = 0; i < 3; i++) {
+            use(a);                               // error: sent in the previous iteration
+                ~
+!!! error TS96002: 'a' cannot be used here: it may have been sent to 'send' on line 41.
+!!! related TS96011 ownSharedFlow.ts:41:14: 'a' is sent here.
+            send(a);
+                 ~
+!!! error TS96002: 'a' cannot be used here: it may have been sent to 'send' on line 41.
+!!! related TS96011 ownSharedFlow.ts:41:14: 'a' is sent here.
+        }
+        for (let i = 0; i < 3; i++) {
+            const fresh = make();
+            send(fresh);                          // fine: a new value every iteration
+        }
+        const b = make();
+        outer: while (flag) {
+            while (flag) {
+                if (flag) break outer;
+                continue outer;
+            }
+        }
+        send(b);                                  // fine
+        for (const x of [make()]) send(x);        // error on the next iteration: elements share the array's region
+                                       ~
+!!! error TS96002: 'x' cannot be used here: it may have been sent to 'send' on line 55.
+!!! related TS96011 ownSharedFlow.ts:55:36: 'x' is sent here.
+    }
+    
+    export function tries() {
+        const a = make();
+        try { send(a); } catch (e) { send(e); } finally { use(a); } // errors: e is captured, a may have been sent
+                                          ~
+!!! error TS96008: 'e' cannot be sent: it is captured from an outer scope.
+                                                              ~
+!!! error TS96002: 'a' cannot be used here: it may have been sent to 'send' on line 60.
+!!! related TS96011 ownSharedFlow.ts:60:16: 'a' is sent here.
+    }
+    
+    export function destructuring(o: sending ({ p: Box; q: Box })) {
+        const { p, q } = o;
+        send(p);
+        use(q);                                   // error: q shares objects with p
+            ~
+!!! error TS96003: 'q' cannot be used here: it shares objects with 'p', which was sent to 'send' on line 65.
+!!! related TS96011 ownSharedFlow.ts:65:10: 'p' is sent here.
+    }
+    
+    export function consumes(x: sending Box) {
+        const y = consume x;
+        use(y);
+        use(x);                                   // error: consumed
+            ~
+!!! error TS96005: 'x' was consumed by 'consume' on line 70.
+!!! related TS96012 ownSharedFlow.ts:70:15: 'x' is consumed here.
+        send(consume y);
+        use(y);                                   // error: consumed by send
+            ~
+!!! error TS96005: 'y' was consumed by 'send' on line 73.
+!!! related TS96012 ownSharedFlow.ts:73:10: 'y' is consumed here.
+    }
+    
+    export class C {
+        f: Box = { v: 1 };
+        m() { send(this.f); }                     // error: this is the caller's
+                   ~~~~~~
+!!! error TS96007: 'this.f' cannot be sent: it may be referenced by the caller. Declare the parameter 'sending' to take ownership.
+        n = () => send(this.f);                   // error: this is captured
+                       ~~~~~~
+!!! error TS96008: 'this.f' cannot be sent: it is captured from an outer scope.
+    }
+    
+    export function closures() {
+        const a = make();
+        const f = () => a.v;
+        send(f);
+        use(a);                                   // error: a shares objects with f
+            ~
+!!! error TS96003: 'a' cannot be used here: it shares objects with 'f', which was sent to 'send' on line 86.
+!!! related TS96011 ownSharedFlow.ts:86:10: 'f' is sent here.
+        const c = make();
+        [1, 2].forEach(i => { send(c); });        // error: c is captured
+                                   ~
+!!! error TS96008: 'c' cannot be sent: it is captured from an outer scope.
+    }
+    
+    export function maps(xs: Box[]) {
+        const fresh = xs.map(x => ({ v: x.v }));
+        send(fresh);                              // fine: the callback builds fresh objects
+        const nums = xs.map(x => x.v);
+        send(nums);                               // fine
+        const aliased = xs.map(x => x);
+        send(aliased);                            // error: holds the caller's objects
+             ~~~~~~~
+!!! error TS96007: 'aliased' cannot be sent: it may be referenced by the caller. Declare the parameter 'sending' to take ownership.
+        const filtered = xs.filter(x => x.v > 0);
+        send(filtered);                           // error: filter aliases the receiver
+             ~~~~~~~~
+!!! error TS96007: 'filtered' cannot be sent: it may be referenced by the caller. Declare the parameter 'sending' to take ownership.
+    }
+    
+    export function sharedValues(p: shared Box[], q: readonly shared Box[]) {
+        p[0].v = 1;                               // error
+        ~~~~~~
+!!! error TS96010: Cannot change 'p[0]': it is a shared value, which is immutable.
+        p[0].v++;                                 // error
+        ~~~~~~
+!!! error TS96010: Cannot change 'p[0]': it is a shared value, which is immutable.
+        delete p[0].next;                         // error
+               ~~~~~~~~~
+!!! error TS96010: Cannot change 'p[0]': it is a shared value, which is immutable.
+        p.sort();                                 // error
+        ~~~~~~
+!!! error TS96010: Cannot change 'p': it is a shared value, which is immutable.
+        use(q.length + Math.max(1, 2));
+        const s = share({ v: 1 });
+        s.v = 2;                                  // error
+        ~~~
+!!! error TS96010: Cannot change 's': it is a shared value, which is immutable.
+        let u: Box[] | undefined;
+        for (const x of q) { if (u) u.push(x); else u = []; } // fine: u is not a shared value
+    }
+    
+    export shared struct Counter { n: number }
+    export function structs(c: Counter) {
+        c.n++;                                    // fine: struct fields are cells
+        send(c);                                  // fine: shared structs are shared
+    }
+    
+    export const giveBack = (x: Box): sending Box => x; // error: x is the caller's
+                                                     ~
+!!! error TS96009: 'x' cannot be returned as 'sending': it may be referenced by the caller.
+    export const fresh = (): sending Box => ({ v: 1 });
+    
+    const top = make();
+    send(top);
+    use(top);                                     // error: top-level code is analyzed too
+        ~~~
+!!! error TS96001: 'top' cannot be used here: it was sent to 'send' on line 125.
+!!! related TS96011 ownSharedFlow.ts:125:6: 'top' is sent here.
+    

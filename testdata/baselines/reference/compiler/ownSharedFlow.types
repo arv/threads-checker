@@ -1,0 +1,575 @@
+//// [tests/cases/compiler/ownSharedFlow.ts] ////
+
+=== ownSharedFlow.ts ===
+// Control flow, closures and the map rule of the ownership analysis of the "own and shared
+// threads" extension. Lines marked "error" are expected to be reported.
+
+type Box = { v: number; next?: Box };
+>Box : Box
+>v : number
+>next : Box | undefined
+
+declare function send<T>(x: sending T): void;
+>send : <T>(x: sending T) => void
+>x : T
+
+declare function share<T>(x: sending T): shared T;
+>share : <T>(x: sending T) => shared T
+>x : T
+
+declare function make(): sending Box;
+>make : () => sending Box
+
+declare function use(x: unknown): void;
+>use : (x: unknown) => void
+>x : unknown
+
+declare const flag: boolean;
+>flag : boolean
+
+export function joins() {
+>joins : () => void
+
+    const a = make();
+>a : Box
+>make() : Box
+>make : () => sending Box
+
+    if (flag) { send(a); }
+>flag : boolean
+>send(a) : void
+>send : <T>(x: sending T) => void
+>a : Box
+
+    use(a);                                   // error: may have been sent
+>use(a) : void
+>use : (x: unknown) => void
+>a : Box
+
+    const b = make();
+>b : Box
+>make() : Box
+>make : () => sending Box
+
+    if (flag) { send(b); } else { send(b); }
+>flag : boolean
+>send(b) : void
+>send : <T>(x: sending T) => void
+>b : Box
+>send(b) : void
+>send : <T>(x: sending T) => void
+>b : Box
+
+    use(b);                                   // error: sent on both paths
+>use(b) : void
+>use : (x: unknown) => void
+>b : Box
+
+    const c = make(), d = make();
+>c : Box
+>make() : Box
+>make : () => sending Box
+>d : Box
+>make() : Box
+>make : () => sending Box
+
+    const e = flag ? c : d;
+>e : Box
+>flag ? c : d : Box
+>flag : boolean
+>c : Box
+>d : Box
+
+    send(e);
+>send(e) : void
+>send : <T>(x: sending T) => void
+>e : Box
+
+    use(d);                                   // error: d shares objects with e
+>use(d) : void
+>use : (x: unknown) => void
+>d : Box
+
+    const f = make();
+>f : Box
+>make() : Box
+>make : () => sending Box
+
+    flag && send(f);
+>flag && send(f) : void | false
+>flag : boolean
+>send(f) : void
+>send : <T>(x: sending T) => void
+>f : Box
+
+    use(f);                                   // error: may have been sent
+>use(f) : void
+>use : (x: unknown) => void
+>f : Box
+}
+
+export function switches(k: number) {
+>switches : (k: number) => void
+>k : number
+
+    const a = make();
+>a : Box
+>make() : Box
+>make : () => sending Box
+
+    switch (k) {
+>k : number
+
+        case 0: send(a); break;
+>0 : 0
+>send(a) : void
+>send : <T>(x: sending T) => void
+>a : Box
+
+        case 1: use(a);
+>1 : 1
+>use(a) : void
+>use : (x: unknown) => void
+>a : Box
+
+        default: break;
+    }
+    use(a);                                   // error: may have been sent
+>use(a) : void
+>use : (x: unknown) => void
+>a : Box
+}
+
+export function loops() {
+>loops : () => void
+
+    const a = make();
+>a : Box
+>make() : Box
+>make : () => sending Box
+
+    for (let i = 0; i < 3; i++) {
+>i : number
+>0 : 0
+>i < 3 : boolean
+>i : number
+>3 : 3
+>i++ : number
+>i : number
+
+        use(a);                               // error: sent in the previous iteration
+>use(a) : void
+>use : (x: unknown) => void
+>a : Box
+
+        send(a);
+>send(a) : void
+>send : <T>(x: sending T) => void
+>a : Box
+    }
+    for (let i = 0; i < 3; i++) {
+>i : number
+>0 : 0
+>i < 3 : boolean
+>i : number
+>3 : 3
+>i++ : number
+>i : number
+
+        const fresh = make();
+>fresh : Box
+>make() : Box
+>make : () => sending Box
+
+        send(fresh);                          // fine: a new value every iteration
+>send(fresh) : void
+>send : <T>(x: sending T) => void
+>fresh : Box
+    }
+    const b = make();
+>b : Box
+>make() : Box
+>make : () => sending Box
+
+    outer: while (flag) {
+>outer : any
+>flag : boolean
+
+        while (flag) {
+>flag : true
+
+            if (flag) break outer;
+>flag : true
+>outer : any
+
+            continue outer;
+>outer : any
+        }
+    }
+    send(b);                                  // fine
+>send(b) : void
+>send : <T>(x: sending T) => void
+>b : Box
+
+    for (const x of [make()]) send(x);        // error on the next iteration: elements share the array's region
+>x : Box
+>[make()] : Box[]
+>make() : Box
+>make : () => sending Box
+>send(x) : void
+>send : <T>(x: sending T) => void
+>x : Box
+}
+
+export function tries() {
+>tries : () => void
+
+    const a = make();
+>a : Box
+>make() : Box
+>make : () => sending Box
+
+    try { send(a); } catch (e) { send(e); } finally { use(a); } // errors: e is captured, a may have been sent
+>send(a) : void
+>send : <T>(x: sending T) => void
+>a : Box
+>e : unknown
+>send(e) : void
+>send : <T>(x: sending T) => void
+>e : unknown
+>use(a) : void
+>use : (x: unknown) => void
+>a : Box
+}
+
+export function destructuring(o: sending ({ p: Box; q: Box })) {
+>destructuring : (o: sending ({ p: Box; q: Box; })) => void
+>o : { p: Box; q: Box; }
+>p : Box
+>q : Box
+
+    const { p, q } = o;
+>p : Box
+>q : Box
+>o : { p: Box; q: Box; }
+
+    send(p);
+>send(p) : void
+>send : <T>(x: sending T) => void
+>p : Box
+
+    use(q);                                   // error: q shares objects with p
+>use(q) : void
+>use : (x: unknown) => void
+>q : Box
+}
+
+export function consumes(x: sending Box) {
+>consumes : (x: sending Box) => void
+>x : Box
+
+    const y = consume x;
+>y : Box
+>consume x : Box
+>x : Box
+
+    use(y);
+>use(y) : void
+>use : (x: unknown) => void
+>y : Box
+
+    use(x);                                   // error: consumed
+>use(x) : void
+>use : (x: unknown) => void
+>x : Box
+
+    send(consume y);
+>send(consume y) : void
+>send : <T>(x: sending T) => void
+>consume y : Box
+>y : Box
+
+    use(y);                                   // error: consumed by send
+>use(y) : void
+>use : (x: unknown) => void
+>y : Box
+}
+
+export class C {
+>C : C
+
+    f: Box = { v: 1 };
+>f : Box
+>{ v: 1 } : { v: number; }
+>v : number
+>1 : 1
+
+    m() { send(this.f); }                     // error: this is the caller's
+>m : () => void
+>send(this.f) : void
+>send : <T>(x: sending T) => void
+>this.f : Box
+>this : this
+>f : Box
+
+    n = () => send(this.f);                   // error: this is captured
+>n : () => void
+>() => send(this.f) : () => void
+>send(this.f) : void
+>send : <T>(x: sending T) => void
+>this.f : Box
+>this : this
+>f : Box
+}
+
+export function closures() {
+>closures : () => void
+
+    const a = make();
+>a : Box
+>make() : Box
+>make : () => sending Box
+
+    const f = () => a.v;
+>f : () => number
+>() => a.v : () => number
+>a.v : number
+>a : Box
+>v : number
+
+    send(f);
+>send(f) : void
+>send : <T>(x: sending T) => void
+>f : () => number
+
+    use(a);                                   // error: a shares objects with f
+>use(a) : void
+>use : (x: unknown) => void
+>a : Box
+
+    const c = make();
+>c : Box
+>make() : Box
+>make : () => sending Box
+
+    [1, 2].forEach(i => { send(c); });        // error: c is captured
+>[1, 2].forEach(i => { send(c); }) : void
+>[1, 2].forEach : (callbackfn: (value: number, index: number, array: number[]) => void, thisArg?: any) => void
+>[1, 2] : number[]
+>1 : 1
+>2 : 2
+>forEach : (callbackfn: (value: number, index: number, array: number[]) => void, thisArg?: any) => void
+>i => { send(c); } : (i: number) => void
+>i : number
+>send(c) : void
+>send : <T>(x: sending T) => void
+>c : Box
+}
+
+export function maps(xs: Box[]) {
+>maps : (xs: Box[]) => void
+>xs : Box[]
+
+    const fresh = xs.map(x => ({ v: x.v }));
+>fresh : { v: number; }[]
+>xs.map(x => ({ v: x.v })) : { v: number; }[]
+>xs.map : <U>(callbackfn: (value: Box, index: number, array: Box[]) => U, thisArg?: any) => U[]
+>xs : Box[]
+>map : <U>(callbackfn: (value: Box, index: number, array: Box[]) => U, thisArg?: any) => U[]
+>x => ({ v: x.v }) : (x: Box) => { v: number; }
+>x : Box
+>({ v: x.v }) : { v: number; }
+>{ v: x.v } : { v: number; }
+>v : number
+>x.v : number
+>x : Box
+>v : number
+
+    send(fresh);                              // fine: the callback builds fresh objects
+>send(fresh) : void
+>send : <T>(x: sending T) => void
+>fresh : { v: number; }[]
+
+    const nums = xs.map(x => x.v);
+>nums : number[]
+>xs.map(x => x.v) : number[]
+>xs.map : <U>(callbackfn: (value: Box, index: number, array: Box[]) => U, thisArg?: any) => U[]
+>xs : Box[]
+>map : <U>(callbackfn: (value: Box, index: number, array: Box[]) => U, thisArg?: any) => U[]
+>x => x.v : (x: Box) => number
+>x : Box
+>x.v : number
+>x : Box
+>v : number
+
+    send(nums);                               // fine
+>send(nums) : void
+>send : <T>(x: sending T) => void
+>nums : number[]
+
+    const aliased = xs.map(x => x);
+>aliased : Box[]
+>xs.map(x => x) : Box[]
+>xs.map : <U>(callbackfn: (value: Box, index: number, array: Box[]) => U, thisArg?: any) => U[]
+>xs : Box[]
+>map : <U>(callbackfn: (value: Box, index: number, array: Box[]) => U, thisArg?: any) => U[]
+>x => x : (x: Box) => Box
+>x : Box
+>x : Box
+
+    send(aliased);                            // error: holds the caller's objects
+>send(aliased) : void
+>send : <T>(x: sending T) => void
+>aliased : Box[]
+
+    const filtered = xs.filter(x => x.v > 0);
+>filtered : Box[]
+>xs.filter(x => x.v > 0) : Box[]
+>xs.filter : { <S extends Box>(predicate: (value: Box, index: number, array: Box[]) => value is S, thisArg?: any): S[]; (predicate: (value: Box, index: number, array: Box[]) => unknown, thisArg?: any): Box[]; }
+>xs : Box[]
+>filter : { <S extends Box>(predicate: (value: Box, index: number, array: Box[]) => value is S, thisArg?: any): S[]; (predicate: (value: Box, index: number, array: Box[]) => unknown, thisArg?: any): Box[]; }
+>x => x.v > 0 : (x: Box) => boolean
+>x : Box
+>x.v > 0 : boolean
+>x.v : number
+>x : Box
+>v : number
+>0 : 0
+
+    send(filtered);                           // error: filter aliases the receiver
+>send(filtered) : void
+>send : <T>(x: sending T) => void
+>filtered : Box[]
+}
+
+export function sharedValues(p: shared Box[], q: readonly shared Box[]) {
+>sharedValues : (p: shared Box[], q: readonly shared Box[]) => void
+>p : Box[]
+>q : readonly Box[]
+
+    p[0].v = 1;                               // error
+>p[0].v = 1 : 1
+>p[0].v : number
+>p[0] : Box
+>p : Box[]
+>0 : 0
+>v : number
+>1 : 1
+
+    p[0].v++;                                 // error
+>p[0].v++ : number
+>p[0].v : number
+>p[0] : Box
+>p : Box[]
+>0 : 0
+>v : number
+
+    delete p[0].next;                         // error
+>delete p[0].next : boolean
+>p[0].next : Box | undefined
+>p[0] : Box
+>p : Box[]
+>0 : 0
+>next : Box | undefined
+
+    p.sort();                                 // error
+>p.sort() : Box[]
+>p.sort : (compareFn?: ((a: Box, b: Box) => number) | undefined) => Box[]
+>p : Box[]
+>sort : (compareFn?: ((a: Box, b: Box) => number) | undefined) => Box[]
+
+    use(q.length + Math.max(1, 2));
+>use(q.length + Math.max(1, 2)) : void
+>use : (x: unknown) => void
+>q.length + Math.max(1, 2) : number
+>q.length : number
+>q : readonly Box[]
+>length : number
+>Math.max(1, 2) : number
+>Math.max : (...values: number[]) => number
+>Math : Math
+>max : (...values: number[]) => number
+>1 : 1
+>2 : 2
+
+    const s = share({ v: 1 });
+>s : { v: number; }
+>share({ v: 1 }) : { v: number; }
+>share : <T>(x: sending T) => shared T
+>{ v: 1 } : { v: number; }
+>v : number
+>1 : 1
+
+    s.v = 2;                                  // error
+>s.v = 2 : 2
+>s.v : number
+>s : { v: number; }
+>v : number
+>2 : 2
+
+    let u: Box[] | undefined;
+>u : Box[] | undefined
+
+    for (const x of q) { if (u) u.push(x); else u = []; } // fine: u is not a shared value
+>x : Box
+>q : readonly Box[]
+>u : Box[] | undefined
+>u.push(x) : number
+>u.push : (...items: Box[]) => number
+>u : Box[]
+>push : (...items: Box[]) => number
+>x : Box
+>u = [] : never[]
+>u : Box[] | undefined
+>[] : never[]
+}
+
+export shared struct Counter { n: number }
+>Counter : Counter
+>n : number
+
+export function structs(c: Counter) {
+>structs : (c: Counter) => void
+>c : Counter
+
+    c.n++;                                    // fine: struct fields are cells
+>c.n++ : number
+>c.n : number
+>c : Counter
+>n : number
+
+    send(c);                                  // fine: shared structs are shared
+>send(c) : void
+>send : <T>(x: sending T) => void
+>c : Counter
+}
+
+export const giveBack = (x: Box): sending Box => x; // error: x is the caller's
+>giveBack : (x: Box) => sending Box
+>(x: Box): sending Box => x : (x: Box) => sending Box
+>x : Box
+>x : Box
+
+export const fresh = (): sending Box => ({ v: 1 });
+>fresh : () => sending Box
+>(): sending Box => ({ v: 1 }) : () => sending Box
+>({ v: 1 }) : { v: number; }
+>{ v: 1 } : { v: number; }
+>v : number
+>1 : 1
+
+const top = make();
+>top : Box
+>make() : Box
+>make : () => sending Box
+
+send(top);
+>send(top) : void
+>send : <T>(x: sending T) => void
+>top : Box
+
+use(top);                                     // error: top-level code is analyzed too
+>use(top) : void
+>use : (x: unknown) => void
+>top : Box
+

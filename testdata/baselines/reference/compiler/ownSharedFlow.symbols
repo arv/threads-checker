@@ -1,0 +1,473 @@
+//// [tests/cases/compiler/ownSharedFlow.ts] ////
+
+=== ownSharedFlow.ts ===
+// Control flow, closures and the map rule of the ownership analysis of the "own and shared
+// threads" extension. Lines marked "error" are expected to be reported.
+
+type Box = { v: number; next?: Box };
+>Box : Symbol(Box, Decl(ownSharedFlow.ts, 0, 0))
+>v : Symbol(v, Decl(ownSharedFlow.ts, 3, 12))
+>next : Symbol(next, Decl(ownSharedFlow.ts, 3, 23))
+>Box : Symbol(Box, Decl(ownSharedFlow.ts, 0, 0))
+
+declare function send<T>(x: sending T): void;
+>send : Symbol(send, Decl(ownSharedFlow.ts, 3, 37))
+>T : Symbol(T, Decl(ownSharedFlow.ts, 4, 22))
+>x : Symbol(x, Decl(ownSharedFlow.ts, 4, 25))
+>T : Symbol(T, Decl(ownSharedFlow.ts, 4, 22))
+
+declare function share<T>(x: sending T): shared T;
+>share : Symbol(share, Decl(ownSharedFlow.ts, 4, 45))
+>T : Symbol(T, Decl(ownSharedFlow.ts, 5, 23))
+>x : Symbol(x, Decl(ownSharedFlow.ts, 5, 26))
+>T : Symbol(T, Decl(ownSharedFlow.ts, 5, 23))
+>T : Symbol(T, Decl(ownSharedFlow.ts, 5, 23))
+
+declare function make(): sending Box;
+>make : Symbol(make, Decl(ownSharedFlow.ts, 5, 50))
+>Box : Symbol(Box, Decl(ownSharedFlow.ts, 0, 0))
+
+declare function use(x: unknown): void;
+>use : Symbol(use, Decl(ownSharedFlow.ts, 6, 37))
+>x : Symbol(x, Decl(ownSharedFlow.ts, 7, 21))
+
+declare const flag: boolean;
+>flag : Symbol(flag, Decl(ownSharedFlow.ts, 8, 13))
+
+export function joins() {
+>joins : Symbol(joins, Decl(ownSharedFlow.ts, 8, 28))
+
+    const a = make();
+>a : Symbol(a, Decl(ownSharedFlow.ts, 11, 9))
+>make : Symbol(make, Decl(ownSharedFlow.ts, 5, 50))
+
+    if (flag) { send(a); }
+>flag : Symbol(flag, Decl(ownSharedFlow.ts, 8, 13))
+>send : Symbol(send, Decl(ownSharedFlow.ts, 3, 37))
+>a : Symbol(a, Decl(ownSharedFlow.ts, 11, 9))
+
+    use(a);                                   // error: may have been sent
+>use : Symbol(use, Decl(ownSharedFlow.ts, 6, 37))
+>a : Symbol(a, Decl(ownSharedFlow.ts, 11, 9))
+
+    const b = make();
+>b : Symbol(b, Decl(ownSharedFlow.ts, 14, 9))
+>make : Symbol(make, Decl(ownSharedFlow.ts, 5, 50))
+
+    if (flag) { send(b); } else { send(b); }
+>flag : Symbol(flag, Decl(ownSharedFlow.ts, 8, 13))
+>send : Symbol(send, Decl(ownSharedFlow.ts, 3, 37))
+>b : Symbol(b, Decl(ownSharedFlow.ts, 14, 9))
+>send : Symbol(send, Decl(ownSharedFlow.ts, 3, 37))
+>b : Symbol(b, Decl(ownSharedFlow.ts, 14, 9))
+
+    use(b);                                   // error: sent on both paths
+>use : Symbol(use, Decl(ownSharedFlow.ts, 6, 37))
+>b : Symbol(b, Decl(ownSharedFlow.ts, 14, 9))
+
+    const c = make(), d = make();
+>c : Symbol(c, Decl(ownSharedFlow.ts, 17, 9))
+>make : Symbol(make, Decl(ownSharedFlow.ts, 5, 50))
+>d : Symbol(d, Decl(ownSharedFlow.ts, 17, 21))
+>make : Symbol(make, Decl(ownSharedFlow.ts, 5, 50))
+
+    const e = flag ? c : d;
+>e : Symbol(e, Decl(ownSharedFlow.ts, 18, 9))
+>flag : Symbol(flag, Decl(ownSharedFlow.ts, 8, 13))
+>c : Symbol(c, Decl(ownSharedFlow.ts, 17, 9))
+>d : Symbol(d, Decl(ownSharedFlow.ts, 17, 21))
+
+    send(e);
+>send : Symbol(send, Decl(ownSharedFlow.ts, 3, 37))
+>e : Symbol(e, Decl(ownSharedFlow.ts, 18, 9))
+
+    use(d);                                   // error: d shares objects with e
+>use : Symbol(use, Decl(ownSharedFlow.ts, 6, 37))
+>d : Symbol(d, Decl(ownSharedFlow.ts, 17, 21))
+
+    const f = make();
+>f : Symbol(f, Decl(ownSharedFlow.ts, 21, 9))
+>make : Symbol(make, Decl(ownSharedFlow.ts, 5, 50))
+
+    flag && send(f);
+>flag : Symbol(flag, Decl(ownSharedFlow.ts, 8, 13))
+>send : Symbol(send, Decl(ownSharedFlow.ts, 3, 37))
+>f : Symbol(f, Decl(ownSharedFlow.ts, 21, 9))
+
+    use(f);                                   // error: may have been sent
+>use : Symbol(use, Decl(ownSharedFlow.ts, 6, 37))
+>f : Symbol(f, Decl(ownSharedFlow.ts, 21, 9))
+}
+
+export function switches(k: number) {
+>switches : Symbol(switches, Decl(ownSharedFlow.ts, 24, 1))
+>k : Symbol(k, Decl(ownSharedFlow.ts, 26, 25))
+
+    const a = make();
+>a : Symbol(a, Decl(ownSharedFlow.ts, 27, 9))
+>make : Symbol(make, Decl(ownSharedFlow.ts, 5, 50))
+
+    switch (k) {
+>k : Symbol(k, Decl(ownSharedFlow.ts, 26, 25))
+
+        case 0: send(a); break;
+>send : Symbol(send, Decl(ownSharedFlow.ts, 3, 37))
+>a : Symbol(a, Decl(ownSharedFlow.ts, 27, 9))
+
+        case 1: use(a);
+>use : Symbol(use, Decl(ownSharedFlow.ts, 6, 37))
+>a : Symbol(a, Decl(ownSharedFlow.ts, 27, 9))
+
+        default: break;
+    }
+    use(a);                                   // error: may have been sent
+>use : Symbol(use, Decl(ownSharedFlow.ts, 6, 37))
+>a : Symbol(a, Decl(ownSharedFlow.ts, 27, 9))
+}
+
+export function loops() {
+>loops : Symbol(loops, Decl(ownSharedFlow.ts, 34, 1))
+
+    const a = make();
+>a : Symbol(a, Decl(ownSharedFlow.ts, 37, 9))
+>make : Symbol(make, Decl(ownSharedFlow.ts, 5, 50))
+
+    for (let i = 0; i < 3; i++) {
+>i : Symbol(i, Decl(ownSharedFlow.ts, 38, 12))
+>i : Symbol(i, Decl(ownSharedFlow.ts, 38, 12))
+>i : Symbol(i, Decl(ownSharedFlow.ts, 38, 12))
+
+        use(a);                               // error: sent in the previous iteration
+>use : Symbol(use, Decl(ownSharedFlow.ts, 6, 37))
+>a : Symbol(a, Decl(ownSharedFlow.ts, 37, 9))
+
+        send(a);
+>send : Symbol(send, Decl(ownSharedFlow.ts, 3, 37))
+>a : Symbol(a, Decl(ownSharedFlow.ts, 37, 9))
+    }
+    for (let i = 0; i < 3; i++) {
+>i : Symbol(i, Decl(ownSharedFlow.ts, 42, 12))
+>i : Symbol(i, Decl(ownSharedFlow.ts, 42, 12))
+>i : Symbol(i, Decl(ownSharedFlow.ts, 42, 12))
+
+        const fresh = make();
+>fresh : Symbol(fresh, Decl(ownSharedFlow.ts, 43, 13))
+>make : Symbol(make, Decl(ownSharedFlow.ts, 5, 50))
+
+        send(fresh);                          // fine: a new value every iteration
+>send : Symbol(send, Decl(ownSharedFlow.ts, 3, 37))
+>fresh : Symbol(fresh, Decl(ownSharedFlow.ts, 43, 13))
+    }
+    const b = make();
+>b : Symbol(b, Decl(ownSharedFlow.ts, 46, 9))
+>make : Symbol(make, Decl(ownSharedFlow.ts, 5, 50))
+
+    outer: while (flag) {
+>flag : Symbol(flag, Decl(ownSharedFlow.ts, 8, 13))
+
+        while (flag) {
+>flag : Symbol(flag, Decl(ownSharedFlow.ts, 8, 13))
+
+            if (flag) break outer;
+>flag : Symbol(flag, Decl(ownSharedFlow.ts, 8, 13))
+
+            continue outer;
+        }
+    }
+    send(b);                                  // fine
+>send : Symbol(send, Decl(ownSharedFlow.ts, 3, 37))
+>b : Symbol(b, Decl(ownSharedFlow.ts, 46, 9))
+
+    for (const x of [make()]) send(x);        // error on the next iteration: elements share the array's region
+>x : Symbol(x, Decl(ownSharedFlow.ts, 54, 14))
+>make : Symbol(make, Decl(ownSharedFlow.ts, 5, 50))
+>send : Symbol(send, Decl(ownSharedFlow.ts, 3, 37))
+>x : Symbol(x, Decl(ownSharedFlow.ts, 54, 14))
+}
+
+export function tries() {
+>tries : Symbol(tries, Decl(ownSharedFlow.ts, 55, 1))
+
+    const a = make();
+>a : Symbol(a, Decl(ownSharedFlow.ts, 58, 9))
+>make : Symbol(make, Decl(ownSharedFlow.ts, 5, 50))
+
+    try { send(a); } catch (e) { send(e); } finally { use(a); } // errors: e is captured, a may have been sent
+>send : Symbol(send, Decl(ownSharedFlow.ts, 3, 37))
+>a : Symbol(a, Decl(ownSharedFlow.ts, 58, 9))
+>e : Symbol(e, Decl(ownSharedFlow.ts, 59, 28))
+>send : Symbol(send, Decl(ownSharedFlow.ts, 3, 37))
+>e : Symbol(e, Decl(ownSharedFlow.ts, 59, 28))
+>use : Symbol(use, Decl(ownSharedFlow.ts, 6, 37))
+>a : Symbol(a, Decl(ownSharedFlow.ts, 58, 9))
+}
+
+export function destructuring(o: sending ({ p: Box; q: Box })) {
+>destructuring : Symbol(destructuring, Decl(ownSharedFlow.ts, 60, 1))
+>o : Symbol(o, Decl(ownSharedFlow.ts, 62, 30))
+>p : Symbol(p, Decl(ownSharedFlow.ts, 62, 43))
+>Box : Symbol(Box, Decl(ownSharedFlow.ts, 0, 0))
+>q : Symbol(q, Decl(ownSharedFlow.ts, 62, 51))
+>Box : Symbol(Box, Decl(ownSharedFlow.ts, 0, 0))
+
+    const { p, q } = o;
+>p : Symbol(p, Decl(ownSharedFlow.ts, 63, 11))
+>q : Symbol(q, Decl(ownSharedFlow.ts, 63, 14))
+>o : Symbol(o, Decl(ownSharedFlow.ts, 62, 30))
+
+    send(p);
+>send : Symbol(send, Decl(ownSharedFlow.ts, 3, 37))
+>p : Symbol(p, Decl(ownSharedFlow.ts, 63, 11))
+
+    use(q);                                   // error: q shares objects with p
+>use : Symbol(use, Decl(ownSharedFlow.ts, 6, 37))
+>q : Symbol(q, Decl(ownSharedFlow.ts, 63, 14))
+}
+
+export function consumes(x: sending Box) {
+>consumes : Symbol(consumes, Decl(ownSharedFlow.ts, 66, 1))
+>x : Symbol(x, Decl(ownSharedFlow.ts, 68, 25))
+>Box : Symbol(Box, Decl(ownSharedFlow.ts, 0, 0))
+
+    const y = consume x;
+>y : Symbol(y, Decl(ownSharedFlow.ts, 69, 9))
+>x : Symbol(x, Decl(ownSharedFlow.ts, 68, 25))
+
+    use(y);
+>use : Symbol(use, Decl(ownSharedFlow.ts, 6, 37))
+>y : Symbol(y, Decl(ownSharedFlow.ts, 69, 9))
+
+    use(x);                                   // error: consumed
+>use : Symbol(use, Decl(ownSharedFlow.ts, 6, 37))
+>x : Symbol(x, Decl(ownSharedFlow.ts, 68, 25))
+
+    send(consume y);
+>send : Symbol(send, Decl(ownSharedFlow.ts, 3, 37))
+>y : Symbol(y, Decl(ownSharedFlow.ts, 69, 9))
+
+    use(y);                                   // error: consumed by send
+>use : Symbol(use, Decl(ownSharedFlow.ts, 6, 37))
+>y : Symbol(y, Decl(ownSharedFlow.ts, 69, 9))
+}
+
+export class C {
+>C : Symbol(C, Decl(ownSharedFlow.ts, 74, 1))
+
+    f: Box = { v: 1 };
+>f : Symbol(C.f, Decl(ownSharedFlow.ts, 76, 16))
+>Box : Symbol(Box, Decl(ownSharedFlow.ts, 0, 0))
+>v : Symbol(v, Decl(ownSharedFlow.ts, 77, 14))
+
+    m() { send(this.f); }                     // error: this is the caller's
+>m : Symbol(C.m, Decl(ownSharedFlow.ts, 77, 22))
+>send : Symbol(send, Decl(ownSharedFlow.ts, 3, 37))
+>this.f : Symbol(C.f, Decl(ownSharedFlow.ts, 76, 16))
+>this : Symbol(C, Decl(ownSharedFlow.ts, 74, 1))
+>f : Symbol(C.f, Decl(ownSharedFlow.ts, 76, 16))
+
+    n = () => send(this.f);                   // error: this is captured
+>n : Symbol(C.n, Decl(ownSharedFlow.ts, 78, 25))
+>send : Symbol(send, Decl(ownSharedFlow.ts, 3, 37))
+>this.f : Symbol(C.f, Decl(ownSharedFlow.ts, 76, 16))
+>this : Symbol(C, Decl(ownSharedFlow.ts, 74, 1))
+>f : Symbol(C.f, Decl(ownSharedFlow.ts, 76, 16))
+}
+
+export function closures() {
+>closures : Symbol(closures, Decl(ownSharedFlow.ts, 80, 1))
+
+    const a = make();
+>a : Symbol(a, Decl(ownSharedFlow.ts, 83, 9))
+>make : Symbol(make, Decl(ownSharedFlow.ts, 5, 50))
+
+    const f = () => a.v;
+>f : Symbol(f, Decl(ownSharedFlow.ts, 84, 9))
+>a.v : Symbol(v, Decl(ownSharedFlow.ts, 3, 12))
+>a : Symbol(a, Decl(ownSharedFlow.ts, 83, 9))
+>v : Symbol(v, Decl(ownSharedFlow.ts, 3, 12))
+
+    send(f);
+>send : Symbol(send, Decl(ownSharedFlow.ts, 3, 37))
+>f : Symbol(f, Decl(ownSharedFlow.ts, 84, 9))
+
+    use(a);                                   // error: a shares objects with f
+>use : Symbol(use, Decl(ownSharedFlow.ts, 6, 37))
+>a : Symbol(a, Decl(ownSharedFlow.ts, 83, 9))
+
+    const c = make();
+>c : Symbol(c, Decl(ownSharedFlow.ts, 87, 9))
+>make : Symbol(make, Decl(ownSharedFlow.ts, 5, 50))
+
+    [1, 2].forEach(i => { send(c); });        // error: c is captured
+>[1, 2].forEach : Symbol(Array.forEach, Decl(lib.es5.d.ts, --, --))
+>forEach : Symbol(Array.forEach, Decl(lib.es5.d.ts, --, --))
+>i : Symbol(i, Decl(ownSharedFlow.ts, 88, 19))
+>send : Symbol(send, Decl(ownSharedFlow.ts, 3, 37))
+>c : Symbol(c, Decl(ownSharedFlow.ts, 87, 9))
+}
+
+export function maps(xs: Box[]) {
+>maps : Symbol(maps, Decl(ownSharedFlow.ts, 89, 1))
+>xs : Symbol(xs, Decl(ownSharedFlow.ts, 91, 21))
+>Box : Symbol(Box, Decl(ownSharedFlow.ts, 0, 0))
+
+    const fresh = xs.map(x => ({ v: x.v }));
+>fresh : Symbol(fresh, Decl(ownSharedFlow.ts, 92, 9))
+>xs.map : Symbol(Array.map, Decl(lib.es5.d.ts, --, --))
+>xs : Symbol(xs, Decl(ownSharedFlow.ts, 91, 21))
+>map : Symbol(Array.map, Decl(lib.es5.d.ts, --, --))
+>x : Symbol(x, Decl(ownSharedFlow.ts, 92, 25))
+>v : Symbol(v, Decl(ownSharedFlow.ts, 92, 32))
+>x.v : Symbol(v, Decl(ownSharedFlow.ts, 3, 12))
+>x : Symbol(x, Decl(ownSharedFlow.ts, 92, 25))
+>v : Symbol(v, Decl(ownSharedFlow.ts, 3, 12))
+
+    send(fresh);                              // fine: the callback builds fresh objects
+>send : Symbol(send, Decl(ownSharedFlow.ts, 3, 37))
+>fresh : Symbol(fresh, Decl(ownSharedFlow.ts, 92, 9))
+
+    const nums = xs.map(x => x.v);
+>nums : Symbol(nums, Decl(ownSharedFlow.ts, 94, 9))
+>xs.map : Symbol(Array.map, Decl(lib.es5.d.ts, --, --))
+>xs : Symbol(xs, Decl(ownSharedFlow.ts, 91, 21))
+>map : Symbol(Array.map, Decl(lib.es5.d.ts, --, --))
+>x : Symbol(x, Decl(ownSharedFlow.ts, 94, 24))
+>x.v : Symbol(v, Decl(ownSharedFlow.ts, 3, 12))
+>x : Symbol(x, Decl(ownSharedFlow.ts, 94, 24))
+>v : Symbol(v, Decl(ownSharedFlow.ts, 3, 12))
+
+    send(nums);                               // fine
+>send : Symbol(send, Decl(ownSharedFlow.ts, 3, 37))
+>nums : Symbol(nums, Decl(ownSharedFlow.ts, 94, 9))
+
+    const aliased = xs.map(x => x);
+>aliased : Symbol(aliased, Decl(ownSharedFlow.ts, 96, 9))
+>xs.map : Symbol(Array.map, Decl(lib.es5.d.ts, --, --))
+>xs : Symbol(xs, Decl(ownSharedFlow.ts, 91, 21))
+>map : Symbol(Array.map, Decl(lib.es5.d.ts, --, --))
+>x : Symbol(x, Decl(ownSharedFlow.ts, 96, 27))
+>x : Symbol(x, Decl(ownSharedFlow.ts, 96, 27))
+
+    send(aliased);                            // error: holds the caller's objects
+>send : Symbol(send, Decl(ownSharedFlow.ts, 3, 37))
+>aliased : Symbol(aliased, Decl(ownSharedFlow.ts, 96, 9))
+
+    const filtered = xs.filter(x => x.v > 0);
+>filtered : Symbol(filtered, Decl(ownSharedFlow.ts, 98, 9))
+>xs.filter : Symbol(Array.filter, Decl(lib.es5.d.ts, --, --), Decl(lib.es5.d.ts, --, --))
+>xs : Symbol(xs, Decl(ownSharedFlow.ts, 91, 21))
+>filter : Symbol(Array.filter, Decl(lib.es5.d.ts, --, --), Decl(lib.es5.d.ts, --, --))
+>x : Symbol(x, Decl(ownSharedFlow.ts, 98, 31))
+>x.v : Symbol(v, Decl(ownSharedFlow.ts, 3, 12))
+>x : Symbol(x, Decl(ownSharedFlow.ts, 98, 31))
+>v : Symbol(v, Decl(ownSharedFlow.ts, 3, 12))
+
+    send(filtered);                           // error: filter aliases the receiver
+>send : Symbol(send, Decl(ownSharedFlow.ts, 3, 37))
+>filtered : Symbol(filtered, Decl(ownSharedFlow.ts, 98, 9))
+}
+
+export function sharedValues(p: shared Box[], q: readonly shared Box[]) {
+>sharedValues : Symbol(sharedValues, Decl(ownSharedFlow.ts, 100, 1))
+>p : Symbol(p, Decl(ownSharedFlow.ts, 102, 29))
+>Box : Symbol(Box, Decl(ownSharedFlow.ts, 0, 0))
+>q : Symbol(q, Decl(ownSharedFlow.ts, 102, 45))
+>Box : Symbol(Box, Decl(ownSharedFlow.ts, 0, 0))
+
+    p[0].v = 1;                               // error
+>p[0].v : Symbol(v, Decl(ownSharedFlow.ts, 3, 12))
+>p : Symbol(p, Decl(ownSharedFlow.ts, 102, 29))
+>v : Symbol(v, Decl(ownSharedFlow.ts, 3, 12))
+
+    p[0].v++;                                 // error
+>p[0].v : Symbol(v, Decl(ownSharedFlow.ts, 3, 12))
+>p : Symbol(p, Decl(ownSharedFlow.ts, 102, 29))
+>v : Symbol(v, Decl(ownSharedFlow.ts, 3, 12))
+
+    delete p[0].next;                         // error
+>p[0].next : Symbol(next, Decl(ownSharedFlow.ts, 3, 23))
+>p : Symbol(p, Decl(ownSharedFlow.ts, 102, 29))
+>next : Symbol(next, Decl(ownSharedFlow.ts, 3, 23))
+
+    p.sort();                                 // error
+>p.sort : Symbol(Array.sort, Decl(lib.es5.d.ts, --, --))
+>p : Symbol(p, Decl(ownSharedFlow.ts, 102, 29))
+>sort : Symbol(Array.sort, Decl(lib.es5.d.ts, --, --))
+
+    use(q.length + Math.max(1, 2));
+>use : Symbol(use, Decl(ownSharedFlow.ts, 6, 37))
+>q.length : Symbol(ReadonlyArray.length, Decl(lib.es5.d.ts, --, --))
+>q : Symbol(q, Decl(ownSharedFlow.ts, 102, 45))
+>length : Symbol(ReadonlyArray.length, Decl(lib.es5.d.ts, --, --))
+>Math.max : Symbol(Math.max, Decl(lib.es5.d.ts, --, --))
+>Math : Symbol(Math, Decl(lib.es5.d.ts, --, --), Decl(lib.es5.d.ts, --, --), Decl(lib.es2015.core.d.ts, --, --), Decl(lib.es2015.symbol.wellknown.d.ts, --, --))
+>max : Symbol(Math.max, Decl(lib.es5.d.ts, --, --))
+
+    const s = share({ v: 1 });
+>s : Symbol(s, Decl(ownSharedFlow.ts, 108, 9))
+>share : Symbol(share, Decl(ownSharedFlow.ts, 4, 45))
+>v : Symbol(v, Decl(ownSharedFlow.ts, 108, 21))
+
+    s.v = 2;                                  // error
+>s.v : Symbol(v, Decl(ownSharedFlow.ts, 108, 21))
+>s : Symbol(s, Decl(ownSharedFlow.ts, 108, 9))
+>v : Symbol(v, Decl(ownSharedFlow.ts, 108, 21))
+
+    let u: Box[] | undefined;
+>u : Symbol(u, Decl(ownSharedFlow.ts, 110, 7))
+>Box : Symbol(Box, Decl(ownSharedFlow.ts, 0, 0))
+
+    for (const x of q) { if (u) u.push(x); else u = []; } // fine: u is not a shared value
+>x : Symbol(x, Decl(ownSharedFlow.ts, 111, 14))
+>q : Symbol(q, Decl(ownSharedFlow.ts, 102, 45))
+>u : Symbol(u, Decl(ownSharedFlow.ts, 110, 7))
+>u.push : Symbol(Array.push, Decl(lib.es5.d.ts, --, --))
+>u : Symbol(u, Decl(ownSharedFlow.ts, 110, 7))
+>push : Symbol(Array.push, Decl(lib.es5.d.ts, --, --))
+>x : Symbol(x, Decl(ownSharedFlow.ts, 111, 14))
+>u : Symbol(u, Decl(ownSharedFlow.ts, 110, 7))
+}
+
+export shared struct Counter { n: number }
+>Counter : Symbol(Counter, Decl(ownSharedFlow.ts, 112, 1))
+>n : Symbol(Counter.n, Decl(ownSharedFlow.ts, 114, 30))
+
+export function structs(c: Counter) {
+>structs : Symbol(structs, Decl(ownSharedFlow.ts, 114, 42))
+>c : Symbol(c, Decl(ownSharedFlow.ts, 115, 24))
+>Counter : Symbol(Counter, Decl(ownSharedFlow.ts, 112, 1))
+
+    c.n++;                                    // fine: struct fields are cells
+>c.n : Symbol(Counter.n, Decl(ownSharedFlow.ts, 114, 30))
+>c : Symbol(c, Decl(ownSharedFlow.ts, 115, 24))
+>n : Symbol(Counter.n, Decl(ownSharedFlow.ts, 114, 30))
+
+    send(c);                                  // fine: shared structs are shared
+>send : Symbol(send, Decl(ownSharedFlow.ts, 3, 37))
+>c : Symbol(c, Decl(ownSharedFlow.ts, 115, 24))
+}
+
+export const giveBack = (x: Box): sending Box => x; // error: x is the caller's
+>giveBack : Symbol(giveBack, Decl(ownSharedFlow.ts, 120, 12))
+>x : Symbol(x, Decl(ownSharedFlow.ts, 120, 25))
+>Box : Symbol(Box, Decl(ownSharedFlow.ts, 0, 0))
+>Box : Symbol(Box, Decl(ownSharedFlow.ts, 0, 0))
+>x : Symbol(x, Decl(ownSharedFlow.ts, 120, 25))
+
+export const fresh = (): sending Box => ({ v: 1 });
+>fresh : Symbol(fresh, Decl(ownSharedFlow.ts, 121, 12))
+>Box : Symbol(Box, Decl(ownSharedFlow.ts, 0, 0))
+>v : Symbol(v, Decl(ownSharedFlow.ts, 121, 42))
+
+const top = make();
+>top : Symbol(top, Decl(ownSharedFlow.ts, 123, 5))
+>make : Symbol(make, Decl(ownSharedFlow.ts, 5, 50))
+
+send(top);
+>send : Symbol(send, Decl(ownSharedFlow.ts, 3, 37))
+>top : Symbol(top, Decl(ownSharedFlow.ts, 123, 5))
+
+use(top);                                     // error: top-level code is analyzed too
+>use : Symbol(use, Decl(ownSharedFlow.ts, 6, 37))
+>top : Symbol(top, Decl(ownSharedFlow.ts, 123, 5))
+
