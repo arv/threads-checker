@@ -383,6 +383,12 @@ func (d *astDecoder) createChildrenNode(kind ast.Kind, data uint32, childIndices
 		heritageClauses := d.nodeListAt(it.nextIf(mask, 3))
 		members := d.nodeListAt(it.nextIf(mask, 4))
 		return d.factory.NewInterfaceDeclaration(modifiers, name, typeParameters, heritageClauses, members), nil
+	case ast.KindSharedStructDeclaration:
+		it := newChildIter(childIndices)
+		modifiers := d.modifierListAt(it.nextIf(mask, 0))
+		name := d.nodeAt(it.nextIf(mask, 1))
+		members := d.nodeListAt(it.nextIf(mask, 2))
+		return d.factory.NewSharedStructDeclaration(modifiers, name, members), nil
 	case ast.KindTypeAliasDeclaration, ast.KindJSTypeAliasDeclaration:
 		it := newChildIter(childIndices)
 		modifiers := d.modifierListAt(it.nextIf(mask, 0))
@@ -712,6 +718,8 @@ func (d *astDecoder) createChildrenNode(kind ast.Kind, data uint32, childIndices
 		return d.factory.NewVoidExpression(d.singleChild(childIndices)), nil
 	case ast.KindAwaitExpression:
 		return d.factory.NewAwaitExpression(d.singleChild(childIndices)), nil
+	case ast.KindConsumeExpression:
+		return d.factory.NewConsumeExpression(d.singleChild(childIndices)), nil
 	case ast.KindTypeAssertionExpression:
 		it := newChildIter(childIndices)
 		typeNode := d.nodeAt(it.nextIf(mask, 0))
@@ -752,6 +760,10 @@ func (d *astDecoder) createChildrenNode(kind ast.Kind, data uint32, childIndices
 			operator = ast.KindUniqueKeyword
 		}
 		return d.factory.NewTypeOperatorNode(operator, d.singleChild(childIndices)), nil
+	case ast.KindSendingType:
+		return d.factory.NewSendingTypeNode(d.singleChild(childIndices)), nil
+	case ast.KindSharedType:
+		return d.factory.NewSharedTypeNode(d.singleChild(childIndices)), nil
 	case ast.KindInferType:
 		return d.factory.NewInferTypeNode(d.singleChild(childIndices)), nil
 	case ast.KindArrayType:

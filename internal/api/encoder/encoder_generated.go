@@ -134,6 +134,9 @@ func getChildrenPropertyMask(node *ast.Node) uint8 {
 	case ast.KindInterfaceDeclaration:
 		n := node.AsInterfaceDeclaration()
 		return (boolToByte(hasModifiers(n.Modifiers())) << 0) | (boolToByte(n.Name() != nil) << 1) | (boolToByte(n.TypeParameters != nil) << 2) | (boolToByte(n.HeritageClauses != nil) << 3) | (boolToByte(n.Members != nil) << 4)
+	case ast.KindSharedStructDeclaration:
+		n := node.AsSharedStructDeclaration()
+		return (boolToByte(hasModifiers(n.Modifiers())) << 0) | (boolToByte(n.Name() != nil) << 1) | (boolToByte(n.Members != nil) << 2)
 	case ast.KindTypeAliasDeclaration, ast.KindJSTypeAliasDeclaration:
 		n := node.AsTypeAliasDeclaration()
 		return (boolToByte(hasModifiers(n.Modifiers())) << 0) | (boolToByte(n.Name() != nil) << 1) | (boolToByte(n.TypeParameters != nil) << 2) | (boolToByte(n.Type != nil) << 3)
@@ -293,6 +296,9 @@ func getChildrenPropertyMask(node *ast.Node) uint8 {
 	case ast.KindAwaitExpression:
 		n := node.AsAwaitExpression()
 		return (boolToByte(n.Expression != nil) << 0)
+	case ast.KindConsumeExpression:
+		n := node.AsConsumeExpression()
+		return (boolToByte(n.Expression != nil) << 0)
 	case ast.KindTypeAssertionExpression:
 		n := node.AsTypeAssertion()
 		return (boolToByte(n.Type != nil) << 0) | (boolToByte(n.Expression != nil) << 1)
@@ -307,6 +313,12 @@ func getChildrenPropertyMask(node *ast.Node) uint8 {
 		return (boolToByte(n.CheckType != nil) << 0) | (boolToByte(n.ExtendsType != nil) << 1) | (boolToByte(n.TrueType != nil) << 2) | (boolToByte(n.FalseType != nil) << 3)
 	case ast.KindTypeOperator:
 		n := node.AsTypeOperatorNode()
+		return (boolToByte(n.Type != nil) << 0)
+	case ast.KindSendingType:
+		n := node.AsSendingTypeNode()
+		return (boolToByte(n.Type != nil) << 0)
+	case ast.KindSharedType:
+		n := node.AsSharedTypeNode()
 		return (boolToByte(n.Type != nil) << 0)
 	case ast.KindInferType:
 		n := node.AsInferTypeNode()

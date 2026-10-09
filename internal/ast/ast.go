@@ -345,6 +345,8 @@ func (n *Node) Expression() *Node {
 		return n.AsVoidExpression().Expression
 	case KindAwaitExpression:
 		return n.AsAwaitExpression().Expression
+	case KindConsumeExpression:
+		return n.AsConsumeExpression().Expression
 	case KindYieldExpression:
 		return n.AsYieldExpression().Expression
 	case KindPartiallyEmittedExpression:
@@ -434,6 +436,8 @@ func (m *MutableNode) SetExpression(expr *Node) {
 		n.AsVoidExpression().Expression = expr
 	case KindAwaitExpression:
 		n.AsAwaitExpression().Expression = expr
+	case KindConsumeExpression:
+		n.AsConsumeExpression().Expression = expr
 	case KindYieldExpression:
 		n.AsYieldExpression().Expression = expr
 	case KindPartiallyEmittedExpression:
@@ -560,6 +564,8 @@ func (n *Node) MemberList() *NodeList {
 		return n.AsClassExpression().Members
 	case KindInterfaceDeclaration:
 		return n.AsInterfaceDeclaration().Members
+	case KindSharedStructDeclaration:
+		return n.AsSharedStructDeclaration().Members
 	case KindEnumDeclaration:
 		return n.AsEnumDeclaration().Members
 	case KindTypeLiteral:
@@ -645,6 +651,10 @@ func (n *Node) Type() *Node {
 		return n.AsParenthesizedTypeNode().Type
 	case KindTypeOperator:
 		return n.AsTypeOperatorNode().Type
+	case KindSendingType:
+		return n.AsSendingTypeNode().Type
+	case KindSharedType:
+		return n.AsSharedTypeNode().Type
 	case KindMappedType:
 		return n.AsMappedTypeNode().Type
 	case KindTypeAssertionExpression:
@@ -706,6 +716,10 @@ func (m *MutableNode) SetType(t *Node) {
 		n.AsParenthesizedTypeNode().Type = t
 	case KindTypeOperator:
 		n.AsTypeOperatorNode().Type = t
+	case KindSendingType:
+		n.AsSendingTypeNode().Type = t
+	case KindSharedType:
+		n.AsSharedTypeNode().Type = t
 	case KindMappedType:
 		n.AsMappedTypeNode().Type = t
 	case KindTypeAssertionExpression:
@@ -1343,6 +1357,7 @@ func declarationIsWriteAccess(decl *Node) bool {
 		KindImportEqualsDeclaration,
 		KindImportSpecifier,
 		KindInterfaceDeclaration,
+		KindSharedStructDeclaration,
 		KindJSDocCallbackTag,
 		KindJSDocTypedefTag,
 		KindJsxAttribute,
@@ -2199,6 +2214,11 @@ func (node *AwaitExpression) computeSubtreeFacts() SubtreeFacts {
 	return propagateSubtreeFacts(node.Expression) | SubtreeContainsAwait | SubtreeContainsAnyAwait | SubtreeContainsForAwaitOrAsyncGenerator
 }
 
+// `consume x` is TypeScript-only syntax: the type eraser rewrites it to `x`.
+func (node *ConsumeExpression) computeSubtreeFacts() SubtreeFacts {
+	return propagateSubtreeFacts(node.Expression) | SubtreeContainsTypeScript
+}
+
 func (node *TypeAssertion) computeSubtreeFacts() SubtreeFacts {
 	return propagateSubtreeFacts(node.Expression) | SubtreeContainsTypeScript
 }
@@ -2876,7 +2896,7 @@ func (node *SourceFile) computeDeclarationMap() map[string][]*Node {
 				}
 			}
 			node.ForEachChild(visit)
-		case KindClassDeclaration, KindClassExpression, KindInterfaceDeclaration, KindTypeAliasDeclaration, KindEnumDeclaration, KindModuleDeclaration,
+		case KindClassDeclaration, KindClassExpression, KindInterfaceDeclaration, KindSharedStructDeclaration, KindTypeAliasDeclaration, KindEnumDeclaration, KindModuleDeclaration,
 			KindImportEqualsDeclaration, KindImportClause, KindNamespaceImport, KindGetAccessor, KindSetAccessor, KindTypeLiteral:
 			addDeclaration(node)
 			node.ForEachChild(visit)

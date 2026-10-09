@@ -38,6 +38,7 @@ import type {
     ConstructorDeclaration,
     ConstructorTypeNode,
     ConstructSignatureDeclaration,
+    ConsumeExpression,
     ContinueStatement,
     DebuggerStatement,
     Decorator,
@@ -209,7 +210,10 @@ import type {
     ReturnStatement,
     SatisfiesExpression,
     SemicolonClassElement,
+    SendingTypeNode,
     SetAccessorDeclaration,
+    SharedStructDeclaration,
+    SharedTypeNode,
     ShorthandPropertyAssignment,
     SourceFile,
     SpreadAssignment,
@@ -792,6 +796,8 @@ function cloneNodeData(node: Node): any {
             return { token: n.token, types: n.types };
         case SyntaxKind.InterfaceDeclaration:
             return { modifiers: n.modifiers, name: n.name, typeParameters: n.typeParameters, heritageClauses: n.heritageClauses, members: n.members };
+        case SyntaxKind.SharedStructDeclaration:
+            return { modifiers: n.modifiers, name: n.name, members: n.members };
         case SyntaxKind.TypeAliasDeclaration:
         case SyntaxKind.JSTypeAliasDeclaration:
             return { modifiers: n.modifiers, name: n.name, typeParameters: n.typeParameters, type: n.type };
@@ -910,6 +916,8 @@ function cloneNodeData(node: Node): any {
             return { expression: n.expression };
         case SyntaxKind.AwaitExpression:
             return { expression: n.expression };
+        case SyntaxKind.ConsumeExpression:
+            return { expression: n.expression };
         case SyntaxKind.TypeAssertionExpression:
             return { type: n.type, expression: n.expression };
         case SyntaxKind.UnionType:
@@ -920,6 +928,10 @@ function cloneNodeData(node: Node): any {
             return { checkType: n.checkType, extendsType: n.extendsType, trueType: n.trueType, falseType: n.falseType };
         case SyntaxKind.TypeOperator:
             return { operator: n.operator, type: n.type };
+        case SyntaxKind.SendingType:
+            return { type: n.type };
+        case SyntaxKind.SharedType:
+            return { type: n.type };
         case SyntaxKind.InferType:
             return { typeParameter: n.typeParameter };
         case SyntaxKind.ArrayType:
@@ -1196,6 +1208,10 @@ const forEachChildTable: Record<number, ForEachChildFunction> = {
         visitNodes(cbNode, cbNodes, data.typeParameters) ||
         visitNodes(cbNode, cbNodes, data.heritageClauses) ||
         visitNodes(cbNode, cbNodes, data.members),
+    [SyntaxKind.SharedStructDeclaration]: (data, cbNode, cbNodes) =>
+        visitNodes(cbNode, cbNodes, data.modifiers) ||
+        visitNode(cbNode, data.name) ||
+        visitNodes(cbNode, cbNodes, data.members),
     [SyntaxKind.TypeAliasDeclaration]: (data, cbNode, cbNodes) =>
         visitNodes(cbNode, cbNodes, data.modifiers) ||
         visitNode(cbNode, data.name) ||
@@ -1392,6 +1408,7 @@ const forEachChildTable: Record<number, ForEachChildFunction> = {
     [SyntaxKind.TypeOfExpression]: (data, cbNode, cbNodes) => visitNode(cbNode, data.expression),
     [SyntaxKind.VoidExpression]: (data, cbNode, cbNodes) => visitNode(cbNode, data.expression),
     [SyntaxKind.AwaitExpression]: (data, cbNode, cbNodes) => visitNode(cbNode, data.expression),
+    [SyntaxKind.ConsumeExpression]: (data, cbNode, cbNodes) => visitNode(cbNode, data.expression),
     [SyntaxKind.TypeAssertionExpression]: (data, cbNode, cbNodes) =>
         visitNode(cbNode, data.type) ||
         visitNode(cbNode, data.expression),
@@ -1403,6 +1420,8 @@ const forEachChildTable: Record<number, ForEachChildFunction> = {
         visitNode(cbNode, data.trueType) ||
         visitNode(cbNode, data.falseType),
     [SyntaxKind.TypeOperator]: (data, cbNode, cbNodes) => visitNode(cbNode, data.type),
+    [SyntaxKind.SendingType]: (data, cbNode, cbNodes) => visitNode(cbNode, data.type),
+    [SyntaxKind.SharedType]: (data, cbNode, cbNodes) => visitNode(cbNode, data.type),
     [SyntaxKind.InferType]: (data, cbNode, cbNodes) => visitNode(cbNode, data.typeParameter),
     [SyntaxKind.ArrayType]: (data, cbNode, cbNodes) => visitNode(cbNode, data.elementType),
     [SyntaxKind.IndexedAccessType]: (data, cbNode, cbNodes) =>
@@ -1908,6 +1927,14 @@ export function createInterfaceDeclaration(modifiers: readonly ModifierLike[] | 
     }) as unknown as InterfaceDeclaration;
 }
 
+export function createSharedStructDeclaration(modifiers: readonly ModifierLike[] | undefined, name: Identifier, members: readonly TypeElement[]): SharedStructDeclaration {
+    return new NodeObject(SyntaxKind.SharedStructDeclaration, {
+        modifiers: modifiers ? createNodeArray(modifiers) : undefined,
+        name,
+        members: createNodeArray(members),
+    }) as unknown as SharedStructDeclaration;
+}
+
 export function createTypeAliasDeclaration(modifiers: readonly ModifierLike[] | undefined, name: Identifier, typeParameters: readonly TypeParameterDeclaration[] | undefined, type: TypeNode): TypeAliasDeclaration {
     return new NodeObject(SyntaxKind.TypeAliasDeclaration, {
         modifiers: modifiers ? createNodeArray(modifiers) : undefined,
@@ -2397,6 +2424,12 @@ export function createAwaitExpression(expression: Expression): AwaitExpression {
     }) as unknown as AwaitExpression;
 }
 
+export function createConsumeExpression(expression: Expression): ConsumeExpression {
+    return new NodeObject(SyntaxKind.ConsumeExpression, {
+        expression,
+    }) as unknown as ConsumeExpression;
+}
+
 export function createTypeAssertion(type: TypeNode, expression: Expression): TypeAssertion {
     return new NodeObject(SyntaxKind.TypeAssertionExpression, {
         type,
@@ -2434,6 +2467,18 @@ export function createTypeOperatorNode(operator: SyntaxKind.KeyOfKeyword | Synta
         operator,
         type,
     }) as unknown as TypeOperatorNode;
+}
+
+export function createSendingTypeNode(type: TypeNode): SendingTypeNode {
+    return new NodeObject(SyntaxKind.SendingType, {
+        type,
+    }) as unknown as SendingTypeNode;
+}
+
+export function createSharedTypeNode(type: TypeNode): SharedTypeNode {
+    return new NodeObject(SyntaxKind.SharedType, {
+        type,
+    }) as unknown as SharedTypeNode;
 }
 
 export function createInferTypeNode(typeParameter: TypeParameterDeclaration): InferTypeNode {
@@ -3224,6 +3269,10 @@ export function updateInterfaceDeclaration(node: InterfaceDeclaration, modifiers
     return node.modifiers !== modifiers || node.name !== name || node.typeParameters !== typeParameters || node.heritageClauses !== heritageClauses || node.members !== members ? createInterfaceDeclaration(modifiers, name, typeParameters, heritageClauses, members) : node;
 }
 
+export function updateSharedStructDeclaration(node: SharedStructDeclaration, modifiers: readonly ModifierLike[] | undefined, name: Identifier, members: readonly TypeElement[]): SharedStructDeclaration {
+    return node.modifiers !== modifiers || node.name !== name || node.members !== members ? createSharedStructDeclaration(modifiers, name, members) : node;
+}
+
 export function updateTypeAliasDeclaration(node: TypeAliasDeclaration, modifiers: readonly ModifierLike[] | undefined, name: Identifier, typeParameters: readonly TypeParameterDeclaration[] | undefined, type: TypeNode): TypeAliasDeclaration {
     return node.modifiers !== modifiers || node.name !== name || node.typeParameters !== typeParameters || node.type !== type ? createTypeAliasDeclaration(modifiers, name, typeParameters, type) : node;
 }
@@ -3436,6 +3485,10 @@ export function updateAwaitExpression(node: AwaitExpression, expression: Express
     return node.expression !== expression ? createAwaitExpression(expression) : node;
 }
 
+export function updateConsumeExpression(node: ConsumeExpression, expression: Expression): ConsumeExpression {
+    return node.expression !== expression ? createConsumeExpression(expression) : node;
+}
+
 export function updateTypeAssertion(node: TypeAssertion, type: TypeNode, expression: Expression): TypeAssertion {
     return node.type !== type || node.expression !== expression ? createTypeAssertion(type, expression) : node;
 }
@@ -3454,6 +3507,14 @@ export function updateConditionalTypeNode(node: ConditionalTypeNode, checkType: 
 
 export function updateTypeOperatorNode(node: TypeOperatorNode, type: TypeNode): TypeOperatorNode {
     return node.type !== type ? createTypeOperatorNode(node.operator, type) : node;
+}
+
+export function updateSendingTypeNode(node: SendingTypeNode, type: TypeNode): SendingTypeNode {
+    return node.type !== type ? createSendingTypeNode(type) : node;
+}
+
+export function updateSharedTypeNode(node: SharedTypeNode, type: TypeNode): SharedTypeNode {
+    return node.type !== type ? createSharedTypeNode(type) : node;
 }
 
 export function updateInferTypeNode(node: InferTypeNode, typeParameter: TypeParameterDeclaration): InferTypeNode {

@@ -59,6 +59,7 @@ import type {
     ConstructorDeclaration,
     ConstructorTypeNode,
     ConstructSignatureDeclaration,
+    ConsumeExpression,
     ContinueStatement,
     DebuggerStatement,
     DeclarationName,
@@ -267,7 +268,10 @@ import type {
     ReturnStatement,
     SatisfiesExpression,
     SemicolonClassElement,
+    SendingTypeNode,
     SetAccessorDeclaration,
+    SharedStructDeclaration,
+    SharedTypeNode,
     ShiftOperator,
     ShiftOperatorOrHigher,
     ShorthandPropertyAssignment,
@@ -464,6 +468,10 @@ export function isHeritageClause(node: Node): node is HeritageClause {
 
 export function isInterfaceDeclaration(node: Node): node is InterfaceDeclaration {
     return node.kind === SyntaxKind.InterfaceDeclaration;
+}
+
+export function isSharedStructDeclaration(node: Node): node is SharedStructDeclaration {
+    return node.kind === SyntaxKind.SharedStructDeclaration;
 }
 
 export function isTypeAliasDeclaration(node: Node): node is TypeAliasDeclaration {
@@ -730,6 +738,10 @@ export function isAwaitExpression(node: Node): node is AwaitExpression {
     return node.kind === SyntaxKind.AwaitExpression;
 }
 
+export function isConsumeExpression(node: Node): node is ConsumeExpression {
+    return node.kind === SyntaxKind.ConsumeExpression;
+}
+
 export function isTypeAssertion(node: Node): node is TypeAssertion {
     return node.kind === SyntaxKind.TypeAssertionExpression;
 }
@@ -752,6 +764,14 @@ export function isConditionalTypeNode(node: Node): node is ConditionalTypeNode {
 
 export function isTypeOperatorNode(node: Node): node is TypeOperatorNode {
     return node.kind === SyntaxKind.TypeOperator;
+}
+
+export function isSendingTypeNode(node: Node): node is SendingTypeNode {
+    return node.kind === SyntaxKind.SendingType;
+}
+
+export function isSharedTypeNode(node: Node): node is SharedTypeNode {
+    return node.kind === SyntaxKind.SharedType;
 }
 
 export function isInferTypeNode(node: Node): node is InferTypeNode {
