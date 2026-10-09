@@ -142,6 +142,7 @@ func (r *EmitResolver) determineIfDeclarationIsVisible(node *ast.Node) bool {
 		ast.KindModuleDeclaration,
 		ast.KindClassDeclaration,
 		ast.KindInterfaceDeclaration,
+		ast.KindSharedStructDeclaration,
 		ast.KindTypeAliasDeclaration,
 		ast.KindJSTypeAliasDeclaration,
 		ast.KindFunctionDeclaration,
