@@ -1,0 +1,546 @@
+//// [tests/cases/compiler/ownLayoutChannelsErrors.ts] ////
+
+=== own.d.mts ===
+// Types for the own/shared threads runtime own.mjs (the runtime itself lives in porffor). Programs
+// import their API from "./own.mjs"; the compiler adds the imports of the helpers it emits
+// (`__sharedStruct`, `__register`) when `ownRuntime` is set.
+//
+// `sending T` marks a value whose ownership moves to the receiver: the sender must not use it
+// afterwards. `shared T` marks a value any number of threads may read at once: deeply immutable, or
+// a cell that synchronizes internally (Slots, Barrier, a shared struct).
+
+/** One slot per thread: a thread publishes into its own slot, and everyone reads every slot. */
+export interface SlotsCell<T> {
+>SlotsCell : Symbol(SlotsCell, Decl(own.d.mts, 0, 0))
+>T : Symbol(T, Decl(own.d.mts, 9, 27))
+
+    readonly length: number;
+>length : Symbol(SlotsCell.length, Decl(own.d.mts, 9, 31))
+
+    /** Publishes `value` in slot `index`, replacing what was there. */
+    set(index: number, value: T): void;
+>set : Symbol(SlotsCell.set, Decl(own.d.mts, 10, 28))
+>index : Symbol(index, Decl(own.d.mts, 12, 8))
+>value : Symbol(value, Decl(own.d.mts, 12, 22))
+>T : Symbol(T, Decl(own.d.mts, 9, 27))
+
+    /** The value in slot `index`. */
+    get(index: number): shared T;
+>get : Symbol(SlotsCell.get, Decl(own.d.mts, 12, 39))
+>index : Symbol(index, Decl(own.d.mts, 14, 8))
+>T : Symbol(T, Decl(own.d.mts, 9, 27))
+
+    /** The arrays in all slots, concatenated in slot order. */
+    flat(): shared (T extends readonly (infer E)[] ? E : T)[];
+>flat : Symbol(SlotsCell.flat, Decl(own.d.mts, 14, 33))
+>T : Symbol(T, Decl(own.d.mts, 9, 27))
+>E : Symbol(E, Decl(own.d.mts, 16, 45))
+>E : Symbol(E, Decl(own.d.mts, 16, 45))
+>T : Symbol(T, Decl(own.d.mts, 9, 27))
+}
+export declare const Slots: new <T>(count: number) => shared SlotsCell<T>;
+>Slots : Symbol(Slots, Decl(own.d.mts, 18, 20))
+>T : Symbol(T, Decl(own.d.mts, 18, 33))
+>count : Symbol(count, Decl(own.d.mts, 18, 36))
+>SlotsCell : Symbol(SlotsCell, Decl(own.d.mts, 0, 0))
+>T : Symbol(T, Decl(own.d.mts, 18, 33))
+
+/** A reusable barrier for a fixed number of threads. */
+export interface BarrierCell {
+>BarrierCell : Symbol(BarrierCell, Decl(own.d.mts, 18, 74))
+
+    /** Blocks until all threads have called `wait`. */
+    wait(): void;
+>wait : Symbol(BarrierCell.wait, Decl(own.d.mts, 21, 30))
+}
+export declare const Barrier: new (threads: number) => shared BarrierCell;
+>Barrier : Symbol(Barrier, Decl(own.d.mts, 25, 20))
+>threads : Symbol(threads, Decl(own.d.mts, 25, 35))
+>BarrierCell : Symbol(BarrierCell, Decl(own.d.mts, 18, 74))
+
+/** Freezes a value the caller owns into a deeply immutable value every thread can read. */
+export declare function share<T>(value: sending T): shared T;
+>share : Symbol(share, Decl(own.d.mts, 25, 74))
+>T : Symbol(T, Decl(own.d.mts, 28, 30))
+>value : Symbol(value, Decl(own.d.mts, 28, 33))
+>T : Symbol(T, Decl(own.d.mts, 28, 30))
+>T : Symbol(T, Decl(own.d.mts, 28, 30))
+
+/** A thread started inside a `scope`; joining it moves the thread's result back. */
+export interface Thread<R> {
+>Thread : Symbol(Thread, Decl(own.d.mts, 28, 61))
+>R : Symbol(R, Decl(own.d.mts, 31, 24))
+
+    join(): sending R;
+>join : Symbol(Thread.join, Decl(own.d.mts, 31, 28))
+>R : Symbol(R, Decl(own.d.mts, 31, 24))
+}
+
+/** Spawns threads that cannot outlive the scope. Every argument is sent to the new thread. */
+export interface Scope {
+>Scope : Symbol(Scope, Decl(own.d.mts, 33, 1))
+
+    spawn<A extends unknown[], R>(f: (...args: A) => sending R, ...args: sending A): shared Thread<R>;
+>spawn : Symbol(Scope.spawn, Decl(own.d.mts, 36, 24))
+>A : Symbol(A, Decl(own.d.mts, 37, 10))
+>R : Symbol(R, Decl(own.d.mts, 37, 30))
+>f : Symbol(f, Decl(own.d.mts, 37, 34))
+>args : Symbol(args, Decl(own.d.mts, 37, 38))
+>A : Symbol(A, Decl(own.d.mts, 37, 10))
+>R : Symbol(R, Decl(own.d.mts, 37, 30))
+>args : Symbol(args, Decl(own.d.mts, 37, 63))
+>A : Symbol(A, Decl(own.d.mts, 37, 10))
+>Thread : Symbol(Thread, Decl(own.d.mts, 28, 61))
+>R : Symbol(R, Decl(own.d.mts, 37, 30))
+}
+
+/** Runs `body` and joins every thread it spawned before returning. */
+export declare function scope<R>(body: (s: shared Scope) => R): R;
+>scope : Symbol(scope, Decl(own.d.mts, 38, 1))
+>R : Symbol(R, Decl(own.d.mts, 41, 30))
+>body : Symbol(body, Decl(own.d.mts, 41, 33))
+>s : Symbol(s, Decl(own.d.mts, 41, 40))
+>Scope : Symbol(Scope, Decl(own.d.mts, 33, 1))
+>R : Symbol(R, Decl(own.d.mts, 41, 30))
+>R : Symbol(R, Decl(own.d.mts, 41, 30))
+
+/** Splits an owned array into `parts` owned, disjoint chunks of nearly equal size. Trusted. */
+export declare function partition<T>(items: sending T[], parts: number): (sending T[])[];
+>partition : Symbol(partition, Decl(own.d.mts, 41, 66))
+>T : Symbol(T, Decl(own.d.mts, 44, 34))
+>items : Symbol(items, Decl(own.d.mts, 44, 37))
+>T : Symbol(T, Decl(own.d.mts, 44, 34))
+>parts : Symbol(parts, Decl(own.d.mts, 44, 56))
+>T : Symbol(T, Decl(own.d.mts, 44, 34))
+
+/** Takes element `index` out of an array of owned values, so the caller owns it. Trusted. */
+export declare function take<T>(items: (sending T)[], index: number): sending T;
+>take : Symbol(take, Decl(own.d.mts, 44, 89))
+>T : Symbol(T, Decl(own.d.mts, 47, 29))
+>items : Symbol(items, Decl(own.d.mts, 47, 32))
+>T : Symbol(T, Decl(own.d.mts, 47, 29))
+>index : Symbol(index, Decl(own.d.mts, 47, 53))
+>T : Symbol(T, Decl(own.d.mts, 47, 29))
+
+/** Prints a line, synchronously, from any thread. */
+export declare function log(...args: unknown[]): void;
+>log : Symbol(log, Decl(own.d.mts, 47, 80))
+>args : Symbol(args, Decl(own.d.mts, 50, 28))
+
+/** A shared struct's value as a type: what `new SharedArray(Struct, n)` takes. */
+export interface SharedStructType<T> {
+>SharedStructType : Symbol(SharedStructType, Decl(own.d.mts, 50, 54))
+>T : Symbol(T, Decl(own.d.mts, 53, 34))
+
+    new (): T;
+>T : Symbol(T, Decl(own.d.mts, 53, 34))
+}
+
+/**
+ * A fixed-length array in the shared heap, of numbers or of shared structs stored inline. Threads
+ * share it with no copying. With `ownRuntime` the compiler lays it out in the shared heap and turns
+ * `a[i]` and `a.length` into typed-array accesses.
+ */
+export interface SharedArray<T> {
+>SharedArray : Symbol(SharedArray, Decl(own.d.mts, 55, 1), Decl(own.d.mts, 66, 20))
+>T : Symbol(T, Decl(own.d.mts, 62, 29))
+
+    readonly length: number;
+>length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+
+    [index: number]: T;
+>index : Symbol(index, Decl(own.d.mts, 64, 5))
+>T : Symbol(T, Decl(own.d.mts, 62, 29))
+}
+export declare const SharedArray: {
+>SharedArray : Symbol(SharedArray, Decl(own.d.mts, 55, 1), Decl(own.d.mts, 66, 20))
+
+    new (type: NumberConstructor, length: number): SharedArray<number>;
+>type : Symbol(type, Decl(own.d.mts, 67, 9))
+>NumberConstructor : Symbol(NumberConstructor, Decl(lib.es5.d.ts, --, --), Decl(lib.es2015.core.d.ts, --, --))
+>length : Symbol(length, Decl(own.d.mts, 67, 33))
+>SharedArray : Symbol(SharedArray, Decl(own.d.mts, 55, 1), Decl(own.d.mts, 66, 20))
+
+    new <T>(type: SharedStructType<T>, length: number): SharedArray<T>;
+>T : Symbol(T, Decl(own.d.mts, 68, 9))
+>type : Symbol(type, Decl(own.d.mts, 68, 12))
+>SharedStructType : Symbol(SharedStructType, Decl(own.d.mts, 50, 54))
+>T : Symbol(T, Decl(own.d.mts, 68, 9))
+>length : Symbol(length, Decl(own.d.mts, 68, 38))
+>SharedArray : Symbol(SharedArray, Decl(own.d.mts, 55, 1), Decl(own.d.mts, 66, 20))
+>T : Symbol(T, Decl(own.d.mts, 68, 9))
+
+};
+
+
+=== chan.d.mts ===
+export interface ChannelCell<T> {
+>ChannelCell : Symbol(ChannelCell, Decl(chan.d.mts, 0, 0))
+>T : Symbol(T, Decl(chan.d.mts, 0, 29))
+
+    send(value: sending T): void;
+>send : Symbol(ChannelCell.send, Decl(chan.d.mts, 0, 33))
+>value : Symbol(value, Decl(chan.d.mts, 1, 9))
+>T : Symbol(T, Decl(chan.d.mts, 0, 29))
+
+    recv(): sending T | undefined;
+>recv : Symbol(ChannelCell.recv, Decl(chan.d.mts, 1, 33))
+>T : Symbol(T, Decl(chan.d.mts, 0, 29))
+
+    close(): void;
+>close : Symbol(ChannelCell.close, Decl(chan.d.mts, 2, 34))
+
+    [Symbol.iterator](): Iterator<T>;
+>[Symbol.iterator] : Symbol(ChannelCell[Symbol.iterator], Decl(chan.d.mts, 3, 18))
+>Symbol.iterator : Symbol(SymbolConstructor.iterator, Decl(lib.es2015.iterable.d.ts, --, --))
+>Symbol : Symbol(Symbol, Decl(lib.es5.d.ts, --, --), Decl(lib.es2015.symbol.d.ts, --, --), Decl(lib.es2015.symbol.wellknown.d.ts, --, --), Decl(lib.es2019.symbol.d.ts, --, --))
+>iterator : Symbol(SymbolConstructor.iterator, Decl(lib.es2015.iterable.d.ts, --, --))
+>Iterator : Symbol(Iterator, Decl(lib.es2015.iterable.d.ts, --, --))
+>T : Symbol(T, Decl(chan.d.mts, 0, 29))
+}
+export declare const Channel: new <T>(capacity?: number) => shared ChannelCell<T>;
+>Channel : Symbol(Channel, Decl(chan.d.mts, 6, 20))
+>T : Symbol(T, Decl(chan.d.mts, 6, 35))
+>capacity : Symbol(capacity, Decl(chan.d.mts, 6, 38))
+>ChannelCell : Symbol(ChannelCell, Decl(chan.d.mts, 0, 0))
+>T : Symbol(T, Decl(chan.d.mts, 6, 35))
+
+export declare function go<A extends unknown[]>(f: (...args: A) => void, ...args: sending A): void;
+>go : Symbol(go, Decl(chan.d.mts, 6, 82))
+>A : Symbol(A, Decl(chan.d.mts, 7, 27))
+>f : Symbol(f, Decl(chan.d.mts, 7, 48))
+>args : Symbol(args, Decl(chan.d.mts, 7, 52))
+>A : Symbol(A, Decl(chan.d.mts, 7, 27))
+>args : Symbol(args, Decl(chan.d.mts, 7, 72))
+>A : Symbol(A, Decl(chan.d.mts, 7, 27))
+
+export declare function select<T>(...channels: (shared ChannelCell<T>)[]): [index: number, value: T | undefined];
+>select : Symbol(select, Decl(chan.d.mts, 7, 99))
+>T : Symbol(T, Decl(chan.d.mts, 8, 31))
+>channels : Symbol(channels, Decl(chan.d.mts, 8, 34))
+>ChannelCell : Symbol(ChannelCell, Decl(chan.d.mts, 0, 0))
+>T : Symbol(T, Decl(chan.d.mts, 8, 31))
+>T : Symbol(T, Decl(chan.d.mts, 8, 31))
+
+=== moves.mts ===
+import { SharedArray } from "./own.mjs";
+>SharedArray : Symbol(SharedArray, Decl(moves.mts, 0, 8))
+
+import { type ChannelCell, go, select } from "./chan.mjs";
+>ChannelCell : Symbol(ChannelCell, Decl(moves.mts, 1, 8))
+>go : Symbol(go, Decl(moves.mts, 1, 26))
+>select : Symbol(select, Decl(moves.mts, 1, 30))
+
+export shared struct Node { value: number; next: Node | null }
+>Node : Symbol(Node, Decl(moves.mts, 1, 58))
+>value : Symbol(Node.value, Decl(moves.mts, 3, 27))
+>next : Symbol(Node.next, Decl(moves.mts, 3, 42))
+>Node : Symbol(Node, Decl(moves.mts, 1, 58))
+
+declare const flag: boolean;
+>flag : Symbol(flag, Decl(moves.mts, 5, 13))
+
+export function useAfterSend(ch: shared ChannelCell<Node>) {
+>useAfterSend : Symbol(useAfterSend, Decl(moves.mts, 5, 28))
+>ch : Symbol(ch, Decl(moves.mts, 7, 29))
+>ChannelCell : Symbol(ChannelCell, Decl(moves.mts, 1, 8))
+>Node : Symbol(Node, Decl(moves.mts, 1, 58))
+
+    const n = new Node();
+>n : Symbol(n, Decl(moves.mts, 8, 9))
+>Node : Symbol(Node, Decl(moves.mts, 1, 58))
+
+    ch.send(n);
+>ch.send : Symbol(ChannelCell.send, Decl(chan.d.mts, 0, 33))
+>ch : Symbol(ch, Decl(moves.mts, 7, 29))
+>send : Symbol(ChannelCell.send, Decl(chan.d.mts, 0, 33))
+>n : Symbol(n, Decl(moves.mts, 8, 9))
+
+    return n.value;                          // error: sent
+>n.value : Symbol(Node.value, Decl(moves.mts, 3, 27))
+>n : Symbol(n, Decl(moves.mts, 8, 9))
+>value : Symbol(Node.value, Decl(moves.mts, 3, 27))
+}
+
+export function alias(ch: shared ChannelCell<Node>) {
+>alias : Symbol(alias, Decl(moves.mts, 11, 1))
+>ch : Symbol(ch, Decl(moves.mts, 13, 22))
+>ChannelCell : Symbol(ChannelCell, Decl(moves.mts, 1, 8))
+>Node : Symbol(Node, Decl(moves.mts, 1, 58))
+
+    const n = new Node();
+>n : Symbol(n, Decl(moves.mts, 14, 9))
+>Node : Symbol(Node, Decl(moves.mts, 1, 58))
+
+    const other = n;
+>other : Symbol(other, Decl(moves.mts, 15, 9))
+>n : Symbol(n, Decl(moves.mts, 14, 9))
+
+    ch.send(n);
+>ch.send : Symbol(ChannelCell.send, Decl(chan.d.mts, 0, 33))
+>ch : Symbol(ch, Decl(moves.mts, 13, 22))
+>send : Symbol(ChannelCell.send, Decl(chan.d.mts, 0, 33))
+>n : Symbol(n, Decl(moves.mts, 14, 9))
+
+    return other.value;                      // error: shares the block with n
+>other.value : Symbol(Node.value, Decl(moves.mts, 3, 27))
+>other : Symbol(other, Decl(moves.mts, 15, 9))
+>value : Symbol(Node.value, Decl(moves.mts, 3, 27))
+}
+
+export function element(ch: shared ChannelCell<SharedArray<Node>>) {
+>element : Symbol(element, Decl(moves.mts, 18, 1))
+>ch : Symbol(ch, Decl(moves.mts, 20, 24))
+>ChannelCell : Symbol(ChannelCell, Decl(moves.mts, 1, 8))
+>SharedArray : Symbol(SharedArray, Decl(moves.mts, 0, 8))
+>Node : Symbol(Node, Decl(moves.mts, 1, 58))
+
+    const nodes = new SharedArray(Node, 4);
+>nodes : Symbol(nodes, Decl(moves.mts, 21, 9))
+>SharedArray : Symbol(SharedArray, Decl(moves.mts, 0, 8))
+>Node : Symbol(Node, Decl(moves.mts, 1, 58))
+
+    const first = nodes[0];                  // stored inline in the array's block
+>first : Symbol(first, Decl(moves.mts, 22, 9))
+>nodes : Symbol(nodes, Decl(moves.mts, 21, 9))
+
+    ch.send(nodes);
+>ch.send : Symbol(ChannelCell.send, Decl(chan.d.mts, 0, 33))
+>ch : Symbol(ch, Decl(moves.mts, 20, 24))
+>send : Symbol(ChannelCell.send, Decl(chan.d.mts, 0, 33))
+>nodes : Symbol(nodes, Decl(moves.mts, 21, 9))
+
+    return first.value;                      // error
+>first.value : Symbol(Node.value, Decl(moves.mts, 3, 27))
+>first : Symbol(first, Decl(moves.mts, 22, 9))
+>value : Symbol(Node.value, Decl(moves.mts, 3, 27))
+}
+
+export function maybe(ch: shared ChannelCell<Node>) {
+>maybe : Symbol(maybe, Decl(moves.mts, 25, 1))
+>ch : Symbol(ch, Decl(moves.mts, 27, 22))
+>ChannelCell : Symbol(ChannelCell, Decl(moves.mts, 1, 8))
+>Node : Symbol(Node, Decl(moves.mts, 1, 58))
+
+    const n = new Node();
+>n : Symbol(n, Decl(moves.mts, 28, 9))
+>Node : Symbol(Node, Decl(moves.mts, 1, 58))
+
+    if (flag) ch.send(n);
+>flag : Symbol(flag, Decl(moves.mts, 5, 13))
+>ch.send : Symbol(ChannelCell.send, Decl(chan.d.mts, 0, 33))
+>ch : Symbol(ch, Decl(moves.mts, 27, 22))
+>send : Symbol(ChannelCell.send, Decl(chan.d.mts, 0, 33))
+>n : Symbol(n, Decl(moves.mts, 28, 9))
+
+    return n.value;                          // error: may have been sent
+>n.value : Symbol(Node.value, Decl(moves.mts, 3, 27))
+>n : Symbol(n, Decl(moves.mts, 28, 9))
+>value : Symbol(Node.value, Decl(moves.mts, 3, 27))
+}
+
+export function twice(ch: shared ChannelCell<Node>) {
+>twice : Symbol(twice, Decl(moves.mts, 31, 1))
+>ch : Symbol(ch, Decl(moves.mts, 33, 22))
+>ChannelCell : Symbol(ChannelCell, Decl(moves.mts, 1, 8))
+>Node : Symbol(Node, Decl(moves.mts, 1, 58))
+
+    const n = new Node();
+>n : Symbol(n, Decl(moves.mts, 34, 9))
+>Node : Symbol(Node, Decl(moves.mts, 1, 58))
+
+    ch.send(n);
+>ch.send : Symbol(ChannelCell.send, Decl(chan.d.mts, 0, 33))
+>ch : Symbol(ch, Decl(moves.mts, 33, 22))
+>send : Symbol(ChannelCell.send, Decl(chan.d.mts, 0, 33))
+>n : Symbol(n, Decl(moves.mts, 34, 9))
+
+    ch.send(n);                              // error: sent
+>ch.send : Symbol(ChannelCell.send, Decl(chan.d.mts, 0, 33))
+>ch : Symbol(ch, Decl(moves.mts, 33, 22))
+>send : Symbol(ChannelCell.send, Decl(chan.d.mts, 0, 33))
+>n : Symbol(n, Decl(moves.mts, 34, 9))
+}
+
+export function borrowed(ch: shared ChannelCell<Node>, n: Node) {
+>borrowed : Symbol(borrowed, Decl(moves.mts, 37, 1))
+>ch : Symbol(ch, Decl(moves.mts, 39, 25))
+>ChannelCell : Symbol(ChannelCell, Decl(moves.mts, 1, 8))
+>Node : Symbol(Node, Decl(moves.mts, 1, 58))
+>n : Symbol(n, Decl(moves.mts, 39, 54))
+>Node : Symbol(Node, Decl(moves.mts, 1, 58))
+
+    ch.send(n);                              // error: the caller may still use it
+>ch.send : Symbol(ChannelCell.send, Decl(chan.d.mts, 0, 33))
+>ch : Symbol(ch, Decl(moves.mts, 39, 25))
+>send : Symbol(ChannelCell.send, Decl(chan.d.mts, 0, 33))
+>n : Symbol(n, Decl(moves.mts, 39, 54))
+}
+
+export function owned(ch: shared ChannelCell<Node>, n: sending Node) {
+>owned : Symbol(owned, Decl(moves.mts, 41, 1))
+>ch : Symbol(ch, Decl(moves.mts, 43, 22))
+>ChannelCell : Symbol(ChannelCell, Decl(moves.mts, 1, 8))
+>Node : Symbol(Node, Decl(moves.mts, 1, 58))
+>n : Symbol(n, Decl(moves.mts, 43, 51))
+>Node : Symbol(Node, Decl(moves.mts, 1, 58))
+
+    ch.send(n);                              // fine: declared `sending`
+>ch.send : Symbol(ChannelCell.send, Decl(chan.d.mts, 0, 33))
+>ch : Symbol(ch, Decl(moves.mts, 43, 22))
+>send : Symbol(ChannelCell.send, Decl(chan.d.mts, 0, 33))
+>n : Symbol(n, Decl(moves.mts, 43, 51))
+}
+
+export function captured(ch: shared ChannelCell<Node>) {
+>captured : Symbol(captured, Decl(moves.mts, 45, 1))
+>ch : Symbol(ch, Decl(moves.mts, 47, 25))
+>ChannelCell : Symbol(ChannelCell, Decl(moves.mts, 1, 8))
+>Node : Symbol(Node, Decl(moves.mts, 1, 58))
+
+    const n = new Node();
+>n : Symbol(n, Decl(moves.mts, 48, 9))
+>Node : Symbol(Node, Decl(moves.mts, 1, 58))
+
+    return () => ch.send(n);                 // error: captured from an outer scope
+>ch.send : Symbol(ChannelCell.send, Decl(chan.d.mts, 0, 33))
+>ch : Symbol(ch, Decl(moves.mts, 47, 25))
+>send : Symbol(ChannelCell.send, Decl(chan.d.mts, 0, 33))
+>n : Symbol(n, Decl(moves.mts, 48, 9))
+}
+
+export function inLoop(ch: shared ChannelCell<Node>) {
+>inLoop : Symbol(inLoop, Decl(moves.mts, 50, 1))
+>ch : Symbol(ch, Decl(moves.mts, 52, 23))
+>ChannelCell : Symbol(ChannelCell, Decl(moves.mts, 1, 8))
+>Node : Symbol(Node, Decl(moves.mts, 1, 58))
+
+    for (let i = 0; i < 3; i++) {
+>i : Symbol(i, Decl(moves.mts, 53, 12))
+>i : Symbol(i, Decl(moves.mts, 53, 12))
+>i : Symbol(i, Decl(moves.mts, 53, 12))
+
+        const n = new Node();                // fresh in every iteration
+>n : Symbol(n, Decl(moves.mts, 54, 13))
+>Node : Symbol(Node, Decl(moves.mts, 1, 58))
+
+        ch.send(n);
+>ch.send : Symbol(ChannelCell.send, Decl(chan.d.mts, 0, 33))
+>ch : Symbol(ch, Decl(moves.mts, 52, 23))
+>send : Symbol(ChannelCell.send, Decl(chan.d.mts, 0, 33))
+>n : Symbol(n, Decl(moves.mts, 54, 13))
+    }
+    const kept = new Node();
+>kept : Symbol(kept, Decl(moves.mts, 57, 9))
+>Node : Symbol(Node, Decl(moves.mts, 1, 58))
+
+    for (let i = 0; i < 3; i++) ch.send(kept);   // error: sent in an earlier iteration
+>i : Symbol(i, Decl(moves.mts, 58, 12))
+>i : Symbol(i, Decl(moves.mts, 58, 12))
+>i : Symbol(i, Decl(moves.mts, 58, 12))
+>ch.send : Symbol(ChannelCell.send, Decl(chan.d.mts, 0, 33))
+>ch : Symbol(ch, Decl(moves.mts, 52, 23))
+>send : Symbol(ChannelCell.send, Decl(chan.d.mts, 0, 33))
+>kept : Symbol(kept, Decl(moves.mts, 57, 9))
+}
+
+// Not moves: a thread's arguments share a counted value, and a reference field is not tracked.
+function work(n: Node) {}
+>work : Symbol(work, Decl(moves.mts, 59, 1))
+>n : Symbol(n, Decl(moves.mts, 62, 14))
+>Node : Symbol(Node, Decl(moves.mts, 1, 58))
+
+export function notMoves(ch: shared ChannelCell<Node>, holder: Node) {
+>notMoves : Symbol(notMoves, Decl(moves.mts, 62, 25))
+>ch : Symbol(ch, Decl(moves.mts, 63, 25))
+>ChannelCell : Symbol(ChannelCell, Decl(moves.mts, 1, 8))
+>Node : Symbol(Node, Decl(moves.mts, 1, 58))
+>holder : Symbol(holder, Decl(moves.mts, 63, 54))
+>Node : Symbol(Node, Decl(moves.mts, 1, 58))
+
+    const n = new Node();
+>n : Symbol(n, Decl(moves.mts, 64, 9))
+>Node : Symbol(Node, Decl(moves.mts, 1, 58))
+
+    go(work, n);
+>go : Symbol(go, Decl(moves.mts, 1, 26))
+>work : Symbol(work, Decl(moves.mts, 59, 1))
+>n : Symbol(n, Decl(moves.mts, 64, 9))
+
+    go(work, n);
+>go : Symbol(go, Decl(moves.mts, 1, 26))
+>work : Symbol(work, Decl(moves.mts, 59, 1))
+>n : Symbol(n, Decl(moves.mts, 64, 9))
+
+    ch.send(holder.next!);
+>ch.send : Symbol(ChannelCell.send, Decl(chan.d.mts, 0, 33))
+>ch : Symbol(ch, Decl(moves.mts, 63, 25))
+>send : Symbol(ChannelCell.send, Decl(chan.d.mts, 0, 33))
+>holder.next : Symbol(Node.next, Decl(moves.mts, 3, 42))
+>holder : Symbol(holder, Decl(moves.mts, 63, 54))
+>next : Symbol(Node.next, Decl(moves.mts, 3, 42))
+
+    return n.value + holder.next!.value;     // not reported: aliases through reference fields are not tracked
+>n.value : Symbol(Node.value, Decl(moves.mts, 3, 27))
+>n : Symbol(n, Decl(moves.mts, 64, 9))
+>value : Symbol(Node.value, Decl(moves.mts, 3, 27))
+>holder.next!.value : Symbol(Node.value, Decl(moves.mts, 3, 27))
+>holder.next : Symbol(Node.next, Decl(moves.mts, 3, 42))
+>holder : Symbol(holder, Decl(moves.mts, 63, 54))
+>next : Symbol(Node.next, Decl(moves.mts, 3, 42))
+>value : Symbol(Node.value, Decl(moves.mts, 3, 27))
+}
+
+// select returns its value in an ordinary tuple, where nothing could count it.
+export function selects(a: shared ChannelCell<Node>, b: shared ChannelCell<Node>) {
+>selects : Symbol(selects, Decl(moves.mts, 69, 1))
+>a : Symbol(a, Decl(moves.mts, 72, 24))
+>ChannelCell : Symbol(ChannelCell, Decl(moves.mts, 1, 8))
+>Node : Symbol(Node, Decl(moves.mts, 1, 58))
+>b : Symbol(b, Decl(moves.mts, 72, 52))
+>ChannelCell : Symbol(ChannelCell, Decl(moves.mts, 1, 8))
+>Node : Symbol(Node, Decl(moves.mts, 1, 58))
+
+    const result = select(a, b);             // error
+>result : Symbol(result, Decl(moves.mts, 73, 9))
+>select : Symbol(select, Decl(moves.mts, 1, 30))
+>a : Symbol(a, Decl(moves.mts, 72, 24))
+>b : Symbol(b, Decl(moves.mts, 72, 52))
+
+    return result[0];
+>result : Symbol(result, Decl(moves.mts, 73, 9))
+>0 : Symbol(0)
+}
+
+// A for-of over a channel owns its values; over an ordinary array, it cannot.
+export function loops(ch: shared ChannelCell<Node>, list: Node[]) {
+>loops : Symbol(loops, Decl(moves.mts, 75, 1))
+>ch : Symbol(ch, Decl(moves.mts, 78, 22))
+>ChannelCell : Symbol(ChannelCell, Decl(moves.mts, 1, 8))
+>Node : Symbol(Node, Decl(moves.mts, 1, 58))
+>list : Symbol(list, Decl(moves.mts, 78, 51))
+>Node : Symbol(Node, Decl(moves.mts, 1, 58))
+
+    let total = 0;
+>total : Symbol(total, Decl(moves.mts, 79, 7))
+
+    for (const n of ch) total += n.value;
+>n : Symbol(n, Decl(moves.mts, 80, 14))
+>ch : Symbol(ch, Decl(moves.mts, 78, 22))
+>total : Symbol(total, Decl(moves.mts, 79, 7))
+>n.value : Symbol(Node.value, Decl(moves.mts, 3, 27))
+>n : Symbol(n, Decl(moves.mts, 80, 14))
+>value : Symbol(Node.value, Decl(moves.mts, 3, 27))
+
+    for (const n of list) total += n.value;  // error
+>n : Symbol(n, Decl(moves.mts, 81, 14))
+>list : Symbol(list, Decl(moves.mts, 78, 51))
+>total : Symbol(total, Decl(moves.mts, 79, 7))
+>n.value : Symbol(Node.value, Decl(moves.mts, 3, 27))
+>n : Symbol(n, Decl(moves.mts, 81, 14))
+>value : Symbol(Node.value, Decl(moves.mts, 3, 27))
+
+    return total;
+>total : Symbol(total, Decl(moves.mts, 79, 7))
+}
+

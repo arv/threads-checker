@@ -56,9 +56,11 @@ import (
 // count out (`(_t = x, x = 0, _t)`). An owned local is released when its block ends:
 // `const x = E; try { ...rest of the block } finally { __release(x) }`, and its reassignment retains
 // the new value before releasing the old (`_t = x, x = E', __release(_t)`). An owned parameter is
-// retained on entry. A counted argument of `spawn` is `__ref(E)`, a closure that captures counted
-// variables is `__hold(fn, x, ...)`, and a loop that reads or stores a reference field ends each
-// iteration (and each `continue`) with `__quiescent()`.
+// retained on entry. A counted argument that the callee takes a count of (a thread's argument for
+// `spawn` or `go`, a channel's `send`) is `__ref(E)`; a received value is owned (a for-of variable
+// over a channel is released when its iteration ends). A closure that captures counted variables is
+// `__hold(fn, x, ...)`, and a loop that reads or stores a reference field ends each iteration (and
+// each `continue`) with `__quiescent()`.
 type OwnLayoutTransformer struct {
 	transformers.Transformer
 	compilerOptions           *core.CompilerOptions
@@ -782,11 +784,25 @@ func (tx *OwnLayoutTransformer) visitForStatement(node *ast.Node, label *ast.Nod
 	return tx.Factory().NewBlock(tx.Factory().NewNodeList([]*ast.Node{declarations, tx.tryFinally([]*ast.Node{loop}, owned)}), true /*multiLine*/)
 }
 
-// A loop's body, which ends at a quiescent point if the loop reads or stores a reference field.
+// A loop's body. A for-of variable that owns each value (received from a channel) is released when
+// the iteration ends, and the iteration ends at a quiescent point if the loop reads or stores a
+// reference field.
 func (tx *OwnLayoutTransformer) visitLoopBody(body *ast.Node, loop *ast.Node) *ast.Node {
 	visited := tx.EmitContext().VisitIterationBody(body, tx.Visitor())
 	original := tx.original(loop)
-	if original == nil || !tx.emitResolver.IsOwnQuiescentLoop(original) {
+	if original == nil {
+		return visited
+	}
+	if ast.IsForOfStatement(original) && ast.IsVariableDeclarationList(original.AsForInOrOfStatement().Initializer) {
+		if owned := tx.ownedLocalsOfList(original.AsForInOrOfStatement().Initializer); len(owned) > 0 {
+			statements := []*ast.Node{visited}
+			if ast.IsBlock(visited) {
+				statements = visited.Statements()
+			}
+			visited = tx.Factory().NewBlock(tx.Factory().NewNodeList([]*ast.Node{tx.tryFinally(statements, owned)}), true /*multiLine*/)
+		}
+	}
+	if !tx.emitResolver.IsOwnQuiescentLoop(original) {
 		return visited
 	}
 	if ast.IsBlock(visited) {
@@ -915,7 +931,7 @@ func (tx *OwnLayoutTransformer) visitArguments(args *ast.NodeList, conditional b
 		switch original := tx.original(arg); {
 		case ast.IsSpreadElement(arg):
 			visited = append(visited, tx.Visitor().VisitNode(arg))
-		case original != nil && tx.emitResolver.IsOwnSpawnArgument(original):
+		case original != nil && tx.emitResolver.IsOwnRefArgument(original):
 			visited = append(visited, tx.finish(tx.call(transformers.OwnRuntimeRefHelper, tx.visitIn(arg, ownAtOnce)), arg))
 		default:
 			visited = append(visited, tx.unparen(tx.visitIn(arg, ownArgument)))

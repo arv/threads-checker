@@ -36,6 +36,22 @@ import (
 //     classes, enums, namespaces) referenced by name are treated as shared. This is not sound for
 //     mutable library state, but otherwise every call on a library global would pin its arguments.
 //   - Storing a non-shared value into a field of a shared struct instance is not checked yet.
+//
+// Counted values (with `--ownRuntime`): a shared struct or SharedArray value is an address in the
+// shared heap, which the emit counts (ownrefcount.go). It is shared memory, but sending it moves it:
+// after `ch.send(x)` the sender must not use x, or anything the analysis knows aliases it. So counted
+// values live in COUNTED regions of their own, which never merge with ordinary ones:
+//   - `new`, a call and a received value (`recv()`, a for-of over a channel) give a fresh counted
+//     region; a variable copy, a conditional and an element of a SharedArray of structs (stored
+//     inline in the array's block) stay in the region they come from.
+//   - Not tracked: aliases through a reference field (`n.next` is untracked) and through a call
+//     (`identity(x)` is fresh). Passing a counted value to a function does not merge it with the
+//     other arguments, and a closure or an object does not take it into its region.
+//   - Only a `sending` parameter that is not a rest parameter sends (moves) a counted value: a
+//     channel's `send`. A thread's arguments (`spawn(f, ...args: sending A)`, `go`) share it, so one
+//     SharedArray can go to every thread, and a share-like function does not consume it.
+//   - Parameters, `this` and captured variables are CALLER and OUTER regions as usual, so a counted
+//     parameter can be sent only if it is declared `sending`.
 
 const ownMaxLoopIterations = 4
 
@@ -65,8 +81,9 @@ func ownRegionValue(r ownRegion) ownValue {
 type ownRegionFlags uint8
 
 const (
-	ownRegionCaller ownRegionFlags = 1 << iota // may be referenced by the caller
-	ownRegionOuter                             // captured from an enclosing scope
+	ownRegionCaller  ownRegionFlags = 1 << iota // may be referenced by the caller
+	ownRegionOuter                              // captured from an enclosing scope
+	ownRegionCounted                            // counted values (shared structs and SharedArrays): never merged with ordinary regions
 )
 
 // A send (or consume) of a region.
@@ -158,6 +175,14 @@ func (s *ownState) union(a, b ownRegion) ownRegion {
 		return ra
 	}
 	ia, ib := s.info[ra], s.info[rb]
+	if (ia.flags^ib.flags)&ownRegionCounted != 0 {
+		// A counted value and an ordinary one never alias: keep them apart (the ordinary one stands
+		// for the pair, so that sending it still sends the ordinary objects).
+		if ia.flags&ownRegionCounted != 0 {
+			return rb
+		}
+		return ra
+	}
 	s.parent[rb] = ra
 	delete(s.info, rb)
 	merged := ia
@@ -394,6 +419,30 @@ func (a *ownAnalyzer) newRegion() ownRegion {
 	return a.nextRegion
 }
 
+// A fresh region, counted if `counted`.
+func (a *ownAnalyzer) newRegionOf(counted bool, s *ownState) ownRegion {
+	r := a.newRegion()
+	if counted {
+		s.addFlags(r, ownRegionCounted)
+	}
+	return r
+}
+
+// Reports whether values of a type are counted addresses in the shared heap (with `--ownRuntime`): a
+// shared struct or a SharedArray, possibly with null or undefined.
+func (a *ownAnalyzer) isCountedType(t *Type) bool {
+	return a.c.compilerOptions.OwnRuntime != "" && a.c.isOwnCellType(t)
+}
+
+// Reports whether a value is in a counted region.
+func (s *ownState) isCounted(v ownValue) bool {
+	if v.kind != ownInRegion {
+		return false
+	}
+	_, inf := s.root(v)
+	return inf.flags&ownRegionCounted != 0
+}
+
 type ownTarget struct {
 	labels    []string
 	isLoop    bool
@@ -458,14 +507,16 @@ func (a *ownAnalyzer) analyzeFunction(node *ast.Node) *ownFunctionResult {
 
 func (f *ownFunction) parameterValue(p *ast.Node, s *ownState) ownValue {
 	a := f.a
+	sym := a.c.getSymbolOfDeclaration(p)
+	counted := sym != nil && a.isCountedType(a.c.getTypeOfSymbol(sym))
 	if t := a.parameterTypeNode(p); t != nil && a.isSendingTypeNode(t) {
 		// `sending T`: the function owns the argument.
-		return ownRegionValue(a.newRegion())
+		return ownRegionValue(a.newRegionOf(counted, s))
 	}
-	if sym := a.c.getSymbolOfDeclaration(p); sym != nil && a.isSharedSymbol(sym) {
+	if sym != nil && a.isSharedSymbol(sym) {
 		return ownSharedValue
 	}
-	r := a.newRegion()
+	r := a.newRegionOf(counted, s)
 	s.addFlags(r, ownRegionCaller)
 	return ownRegionValue(r)
 }
@@ -632,6 +683,7 @@ func (f *ownFunction) jump(node *ast.Node, s *ownState) {
 // seen by the uses in the next.
 func (f *ownFunction) loop(node *ast.Node, labels []string, s *ownState) {
 	var iterated ownValue
+	receives := false // a for-of over a channel of counted values: each iteration receives a fresh one
 	switch node.Kind {
 	case ast.KindForStatement:
 		if init := node.AsForStatement().Initializer; init != nil {
@@ -643,6 +695,7 @@ func (f *ownFunction) loop(node *ast.Node, labels []string, s *ownState) {
 		}
 	case ast.KindForOfStatement:
 		iterated = f.a.elementValue(node.Expression(), f.eval(node.Expression(), s))
+		receives = f.a.isCountedType(f.a.c.getOwnChannelElementType(f.a.c.getTypeOfExpression(node.Expression())))
 	case ast.KindForInStatement:
 		f.eval(node.Expression(), s)
 		iterated = ownSharedValue // property names
@@ -691,12 +744,16 @@ func (f *ownFunction) loop(node *ast.Node, labels []string, s *ownState) {
 		case ast.KindForInStatement, ast.KindForOfStatement:
 			exit = st.copy()
 			n := node.AsForInOrOfStatement()
+			value := iterated
+			if receives {
+				value = ownRegionValue(f.a.newRegionOf(true, st))
+			}
 			if ast.IsVariableDeclarationList(n.Initializer) {
 				for _, decl := range n.Initializer.AsVariableDeclarationList().Declarations.Nodes {
-					f.bindName(decl.Name(), decl, iterated, st)
+					f.bindName(decl.Name(), decl, value, st)
 				}
 			} else {
-				f.assign(n.Initializer, iterated, st)
+				f.assign(n.Initializer, value, st)
 			}
 			f.statement(n.Statement, st)
 			st = joinAllOwnStates(st, t.continues)
@@ -825,10 +882,11 @@ func (f *ownFunction) checkReturn(expr *ast.Node, v ownValue, s *ownState) {
 		return
 	}
 	_, inf := s.root(v)
-	if inf.flags != 0 || inf.sent != nil {
+	borrowed := inf.flags&(ownRegionCaller|ownRegionOuter) != 0
+	if borrowed || inf.sent != nil {
 		f.result.returnsFresh = false
 	}
-	if f.returnsSending && inf.flags != 0 {
+	if f.returnsSending && borrowed {
 		f.a.report(ownReportKey{expr, ownReportReturn}, expr, diagnostics.X_0_cannot_be_returned_as_sending_Colon_it_may_be_referenced_by_the_caller, ownExpressionName(expr))
 	}
 }
@@ -926,11 +984,11 @@ func (f *ownFunction) eval(node *ast.Node, s *ownState) ownValue {
 		return v
 	case ast.KindPropertyAccessExpression:
 		obj := f.eval(node.Expression(), s)
-		return f.readMember(node, node.Expression(), obj)
+		return f.readMember(node, node.Expression(), obj, s)
 	case ast.KindElementAccessExpression:
 		obj := f.eval(node.Expression(), s)
 		f.eval(node.AsElementAccessExpression().ArgumentExpression, s)
-		return f.readMember(node, node.Expression(), obj)
+		return f.readMember(node, node.Expression(), obj, s)
 	}
 	return f.evalChildren(node, s)
 }
@@ -996,7 +1054,7 @@ func (f *ownFunction) lookup(sym *ast.Symbol, s *ownState) ownValue {
 	if a.isSharedSymbol(sym) {
 		return ownSharedValue
 	}
-	r := a.newRegion()
+	r := a.newRegionOf(a.isCountedType(a.c.getTypeOfSymbol(sym)), s)
 	s.addFlags(r, ownRegionOuter)
 	v := ownRegionValue(r)
 	s.vars[sym] = v
@@ -1112,7 +1170,7 @@ func (f *ownFunction) assign(target *ast.Node, v ownValue, s *ownState) {
 			f.eval(target.AsElementAccessExpression().ArgumentExpression, s)
 		}
 		f.checkWrite(target, target.Expression(), obj)
-		if obj.kind == ownInRegion {
+		if obj.kind == ownInRegion && !s.isCounted(obj) {
 			s.mergeValues(obj, v)
 		}
 	case ast.KindArrayLiteralExpression:
@@ -1166,9 +1224,17 @@ func (f *ownFunction) checkWrite(target *ast.Node, object *ast.Node, obj ownValu
 
 // The value of `o.p` or `o[i]` given the value of `o`: shared if `o` is shared (sharedness is deep),
 // if the member is declared `shared`, or if it is a primitive; otherwise in `o`'s region.
-func (f *ownFunction) readMember(node *ast.Node, object *ast.Node, obj ownValue) ownValue {
+func (f *ownFunction) readMember(node *ast.Node, object *ast.Node, obj ownValue, s *ownState) ownValue {
 	a := f.a
 	if obj.kind != ownInRegion {
+		return ownSharedValue
+	}
+	if s.isCounted(obj) {
+		// A struct element of a SharedArray is stored inline in the array's block: an alias of the
+		// array. Fields are numbers or untracked references.
+		if ast.IsElementAccessExpression(node) && a.isCountedType(a.c.getTypeOfExpression(node)) {
+			return obj
+		}
 		return ownSharedValue
 	}
 	if ast.IsPropertyAccessExpression(node) {
@@ -1227,7 +1293,7 @@ func (f *ownFunction) closureValue(node *ast.Node, s *ownState) ownValue {
 		v := f.lookup(sym, s)
 		// A captured variable that was already sent is reported once, here; it is not linked to the
 		// closure, so that uses of the closure do not report it again.
-		if !f.checkUse(captures.nodes[i], sym.Name, v, s) && v.kind == ownInRegion {
+		if !f.checkUse(captures.nodes[i], sym.Name, v, s) && v.kind == ownInRegion && !s.isCounted(v) {
 			s.union(r, v.region)
 		}
 	}
@@ -1254,7 +1320,9 @@ func (f *ownFunction) evalCall(node *ast.Node, s *ownState) ownValue {
 	callee := ast.SkipOuterExpressions(call.Expression, ast.OEKParentheses|ast.OEKNonNullAssertions)
 	var regions []ownRegion
 	add := func(v ownValue) {
-		if v.kind == ownInRegion {
+		// A counted value is not linked to the other arguments (a function can only store it in a
+		// reference field, which is not tracked).
+		if v.kind == ownInRegion && !s.isCounted(v) {
 			regions = append(regions, v.region)
 		}
 	}
@@ -1303,18 +1371,19 @@ func (f *ownFunction) evalCall(node *ast.Node, s *ownState) ownValue {
 		}
 		v := f.eval(expr, s)
 		if param := ownParameterAt(params, i); param != nil && a.isSendingTypeNode(param.Type()) {
-			f.send(v, expr, name, consuming, s)
+			f.sendArgument(v, expr, param, name, consuming, s)
 			continue
 		}
 		add(v)
-		if v.kind == ownInRegion && !(callback != nil && i == 0) {
+		if v.kind == ownInRegion && !s.isCounted(v) && !(callback != nil && i == 0) {
 			otherArgs = append(otherArgs, v.region)
 		}
 	}
+	counted := a.isCountedType(c.getTypeOfExpression(node))
 	switch a.returnKind(decl) {
 	case ownReturnsSending:
 		f.unionAll(regions, s)
-		return ownRegionValue(a.newRegion())
+		return ownRegionValue(a.newRegionOf(counted, s))
 	case ownReturnsShared:
 		f.unionAll(regions, s)
 		return ownSharedValue
@@ -1325,6 +1394,10 @@ func (f *ownFunction) evalCall(node *ast.Node, s *ownState) ownValue {
 		return ownRegionValue(a.newRegion())
 	}
 	r := f.unionAll(regions, s)
+	if counted {
+		// Not tracked through the call: a fresh counted value.
+		return ownRegionValue(a.newRegionOf(true, s))
+	}
 	if a.isPrimitiveOrSharedStructType(c.getTypeOfExpression(node)) {
 		return ownSharedValue
 	}
@@ -1337,12 +1410,17 @@ func (f *ownFunction) evalCall(node *ast.Node, s *ownState) ownValue {
 func (f *ownFunction) evalNew(node *ast.Node, s *ownState) ownValue {
 	a := f.a
 	n := node.AsNewExpression()
-	if a.isSharedStructReference(n.Expression) {
-		// `new S(...)` of a shared struct: the instance is shared.
+	counted := a.isCountedType(a.c.getTypeOfExpression(node))
+	if a.isSharedStructReference(n.Expression) || counted {
+		// `new S(...)` of a shared struct: the instance is shared, or (with `--ownRuntime`) a fresh
+		// counted value, as is a new SharedArray.
 		if n.Arguments != nil {
 			for _, arg := range n.Arguments.Nodes {
 				f.eval(arg, s)
 			}
+		}
+		if counted {
+			return ownRegionValue(a.newRegionOf(true, s))
 		}
 		return ownSharedValue
 	}
@@ -1366,10 +1444,10 @@ func (f *ownFunction) evalNew(node *ast.Node, s *ownState) ownValue {
 			}
 			v := f.eval(expr, s)
 			if param := ownParameterAt(params, i); param != nil && a.isSendingTypeNode(param.Type()) {
-				f.send(v, expr, name, consuming, s)
+				f.sendArgument(v, expr, param, name, consuming, s)
 				continue
 			}
-			if v.kind == ownInRegion {
+			if v.kind == ownInRegion && !s.isCounted(v) {
 				regions = append(regions, v.region)
 			}
 		}
@@ -1405,6 +1483,16 @@ func (f *ownFunction) unionAll(regions []ownRegion, s *ownState) ownRegion {
 		}
 	}
 	return r
+}
+
+// Passes an argument to a `sending` parameter. A counted value is sent (moved) only by a parameter
+// that is not a rest parameter: a thread's arguments share it, and a share-like function leaves it
+// as it is.
+func (f *ownFunction) sendArgument(v ownValue, expr *ast.Node, param *ast.Node, callee string, consuming bool, s *ownState) {
+	if s.isCounted(v) && (consuming || param.AsParameterDeclaration().DotDotDotToken != nil) {
+		return
+	}
+	f.send(v, expr, callee, consuming, s)
 }
 
 // Sends a value: passes it to a `sending` parameter (or a share-like function, which consumes it).
@@ -1582,6 +1670,9 @@ func (a *ownAnalyzer) computeIsSharedSymbol(sym *ast.Symbol) bool {
 	if a.isDeclaredShared(target) {
 		return true
 	}
+	if a.isCountedType(c.getTypeOfSymbol(target)) {
+		return false // tracked in a counted region
+	}
 	return a.isPrimitiveOrSharedStructType(c.getTypeOfSymbol(target))
 }
 
@@ -1626,7 +1717,7 @@ func (a *ownAnalyzer) isStaticallyShared(expr *ast.Node) bool {
 		return prop != nil && a.isDeclaredShared(prop)
 	case ast.KindCallExpression, ast.KindNewExpression:
 		if ast.IsNewExpression(expr) && a.isSharedStructReference(expr.Expression()) {
-			return true
+			return a.c.compilerOptions.OwnRuntime == "" // with `--ownRuntime`, a counted value
 		}
 		sig := a.c.getResolvedSignature(expr, nil, CheckModeNormal)
 		return sig != nil && a.returnKind(sig.declaration) == ownReturnsShared
@@ -1830,6 +1921,9 @@ func (a *ownAnalyzer) returnKind(decl *ast.Node) ownReturnKind {
 	case t == nil:
 		return ownReturnsOrdinary
 	case a.isSendingTypeNode(t):
+		return ownReturnsSending
+	case ast.IsUnionTypeNode(a.resolveTypeNode(t)) && core.Some(a.resolveTypeNode(t).AsUnionTypeNode().Types.Nodes, a.isSendingTypeNode):
+		// `sending T | undefined`, as a channel's `recv()` returns.
 		return ownReturnsSending
 	case a.isSharedTypeNode(t):
 		return ownReturnsShared

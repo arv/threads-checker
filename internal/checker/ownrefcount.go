@@ -4,6 +4,7 @@ import (
 	"slices"
 
 	"github.com/microsoft/typescript-go/internal/ast"
+	"github.com/microsoft/typescript-go/internal/core"
 	"github.com/microsoft/typescript-go/internal/diagnostics"
 	"github.com/microsoft/typescript-go/internal/printer"
 )
@@ -182,16 +183,47 @@ func (c *Checker) isOwnCountedCall(call *ast.Node) bool {
 		return false
 	}
 	decl := signature.declaration
-	if decl.Flags&ast.NodeFlagsAmbient != 0 {
-		return false
-	}
-	if file := ast.GetSourceFileOfNode(decl); file == nil || file.IsDeclarationFile {
-		return false
+	if isOwnAmbientDeclaration(decl) {
+		// A runtime function: its result is +1 if it hands over ownership (`sending T`), as a
+		// channel's `recv()` does (and `join()`, whose thread's function returned +1).
+		return decl.FunctionLikeData() != nil && (&ownAnalyzer{c: c}).returnKind(decl) == ownReturnsSending
 	}
 	for signature.target != nil {
 		signature = signature.target
 	}
 	return c.isOwnCellType(c.getReturnTypeOfSignature(signature))
+}
+
+// Reports whether a declaration is ambient: declared in a declaration file or with `declare`, so
+// implemented by the runtime (or other code the compiler does not count).
+func isOwnAmbientDeclaration(decl *ast.Node) bool {
+	if decl.Flags&ast.NodeFlagsAmbient != 0 {
+		return true
+	}
+	file := ast.GetSourceFileOfNode(decl)
+	return file == nil || file.IsDeclarationFile
+}
+
+// The element type of a channel, if t is one: `ChannelCell<T>`, the interface that chan.d.mts
+// declares. A for-of over a channel receives its values, which the receiver owns.
+func (c *Checker) getOwnChannelElementType(t *Type) *Type {
+	if c.compilerOptions.OwnRuntime == "" || t == nil || t.objectFlags&ObjectFlagsReference == 0 {
+		return nil
+	}
+	target := t.Target()
+	if target == nil || target.symbol == nil || target.symbol.Name != "ChannelCell" ||
+		!core.Some(target.symbol.Declarations, func(d *ast.Node) bool { return ast.IsInterfaceDeclaration(d) && isOwnAmbientDeclaration(d) }) {
+		return nil
+	}
+	if args := c.getTypeArguments(t); len(args) > 0 {
+		return args[0]
+	}
+	return nil
+}
+
+// Reports whether a for-of statement receives counted values from a channel: its variable owns each.
+func (c *Checker) isOwnChannelReceiveLoop(loop *ast.Node) bool {
+	return ast.IsForOfStatement(loop) && c.isOwnCellType(c.getOwnChannelElementType(c.getTypeOfExpression(loop.Expression())))
 }
 
 // Reports whether a borrowed value stays valid as long as a local initialized from it: it is not read
@@ -286,6 +318,9 @@ func (c *Checker) computeOwnLocal(decl *ast.Node, symbol *ast.Symbol) printer.Ow
 	}
 	statement := list.Parent
 	if ast.IsForInOrOfStatement(statement) {
+		if c.isOwnChannelReceiveLoop(statement) {
+			return c.getOwnOwnedLocal(decl, symbol) // owns each received value
+		}
 		return printer.OwnLocalBorrowed // an error (checkOwnRefCounts)
 	}
 	if ast.IsVariableStatement(statement) && (ast.IsSourceFile(statement.Parent) || ast.IsModuleBlock(statement.Parent)) {
@@ -580,22 +615,26 @@ func (c *Checker) isOwnReferenceField(access *ast.Node) bool {
 	return k >= 0 && cell.Refs[k]
 }
 
-// Reports whether an argument is a counted argument of the runtime's `spawn`, which the emit passes
-// as `__ref(E)`: the thread holds a count of its own.
-func (c *Checker) isOwnSpawnArgument(arg *ast.Node) bool {
+// Reports whether an argument is a counted value that the callee takes a count of, which the emit
+// passes as `__ref(E)`: a `sending` parameter of a runtime (ambient) function, other than a share-like
+// one. That is a thread's arguments (`spawn`, `go`), which the thread releases when its function
+// returns, and a channel's `send`, whose message carries the count to the receiver.
+func (c *Checker) isOwnRefArgument(arg *ast.Node) bool {
 	call := arg.Parent
-	if c.compilerOptions.OwnRuntime == "" || call == nil || !ast.IsCallExpression(call) || slices.Index(call.Arguments(), arg) < 1 {
+	if c.compilerOptions.OwnRuntime == "" || call == nil || !ast.IsCallExpression(call) && !ast.IsNewExpression(call) || ast.IsSpreadElement(arg) {
 		return false
 	}
-	if !c.isOwnCellExpression(arg) || c.getOwnConversion(arg) == printer.OwnConversionBox {
+	index := slices.Index(call.Arguments(), arg)
+	if index < 0 || !c.isOwnCellExpression(arg) || c.getOwnConversion(arg) == printer.OwnConversionBox {
 		return false
 	}
 	signature := c.getResolvedSignature(call, nil, CheckModeNormal)
-	if signature == nil || signature.declaration == nil || !c.isOwnRuntimeFile(ast.GetSourceFileOfNode(signature.declaration)) {
+	if signature == nil || signature.declaration == nil || !isOwnAmbientDeclaration(signature.declaration) {
 		return false
 	}
-	name := signature.declaration.Name()
-	return name != nil && ast.IsIdentifier(name) && name.Text() == "spawn"
+	a := &ownAnalyzer{c: c}
+	param := ownParameterAt(ownSignatureParameters(signature.declaration), index)
+	return param != nil && a.isSendingTypeNode(param.Type()) && !a.isConsumingSignature(signature.declaration)
 }
 
 // Reports the reference counting errors of a file: a captured counted variable that is reassigned, a
@@ -738,13 +777,38 @@ func (c *Checker) checkOwnRefCounts(file *ast.SourceFile) {
 			} else if ast.IsIdentifier(ast.SkipParentheses(init)) || ast.IsAccessExpression(ast.SkipParentheses(init)) {
 				t = c.getOwnAssignmentTargetType(init)
 			}
-			if t != nil && c.isOwnCellType(t) {
+			if t != nil && c.isOwnCellType(t) && !c.isOwnChannelReceiveLoop(node) {
 				c.error(init, diagnostics.A_for_of_or_for_in_variable_cannot_have_type_0_Colon_its_value_is_an_address_in_the_shared_heap, c.typeToString(t, nil))
+			}
+		case ast.KindCallExpression:
+			// A runtime function that returns addresses in an ordinary array or tuple (`select` on
+			// channels of counted values): nothing could count them.
+			if signature := c.getResolvedSignature(node, nil, CheckModeNormal); signature != nil && signature.declaration != nil && isOwnAmbientDeclaration(signature.declaration) {
+				if element := c.getOwnCountedElementType(c.getTypeOfExpression(node)); element != nil {
+					c.error(node, diagnostics.A_value_of_type_0_cannot_be_stored_in_an_ordinary_array_or_object_Colon_reference_counting_cannot_see_it_there_Use_a_SharedArray_or_a_shared_struct_field_or_a_place_typed_unknown_which_holds_a_handle, c.typeToString(element, nil))
+				}
 			}
 		}
 		return node.ForEachChild(visit)
 	}
 	file.AsNode().ForEachChild(visit)
+}
+
+// A counted element type of an array or tuple type, if any.
+func (c *Checker) getOwnCountedElementType(t *Type) *Type {
+	switch {
+	case isTupleType(t):
+		for _, element := range c.getElementTypes(t) {
+			if c.isOwnCellType(element) {
+				return element
+			}
+		}
+	case c.isArrayType(t):
+		if element := c.getElementTypeOfArrayType(t); c.isOwnCellType(element) {
+			return element
+		}
+	}
+	return nil
 }
 
 func ownTargetName(target *ast.Node) string {

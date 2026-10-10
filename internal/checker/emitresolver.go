@@ -125,15 +125,15 @@ func (r *EmitResolver) IsOwnQuiescentLoop(loop *ast.Node) bool {
 	return r.checker.isOwnQuiescentLoop(loop)
 }
 
-// Reports whether an argument of the original tree is a counted argument of `spawn` (own/shared
-// threads extension).
-func (r *EmitResolver) IsOwnSpawnArgument(argument *ast.Node) bool {
+// Reports whether an argument of the original tree is a counted value that the callee takes a count
+// of: a thread's argument or a message (own/shared threads extension).
+func (r *EmitResolver) IsOwnRefArgument(argument *ast.Node) bool {
 	if !isOwnOriginalNode(argument) {
 		return false
 	}
 	r.checkerMu.Lock()
 	defer r.checkerMu.Unlock()
-	return r.checker.isOwnSpawnArgument(argument)
+	return r.checker.isOwnRefArgument(argument)
 }
 
 func isOwnOriginalNode(node *ast.Node) bool {

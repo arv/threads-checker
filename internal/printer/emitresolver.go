@@ -150,7 +150,7 @@ type EmitResolver interface {
 	GetOwnLocal(declaration *ast.Node) OwnLocal
 	GetOwnCaptures(function *ast.Node) []*ast.Node
 	IsOwnQuiescentLoop(loop *ast.Node) bool
-	IsOwnSpawnArgument(argument *ast.Node) bool
+	IsOwnRefArgument(argument *ast.Node) bool
 
 	// JSX Emit
 	GetJsxFactoryEntity(location *ast.Node) *ast.Node
