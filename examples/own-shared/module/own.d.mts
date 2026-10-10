@@ -49,3 +49,22 @@ export declare function take<T>(items: (sending T)[], index: number): sending T;
 
 /** Prints a line, synchronously, from any thread. */
 export declare function log(...args: unknown[]): void;
+
+/** A shared struct's value as a type: what `new SharedArray(Struct, n)` takes. */
+export interface SharedStructType<T> {
+    new (): T;
+}
+
+/**
+ * A fixed-length array in the shared heap, of numbers or of shared structs stored inline. Threads
+ * share it with no copying. With `ownRuntime` the compiler lays it out in the shared heap and turns
+ * `a[i]` and `a.length` into typed-array accesses.
+ */
+export interface SharedArray<T> {
+    readonly length: number;
+    [index: number]: T;
+}
+export declare const SharedArray: {
+    new (type: NumberConstructor, length: number): SharedArray<number>;
+    new <T>(type: SharedStructType<T>, length: number): SharedArray<T>;
+};
