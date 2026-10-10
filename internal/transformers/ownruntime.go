@@ -23,7 +23,7 @@ import (
 //	__register(import.meta.url, { worker, simulate, main });
 //
 // The typed layouts of shared structs and SharedArrays use more helpers (`__F64`, `__I32`,
-// `__newStruct`, `__newSharedArray`, `__oob`, `__box`, `__unbox`; see tstransforms/ownlayout.go). The
+// `__newStruct`, `__newSharedArray`, `__OOB`, `__box`, `__unbox`; see tstransforms/ownlayout.go). The
 // import lists exactly the helpers the emitted module references.
 //
 // The helpers are referenced through helper names, so a file that declares its own `__register`
@@ -36,18 +36,18 @@ const (
 	OwnRuntimeI32Helper            = "__I32"
 	OwnRuntimeNewStructHelper      = "__newStruct"
 	OwnRuntimeNewSharedArrayHelper = "__newSharedArray"
-	OwnRuntimeOutOfBoundsHelper    = "__oob"
+	OwnRuntimeOutOfBoundsHelper    = "__OOB"
 	OwnRuntimeBoxHelper            = "__box"
 	OwnRuntimeUnboxHelper          = "__unbox"
 )
 
-var ownRuntimeHelpers = []string{
+var ownRuntimeHelpers = []string{ // sorted
 	OwnRuntimeF64Helper,
 	OwnRuntimeI32Helper,
+	OwnRuntimeOutOfBoundsHelper,
 	OwnRuntimeBoxHelper,
 	OwnRuntimeNewSharedArrayHelper,
 	OwnRuntimeNewStructHelper,
-	OwnRuntimeOutOfBoundsHelper,
 	OwnRuntimeRegisterHelper,
 	OwnRuntimeSharedStructHelper,
 	OwnRuntimeUnboxHelper,

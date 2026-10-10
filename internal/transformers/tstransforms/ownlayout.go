@@ -23,11 +23,14 @@ import (
 //	new SharedArray(Number, n) __newSharedArray(8, n)
 //	e.fk (read or write)       __F64[(E >> 3) + 1 + k]                  (1 + k folded)
 //	a.length                   __I32[(A + 4) >> 2]
-//	a[i]  (struct elements)    (I >>> 0) < __I32[(A + 4) >> 2] ? A + 16 + I * size : __oob(A, I)
-//	a[i]  (number, read)       (I >>> 0) < __I32[(A + 4) >> 2] ? __F64[((A + 16) >> 3) + I] : __oob(A, I)
-//	a[i]  (number, write)      __F64[((A + 16) >> 3) + ((I >>> 0) < __I32[(A + 4) >> 2] ? I : __oob(A, I))]
+//	a[i]  (struct elements)    CHECK ? A + 16 + I * size : __OOB[I]
+//	a[i]  (number, read)       CHECK ? __F64[((A + 16) >> 3) + I] : __OOB[I]
+//	a[i]  (number, write)      __F64[((A + 16) >> 3) + (CHECK ? I : __OOB[I])]
+//	CHECK                      (I >>> 0) === I && I < __I32[(A + 4) >> 2]
 //
-// A and I are copied to temporaries when they are not simple. Where the checker decides that a value
+// A and I are copied to temporaries when they are not simple. The failure path reads `__OOB[I]`, a
+// Proxy that throws, rather than calling a function: a call, even one that is never taken, keeps
+// V8's TurboFan from optimizing the loops these accesses sit in. Where the checker decides that a value
 // crosses between the raw representation and a place typed otherwise, the expression is wrapped in
 // `__box(E)` or `__unbox(E)` (see checker/ownlayout.go). The helpers are imported from the
 // `ownRuntime` module by the ES module transform.
@@ -197,7 +200,7 @@ func (tx *OwnLayoutTransformer) lowerAccess(node *ast.Node, isWrite bool) *ast.N
 		a := tx.copiable(tx.objectOf(node), &temps)
 		i := tx.copiable(tx.Visitor().VisitNode(node.AsElementAccessExpression().ArgumentExpression), &temps)
 		size := 8 + 8*len(cell.Fields)
-		address := tx.cond(tx.inBounds(a, i), tx.add(tx.add(tx.dup(a), tx.number(16)), tx.binary(tx.dup(i), ast.KindAsteriskToken, tx.number(size))), tx.oob(a, i))
+		address := tx.cond(tx.inBounds(a, i), tx.add(tx.add(tx.dup(a), tx.number(16)), tx.binary(tx.dup(i), ast.KindAsteriskToken, tx.number(size))), tx.oob(i))
 		return tx.sequence(temps, address)
 	case printer.OwnCellArrayOfNumber:
 		var temps []*ast.Node
@@ -205,10 +208,10 @@ func (tx *OwnLayoutTransformer) lowerAccess(node *ast.Node, isWrite bool) *ast.N
 		i := tx.copiable(tx.Visitor().VisitNode(node.AsElementAccessExpression().ArgumentExpression), &temps)
 		base := tx.paren(tx.binary(tx.paren(tx.add(tx.dup(a), tx.number(16))), ast.KindGreaterThanGreaterThanToken, tx.number(3)))
 		if isWrite {
-			index := tx.paren(tx.cond(tx.inBounds(a, i), tx.dup(i), tx.oob(a, i)))
+			index := tx.paren(tx.cond(tx.inBounds(a, i), tx.dup(i), tx.oob(i)))
 			return tx.f64(tx.sequence(temps, tx.add(base, index)))
 		}
-		read := tx.cond(tx.inBounds(a, i), tx.f64(tx.add(base, tx.dup(i))), tx.oob(a, i))
+		read := tx.cond(tx.inBounds(a, i), tx.f64(tx.add(base, tx.dup(i))), tx.oob(i))
 		return tx.sequence(temps, read)
 	}
 	return nil
@@ -250,9 +253,11 @@ func (tx *OwnLayoutTransformer) sequence(temps []*ast.Node, expr *ast.Node) *ast
 	return tx.Factory().InlineExpressions(append(slices.Clone(temps), expr))
 }
 
-// (I >>> 0) < __I32[(A + 4) >> 2]
+// (I >>> 0) === I && I < __I32[(A + 4) >> 2]: an integer index in range (`>>> 0` maps negative and
+// fractional indexes to other numbers).
 func (tx *OwnLayoutTransformer) inBounds(a *ast.Node, i *ast.Node) *ast.Node {
-	return tx.binary(tx.paren(tx.binary(tx.dup(i), ast.KindGreaterThanGreaterThanGreaterThanToken, tx.number(0))), ast.KindLessThanToken, tx.length(tx.dup(a)))
+	isIndex := tx.binary(tx.paren(tx.binary(tx.dup(i), ast.KindGreaterThanGreaterThanGreaterThanToken, tx.number(0))), ast.KindEqualsEqualsEqualsToken, tx.dup(i))
+	return tx.binary(isIndex, ast.KindAmpersandAmpersandToken, tx.binary(tx.dup(i), ast.KindLessThanToken, tx.length(tx.dup(a))))
 }
 
 // __I32[(A + 4) >> 2]
@@ -260,8 +265,9 @@ func (tx *OwnLayoutTransformer) length(a *ast.Node) *ast.Node {
 	return tx.Factory().NewElementAccessExpression(tx.helper(transformers.OwnRuntimeI32Helper), nil /*questionDotToken*/, tx.binary(tx.paren(tx.add(a, tx.number(4))), ast.KindGreaterThanGreaterThanToken, tx.number(2)), ast.NodeFlagsNone)
 }
 
-func (tx *OwnLayoutTransformer) oob(a *ast.Node, i *ast.Node) *ast.Node {
-	return tx.call(transformers.OwnRuntimeOutOfBoundsHelper, tx.dup(a), tx.dup(i))
+// __OOB[I]: throws a RangeError naming the index, without a call.
+func (tx *OwnLayoutTransformer) oob(i *ast.Node) *ast.Node {
+	return tx.Factory().NewElementAccessExpression(tx.helper(transformers.OwnRuntimeOutOfBoundsHelper), nil /*questionDotToken*/, tx.dup(i), ast.NodeFlagsNone)
 }
 
 func (tx *OwnLayoutTransformer) f64(index *ast.Node) *ast.Node {

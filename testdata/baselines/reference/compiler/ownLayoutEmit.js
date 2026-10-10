@@ -120,7 +120,7 @@ export function allocate(n: number) {
 
 
 //// [layout.mjs]
-import { __F64, __I32, __newSharedArray, __newStruct, __oob, __register, __sharedStruct } from "./own.mjs";
+import { __F64, __I32, __OOB, __newSharedArray, __newStruct, __register, __sharedStruct } from "./own.mjs";
 import { SharedArray } from "./own.mjs";
 export const Vec = __sharedStruct("Vec", ["x", "y", "z"]);
 export const Particle = __sharedStruct("Particle", ["pos", "mass", "trail"]);
@@ -136,26 +136,26 @@ export function fields(v, p) {
 }
 export function elements(vs, i) {
     var _a, _b, _c;
-    const v = (i >>> 0) < __I32[(vs + 4) >> 2] ? vs + 16 + i * 32 : __oob(vs, i); // element address, bounds-checked
-    __F64[(((i >>> 0) < __I32[(vs + 4) >> 2] ? vs + 16 + i * 32 : __oob(vs, i)) >> 3) + 1] = __F64[((_a = i + 1, (_a >>> 0) < __I32[(vs + 4) >> 2] ? vs + 16 + _a * 32 : __oob(vs, _a)) >> 3) + 2]; // chains; index not simple: temporary
+    const v = (i >>> 0) === i && i < __I32[(vs + 4) >> 2] ? vs + 16 + i * 32 : __OOB[i]; // element address, bounds-checked
+    __F64[(((i >>> 0) === i && i < __I32[(vs + 4) >> 2] ? vs + 16 + i * 32 : __OOB[i]) >> 3) + 1] = __F64[((_a = i + 1, (_a >>> 0) === _a && _a < __I32[(vs + 4) >> 2] ? vs + 16 + _a * 32 : __OOB[_a]) >> 3) + 2]; // chains; index not simple: temporary
     const n = __I32[(vs + 4) >> 2]; // header word
-    const w = (_b = arrays(), _c = pick(), (_c >>> 0) < __I32[(_b + 4) >> 2] ? _b + 16 + _c * 32 : __oob(_b, _c)); // array and index not simple: temporaries
+    const w = (_b = arrays(), _c = pick(), (_c >>> 0) === _c && _c < __I32[(_b + 4) >> 2] ? _b + 16 + _c * 32 : __OOB[_c]); // array and index not simple: temporaries
     return n + __F64[(w >> 3) + 3] + __F64[(v >> 3) + 1];
 }
 export function numbers(a, p, i) {
     var _a, _b;
-    const first = (0 >>> 0) < __I32[(a + 4) >> 2] ? __F64[((a + 16) >> 3) + 0] : __oob(a, 0); // read
-    __F64[((a + 16) >> 3) + ((i >>> 0) < __I32[(a + 4) >> 2] ? i : __oob(a, i))] = first * 2; // write
-    __F64[_a = i + 1, ((a + 16) >> 3) + ((_a >>> 0) < __I32[(a + 4) >> 2] ? _a : __oob(a, _a))] += 3; // compound assignment, index not simple
-    __F64[((a + 16) >> 3) + ((i >>> 0) < __I32[(a + 4) >> 2] ? i : __oob(a, i))]++;
-    __F64[_b = __F64[(p >> 3) + 3], ((_b + 16) >> 3) + ((i >>> 0) < __I32[(_b + 4) >> 2] ? i : __oob(_b, i))] = __I32[(a + 4) >> 2]; // array from a field: temporary
-    return (i >>> 0) < __I32[(a + 4) >> 2] ? __F64[((a + 16) >> 3) + i] : __oob(a, i);
+    const first = (0 >>> 0) === 0 && 0 < __I32[(a + 4) >> 2] ? __F64[((a + 16) >> 3) + 0] : __OOB[0]; // read
+    __F64[((a + 16) >> 3) + ((i >>> 0) === i && i < __I32[(a + 4) >> 2] ? i : __OOB[i])] = first * 2; // write
+    __F64[_a = i + 1, ((a + 16) >> 3) + ((_a >>> 0) === _a && _a < __I32[(a + 4) >> 2] ? _a : __OOB[_a])] += 3; // compound assignment, index not simple
+    __F64[((a + 16) >> 3) + ((i >>> 0) === i && i < __I32[(a + 4) >> 2] ? i : __OOB[i])]++;
+    __F64[_b = __F64[(p >> 3) + 3], ((_b + 16) >> 3) + ((i >>> 0) === i && i < __I32[(_b + 4) >> 2] ? i : __OOB[i])] = __I32[(a + 4) >> 2]; // array from a field: temporary
+    return (i >>> 0) === i && i < __I32[(a + 4) >> 2] ? __F64[((a + 16) >> 3) + i] : __OOB[i];
 }
 export function allocate(n) {
     const v = __newStruct(Vec);
     const vs = __newSharedArray(Vec, n);
     const ns = __newSharedArray(8, n);
-    __F64[((ns + 16) >> 3) + ((0 >>> 0) < __I32[(ns + 4) >> 2] ? 0 : __oob(ns, 0))] = __F64[(v >> 3) + 1];
+    __F64[((ns + 16) >> 3) + ((0 >>> 0) === 0 && 0 < __I32[(ns + 4) >> 2] ? 0 : __OOB[0])] = __F64[(v >> 3) + 1];
     return vs;
 }
 __register(import.meta.url, { fields, elements, numbers, allocate });
