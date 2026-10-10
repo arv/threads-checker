@@ -30,7 +30,10 @@ import (
 //
 // A and I are copied to temporaries when they are not simple. The failure path reads `__OOB[I]`, a
 // Proxy that throws, rather than calling a function: a call, even one that is never taken, keeps
-// V8's TurboFan from optimizing the loops these accesses sit in. Where the checker decides that a value
+// V8's TurboFan from optimizing the loops these accesses sit in. Where the checker proves that I is
+// an integer in [0, A.length) (see "Bounds-check elimination" in checker/ownlayout.go: I counts up
+// from a non-negative integer in a `for` loop bounded by A.length, and neither A nor I is assigned),
+// the element is accessed with no check at all. Where the checker decides that a value
 // crosses between the raw representation and a place typed otherwise, the expression is wrapped in
 // `__box(E)` or `__unbox(E)` (see checker/ownlayout.go). The helpers are imported from the
 // `ownRuntime` module by the ES module transform.
@@ -182,6 +185,9 @@ func (tx *OwnLayoutTransformer) lowerAccess(node *ast.Node, isWrite bool) *ast.N
 				return nil
 			}
 			object := tx.objectOf(node)
+			if ast.IsBinaryExpression(object) {
+				object = tx.paren(object) // an unchecked element address: ((A + 16 + I * size) >> 3)
+			}
 			return tx.f64(tx.add(tx.paren(tx.binary(object, ast.KindGreaterThanGreaterThanToken, tx.number(3))), tx.number(1+k)))
 		case printer.OwnCellArrayOfNumber, printer.OwnCellArrayOfStruct:
 			if name != "length" || isWrite {
@@ -190,6 +196,18 @@ func (tx *OwnLayoutTransformer) lowerAccess(node *ast.Node, isWrite bool) *ast.N
 			return tx.length(tx.objectOf(node))
 		}
 		return nil
+	}
+	if (cell.Kind == printer.OwnCellArrayOfStruct || cell.Kind == printer.OwnCellArrayOfNumber) && tx.emitResolver.IsOwnElementAccessInBounds(original) {
+		// Proven in bounds (A and I are identifiers): no check, no temporaries.
+		if cell.Kind == printer.OwnCellArrayOfStruct && isWrite {
+			return nil // reported by the checker
+		}
+		a := tx.objectOf(node)
+		i := tx.Visitor().VisitNode(node.AsElementAccessExpression().ArgumentExpression)
+		if cell.Kind == printer.OwnCellArrayOfStruct {
+			return tx.add(tx.add(a, tx.number(16)), tx.binary(i, ast.KindAsteriskToken, tx.number(8+8*len(cell.Fields))))
+		}
+		return tx.f64(tx.add(tx.paren(tx.binary(tx.paren(tx.add(a, tx.number(16))), ast.KindGreaterThanGreaterThanToken, tx.number(3))), i))
 	}
 	switch cell.Kind {
 	case printer.OwnCellArrayOfStruct:

@@ -70,6 +70,17 @@ func (r *EmitResolver) GetOwnConversion(expression *ast.Node) printer.OwnConvers
 	return r.checker.getOwnConversion(expression)
 }
 
+// Reports whether a SharedArray element access of the original tree needs no bounds check (own/shared
+// threads extension).
+func (r *EmitResolver) IsOwnElementAccessInBounds(elementAccess *ast.Node) bool {
+	if elementAccess == nil || elementAccess.Flags&ast.NodeFlagsSynthesized != 0 || ast.GetSourceFileOfNode(elementAccess) == nil {
+		return false
+	}
+	r.checkerMu.Lock()
+	defer r.checkerMu.Unlock()
+	return r.checker.isOwnElementAccessInBounds(elementAccess)
+}
+
 func (r *EmitResolver) GetJsxFactoryEntity(location *ast.Node) *ast.Node {
 	r.checkerMu.Lock()
 	defer r.checkerMu.Unlock()

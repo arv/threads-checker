@@ -1,0 +1,471 @@
+//// [tests/cases/compiler/ownLayoutBoundsChecks.ts] ////
+
+=== own.d.mts ===
+// Types for the own/shared threads runtime own.mjs (the runtime itself lives in porffor). Programs
+// import their API from "./own.mjs"; the compiler adds the imports of the helpers it emits
+// (`__sharedStruct`, `__register`) when `ownRuntime` is set.
+//
+// `sending T` marks a value whose ownership moves to the receiver: the sender must not use it
+// afterwards. `shared T` marks a value any number of threads may read at once: deeply immutable, or
+// a cell that synchronizes internally (Slots, Barrier, a shared struct).
+
+/** One slot per thread: a thread publishes into its own slot, and everyone reads every slot. */
+export interface SlotsCell<T> {
+>SlotsCell : Symbol(SlotsCell, Decl(own.d.mts, 0, 0))
+>T : Symbol(T, Decl(own.d.mts, 9, 27))
+
+    readonly length: number;
+>length : Symbol(SlotsCell.length, Decl(own.d.mts, 9, 31))
+
+    /** Publishes `value` in slot `index`, replacing what was there. */
+    set(index: number, value: T): void;
+>set : Symbol(SlotsCell.set, Decl(own.d.mts, 10, 28))
+>index : Symbol(index, Decl(own.d.mts, 12, 8))
+>value : Symbol(value, Decl(own.d.mts, 12, 22))
+>T : Symbol(T, Decl(own.d.mts, 9, 27))
+
+    /** The value in slot `index`. */
+    get(index: number): shared T;
+>get : Symbol(SlotsCell.get, Decl(own.d.mts, 12, 39))
+>index : Symbol(index, Decl(own.d.mts, 14, 8))
+>T : Symbol(T, Decl(own.d.mts, 9, 27))
+
+    /** The arrays in all slots, concatenated in slot order. */
+    flat(): shared (T extends readonly (infer E)[] ? E : T)[];
+>flat : Symbol(SlotsCell.flat, Decl(own.d.mts, 14, 33))
+>T : Symbol(T, Decl(own.d.mts, 9, 27))
+>E : Symbol(E, Decl(own.d.mts, 16, 45))
+>E : Symbol(E, Decl(own.d.mts, 16, 45))
+>T : Symbol(T, Decl(own.d.mts, 9, 27))
+}
+export declare const Slots: new <T>(count: number) => shared SlotsCell<T>;
+>Slots : Symbol(Slots, Decl(own.d.mts, 18, 20))
+>T : Symbol(T, Decl(own.d.mts, 18, 33))
+>count : Symbol(count, Decl(own.d.mts, 18, 36))
+>SlotsCell : Symbol(SlotsCell, Decl(own.d.mts, 0, 0))
+>T : Symbol(T, Decl(own.d.mts, 18, 33))
+
+/** A reusable barrier for a fixed number of threads. */
+export interface BarrierCell {
+>BarrierCell : Symbol(BarrierCell, Decl(own.d.mts, 18, 74))
+
+    /** Blocks until all threads have called `wait`. */
+    wait(): void;
+>wait : Symbol(BarrierCell.wait, Decl(own.d.mts, 21, 30))
+}
+export declare const Barrier: new (threads: number) => shared BarrierCell;
+>Barrier : Symbol(Barrier, Decl(own.d.mts, 25, 20))
+>threads : Symbol(threads, Decl(own.d.mts, 25, 35))
+>BarrierCell : Symbol(BarrierCell, Decl(own.d.mts, 18, 74))
+
+/** Freezes a value the caller owns into a deeply immutable value every thread can read. */
+export declare function share<T>(value: sending T): shared T;
+>share : Symbol(share, Decl(own.d.mts, 25, 74))
+>T : Symbol(T, Decl(own.d.mts, 28, 30))
+>value : Symbol(value, Decl(own.d.mts, 28, 33))
+>T : Symbol(T, Decl(own.d.mts, 28, 30))
+>T : Symbol(T, Decl(own.d.mts, 28, 30))
+
+/** A thread started inside a `scope`; joining it moves the thread's result back. */
+export interface Thread<R> {
+>Thread : Symbol(Thread, Decl(own.d.mts, 28, 61))
+>R : Symbol(R, Decl(own.d.mts, 31, 24))
+
+    join(): sending R;
+>join : Symbol(Thread.join, Decl(own.d.mts, 31, 28))
+>R : Symbol(R, Decl(own.d.mts, 31, 24))
+}
+
+/** Spawns threads that cannot outlive the scope. Every argument is sent to the new thread. */
+export interface Scope {
+>Scope : Symbol(Scope, Decl(own.d.mts, 33, 1))
+
+    spawn<A extends unknown[], R>(f: (...args: A) => sending R, ...args: sending A): shared Thread<R>;
+>spawn : Symbol(Scope.spawn, Decl(own.d.mts, 36, 24))
+>A : Symbol(A, Decl(own.d.mts, 37, 10))
+>R : Symbol(R, Decl(own.d.mts, 37, 30))
+>f : Symbol(f, Decl(own.d.mts, 37, 34))
+>args : Symbol(args, Decl(own.d.mts, 37, 38))
+>A : Symbol(A, Decl(own.d.mts, 37, 10))
+>R : Symbol(R, Decl(own.d.mts, 37, 30))
+>args : Symbol(args, Decl(own.d.mts, 37, 63))
+>A : Symbol(A, Decl(own.d.mts, 37, 10))
+>Thread : Symbol(Thread, Decl(own.d.mts, 28, 61))
+>R : Symbol(R, Decl(own.d.mts, 37, 30))
+}
+
+/** Runs `body` and joins every thread it spawned before returning. */
+export declare function scope<R>(body: (s: shared Scope) => R): R;
+>scope : Symbol(scope, Decl(own.d.mts, 38, 1))
+>R : Symbol(R, Decl(own.d.mts, 41, 30))
+>body : Symbol(body, Decl(own.d.mts, 41, 33))
+>s : Symbol(s, Decl(own.d.mts, 41, 40))
+>Scope : Symbol(Scope, Decl(own.d.mts, 33, 1))
+>R : Symbol(R, Decl(own.d.mts, 41, 30))
+>R : Symbol(R, Decl(own.d.mts, 41, 30))
+
+/** Splits an owned array into `parts` owned, disjoint chunks of nearly equal size. Trusted. */
+export declare function partition<T>(items: sending T[], parts: number): (sending T[])[];
+>partition : Symbol(partition, Decl(own.d.mts, 41, 66))
+>T : Symbol(T, Decl(own.d.mts, 44, 34))
+>items : Symbol(items, Decl(own.d.mts, 44, 37))
+>T : Symbol(T, Decl(own.d.mts, 44, 34))
+>parts : Symbol(parts, Decl(own.d.mts, 44, 56))
+>T : Symbol(T, Decl(own.d.mts, 44, 34))
+
+/** Takes element `index` out of an array of owned values, so the caller owns it. Trusted. */
+export declare function take<T>(items: (sending T)[], index: number): sending T;
+>take : Symbol(take, Decl(own.d.mts, 44, 89))
+>T : Symbol(T, Decl(own.d.mts, 47, 29))
+>items : Symbol(items, Decl(own.d.mts, 47, 32))
+>T : Symbol(T, Decl(own.d.mts, 47, 29))
+>index : Symbol(index, Decl(own.d.mts, 47, 53))
+>T : Symbol(T, Decl(own.d.mts, 47, 29))
+
+/** Prints a line, synchronously, from any thread. */
+export declare function log(...args: unknown[]): void;
+>log : Symbol(log, Decl(own.d.mts, 47, 80))
+>args : Symbol(args, Decl(own.d.mts, 50, 28))
+
+/** A shared struct's value as a type: what `new SharedArray(Struct, n)` takes. */
+export interface SharedStructType<T> {
+>SharedStructType : Symbol(SharedStructType, Decl(own.d.mts, 50, 54))
+>T : Symbol(T, Decl(own.d.mts, 53, 34))
+
+    new (): T;
+>T : Symbol(T, Decl(own.d.mts, 53, 34))
+}
+
+/**
+ * A fixed-length array in the shared heap, of numbers or of shared structs stored inline. Threads
+ * share it with no copying. With `ownRuntime` the compiler lays it out in the shared heap and turns
+ * `a[i]` and `a.length` into typed-array accesses.
+ */
+export interface SharedArray<T> {
+>SharedArray : Symbol(SharedArray, Decl(own.d.mts, 55, 1), Decl(own.d.mts, 66, 20))
+>T : Symbol(T, Decl(own.d.mts, 62, 29))
+
+    readonly length: number;
+>length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+
+    [index: number]: T;
+>index : Symbol(index, Decl(own.d.mts, 64, 5))
+>T : Symbol(T, Decl(own.d.mts, 62, 29))
+}
+export declare const SharedArray: {
+>SharedArray : Symbol(SharedArray, Decl(own.d.mts, 55, 1), Decl(own.d.mts, 66, 20))
+
+    new (type: NumberConstructor, length: number): SharedArray<number>;
+>type : Symbol(type, Decl(own.d.mts, 67, 9))
+>NumberConstructor : Symbol(NumberConstructor, Decl(lib.es5.d.ts, --, --), Decl(lib.es2015.core.d.ts, --, --))
+>length : Symbol(length, Decl(own.d.mts, 67, 33))
+>SharedArray : Symbol(SharedArray, Decl(own.d.mts, 55, 1), Decl(own.d.mts, 66, 20))
+
+    new <T>(type: SharedStructType<T>, length: number): SharedArray<T>;
+>T : Symbol(T, Decl(own.d.mts, 68, 9))
+>type : Symbol(type, Decl(own.d.mts, 68, 12))
+>SharedStructType : Symbol(SharedStructType, Decl(own.d.mts, 50, 54))
+>T : Symbol(T, Decl(own.d.mts, 68, 9))
+>length : Symbol(length, Decl(own.d.mts, 68, 38))
+>SharedArray : Symbol(SharedArray, Decl(own.d.mts, 55, 1), Decl(own.d.mts, 66, 20))
+>T : Symbol(T, Decl(own.d.mts, 68, 9))
+
+};
+
+=== bounds.mts ===
+import { SharedArray } from "./own.mjs";
+>SharedArray : Symbol(SharedArray, Decl(bounds.mts, 0, 8))
+
+export shared struct P { x: number; y: number }
+>P : Symbol(P, Decl(bounds.mts, 0, 40))
+>x : Symbol(P.x, Decl(bounds.mts, 2, 24))
+>y : Symbol(P.y, Decl(bounds.mts, 2, 35))
+
+const START = 1;
+>START : Symbol(START, Decl(bounds.mts, 4, 5))
+
+export function eliminated(a: SharedArray<number>, ps: SharedArray<P>) {
+>eliminated : Symbol(eliminated, Decl(bounds.mts, 4, 16))
+>a : Symbol(a, Decl(bounds.mts, 6, 27))
+>SharedArray : Symbol(SharedArray, Decl(bounds.mts, 0, 8))
+>ps : Symbol(ps, Decl(bounds.mts, 6, 50))
+>SharedArray : Symbol(SharedArray, Decl(bounds.mts, 0, 8))
+>P : Symbol(P, Decl(bounds.mts, 0, 40))
+
+    let sum = 0;
+>sum : Symbol(sum, Decl(bounds.mts, 7, 7))
+
+    for (let i = 0; i < a.length; i++) sum += a[i];                      // bound a.length
+>i : Symbol(i, Decl(bounds.mts, 8, 12))
+>i : Symbol(i, Decl(bounds.mts, 8, 12))
+>a.length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+>a : Symbol(a, Decl(bounds.mts, 6, 27))
+>length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+>i : Symbol(i, Decl(bounds.mts, 8, 12))
+>sum : Symbol(sum, Decl(bounds.mts, 7, 7))
+>a : Symbol(a, Decl(bounds.mts, 6, 27))
+>i : Symbol(i, Decl(bounds.mts, 8, 12))
+
+    const n = a.length;
+>n : Symbol(n, Decl(bounds.mts, 9, 9))
+>a.length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+>a : Symbol(a, Decl(bounds.mts, 6, 27))
+>length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+
+    for (let i = 0; i < n; ++i) a[i] = sum;                             // bound const n = a.length, ++i
+>i : Symbol(i, Decl(bounds.mts, 10, 12))
+>i : Symbol(i, Decl(bounds.mts, 10, 12))
+>n : Symbol(n, Decl(bounds.mts, 9, 9))
+>i : Symbol(i, Decl(bounds.mts, 10, 12))
+>a : Symbol(a, Decl(bounds.mts, 6, 27))
+>i : Symbol(i, Decl(bounds.mts, 10, 12))
+>sum : Symbol(sum, Decl(bounds.mts, 7, 7))
+
+    for (let i = START; i < a.length; i += 1) a[i] += 1;                // init from a const literal, i += 1
+>i : Symbol(i, Decl(bounds.mts, 11, 12))
+>START : Symbol(START, Decl(bounds.mts, 4, 5))
+>i : Symbol(i, Decl(bounds.mts, 11, 12))
+>a.length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+>a : Symbol(a, Decl(bounds.mts, 6, 27))
+>length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+>i : Symbol(i, Decl(bounds.mts, 11, 12))
+>a : Symbol(a, Decl(bounds.mts, 6, 27))
+>i : Symbol(i, Decl(bounds.mts, 11, 12))
+
+    for (let i = 0; i < ps.length; i++) {
+>i : Symbol(i, Decl(bounds.mts, 12, 12))
+>i : Symbol(i, Decl(bounds.mts, 12, 12))
+>ps.length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+>ps : Symbol(ps, Decl(bounds.mts, 6, 50))
+>length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+>i : Symbol(i, Decl(bounds.mts, 12, 12))
+
+        ps[i].x = ps[i].y;                                              // struct elements
+>ps[i].x : Symbol(P.x, Decl(bounds.mts, 2, 24))
+>ps : Symbol(ps, Decl(bounds.mts, 6, 50))
+>i : Symbol(i, Decl(bounds.mts, 12, 12))
+>x : Symbol(P.x, Decl(bounds.mts, 2, 24))
+>ps[i].y : Symbol(P.y, Decl(bounds.mts, 2, 35))
+>ps : Symbol(ps, Decl(bounds.mts, 6, 50))
+>i : Symbol(i, Decl(bounds.mts, 12, 12))
+>y : Symbol(P.y, Decl(bounds.mts, 2, 35))
+
+        for (let j = 0; j < ps.length; j++) sum += ps[j].x - ps[i].x;   // nested loops
+>j : Symbol(j, Decl(bounds.mts, 14, 16))
+>j : Symbol(j, Decl(bounds.mts, 14, 16))
+>ps.length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+>ps : Symbol(ps, Decl(bounds.mts, 6, 50))
+>length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+>j : Symbol(j, Decl(bounds.mts, 14, 16))
+>sum : Symbol(sum, Decl(bounds.mts, 7, 7))
+>ps[j].x : Symbol(P.x, Decl(bounds.mts, 2, 24))
+>ps : Symbol(ps, Decl(bounds.mts, 6, 50))
+>j : Symbol(j, Decl(bounds.mts, 14, 16))
+>x : Symbol(P.x, Decl(bounds.mts, 2, 24))
+>ps[i].x : Symbol(P.x, Decl(bounds.mts, 2, 24))
+>ps : Symbol(ps, Decl(bounds.mts, 6, 50))
+>i : Symbol(i, Decl(bounds.mts, 12, 12))
+>x : Symbol(P.x, Decl(bounds.mts, 2, 24))
+    }
+    const local = new SharedArray(Number, 4);
+>local : Symbol(local, Decl(bounds.mts, 16, 9))
+>SharedArray : Symbol(SharedArray, Decl(bounds.mts, 0, 8))
+>Number : Symbol(Number, Decl(lib.es5.d.ts, --, --), Decl(lib.es5.d.ts, --, --), Decl(lib.es5.d.ts, --, --), Decl(lib.es2020.number.d.ts, --, --))
+
+    for (let i = 0; i < local.length; i++) local[i]++;                  // a const array
+>i : Symbol(i, Decl(bounds.mts, 17, 12))
+>i : Symbol(i, Decl(bounds.mts, 17, 12))
+>local.length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+>local : Symbol(local, Decl(bounds.mts, 16, 9))
+>length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+>i : Symbol(i, Decl(bounds.mts, 17, 12))
+>local : Symbol(local, Decl(bounds.mts, 16, 9))
+>i : Symbol(i, Decl(bounds.mts, 17, 12))
+
+    return sum;
+>sum : Symbol(sum, Decl(bounds.mts, 7, 7))
+}
+
+export function kept(a: SharedArray<number>, b: SharedArray<number>, lo: number) {
+>kept : Symbol(kept, Decl(bounds.mts, 19, 1))
+>a : Symbol(a, Decl(bounds.mts, 21, 21))
+>SharedArray : Symbol(SharedArray, Decl(bounds.mts, 0, 8))
+>b : Symbol(b, Decl(bounds.mts, 21, 44))
+>SharedArray : Symbol(SharedArray, Decl(bounds.mts, 0, 8))
+>lo : Symbol(lo, Decl(bounds.mts, 21, 68))
+
+    let sum = 0;
+>sum : Symbol(sum, Decl(bounds.mts, 22, 7))
+
+    for (let i = lo; i < a.length; i++) sum += a[i];                     // init not a literal
+>i : Symbol(i, Decl(bounds.mts, 23, 12))
+>lo : Symbol(lo, Decl(bounds.mts, 21, 68))
+>i : Symbol(i, Decl(bounds.mts, 23, 12))
+>a.length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+>a : Symbol(a, Decl(bounds.mts, 21, 21))
+>length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+>i : Symbol(i, Decl(bounds.mts, 23, 12))
+>sum : Symbol(sum, Decl(bounds.mts, 22, 7))
+>a : Symbol(a, Decl(bounds.mts, 21, 21))
+>i : Symbol(i, Decl(bounds.mts, 23, 12))
+
+    for (let i = -1; i < a.length; i++) sum += a[i];                     // negative init
+>i : Symbol(i, Decl(bounds.mts, 24, 12))
+>i : Symbol(i, Decl(bounds.mts, 24, 12))
+>a.length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+>a : Symbol(a, Decl(bounds.mts, 21, 21))
+>length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+>i : Symbol(i, Decl(bounds.mts, 24, 12))
+>sum : Symbol(sum, Decl(bounds.mts, 22, 7))
+>a : Symbol(a, Decl(bounds.mts, 21, 21))
+>i : Symbol(i, Decl(bounds.mts, 24, 12))
+
+    for (let i = 0; i < b.length; i++) sum += a[i];                      // bound from another array
+>i : Symbol(i, Decl(bounds.mts, 25, 12))
+>i : Symbol(i, Decl(bounds.mts, 25, 12))
+>b.length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+>b : Symbol(b, Decl(bounds.mts, 21, 44))
+>length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+>i : Symbol(i, Decl(bounds.mts, 25, 12))
+>sum : Symbol(sum, Decl(bounds.mts, 22, 7))
+>a : Symbol(a, Decl(bounds.mts, 21, 21))
+>i : Symbol(i, Decl(bounds.mts, 25, 12))
+
+    for (let i = 0; i < a.length; i++) { i = 5; sum += a[i]; }           // i assigned in the body
+>i : Symbol(i, Decl(bounds.mts, 26, 12))
+>i : Symbol(i, Decl(bounds.mts, 26, 12))
+>a.length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+>a : Symbol(a, Decl(bounds.mts, 21, 21))
+>length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+>i : Symbol(i, Decl(bounds.mts, 26, 12))
+>i : Symbol(i, Decl(bounds.mts, 26, 12))
+>sum : Symbol(sum, Decl(bounds.mts, 22, 7))
+>a : Symbol(a, Decl(bounds.mts, 21, 21))
+>i : Symbol(i, Decl(bounds.mts, 26, 12))
+
+    for (let i = 0; i < a.length; i++) { const f = () => { i++; }; f(); sum += a[i]; } // i written in a closure
+>i : Symbol(i, Decl(bounds.mts, 27, 12))
+>i : Symbol(i, Decl(bounds.mts, 27, 12))
+>a.length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+>a : Symbol(a, Decl(bounds.mts, 21, 21))
+>length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+>i : Symbol(i, Decl(bounds.mts, 27, 12))
+>f : Symbol(f, Decl(bounds.mts, 27, 46))
+>i : Symbol(i, Decl(bounds.mts, 27, 12))
+>f : Symbol(f, Decl(bounds.mts, 27, 46))
+>sum : Symbol(sum, Decl(bounds.mts, 22, 7))
+>a : Symbol(a, Decl(bounds.mts, 21, 21))
+>i : Symbol(i, Decl(bounds.mts, 27, 12))
+
+    for (let i = 0; i < a.length; i += 2) sum += a[i];                   // update by 2
+>i : Symbol(i, Decl(bounds.mts, 28, 12))
+>i : Symbol(i, Decl(bounds.mts, 28, 12))
+>a.length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+>a : Symbol(a, Decl(bounds.mts, 21, 21))
+>length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+>i : Symbol(i, Decl(bounds.mts, 28, 12))
+>sum : Symbol(sum, Decl(bounds.mts, 22, 7))
+>a : Symbol(a, Decl(bounds.mts, 21, 21))
+>i : Symbol(i, Decl(bounds.mts, 28, 12))
+
+    let m = a.length;
+>m : Symbol(m, Decl(bounds.mts, 29, 7))
+>a.length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+>a : Symbol(a, Decl(bounds.mts, 21, 21))
+>length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+
+    m = 100;
+>m : Symbol(m, Decl(bounds.mts, 29, 7))
+
+    for (let i = 0; i < m; i++) sum += a[i];                             // bound is a reassigned let
+>i : Symbol(i, Decl(bounds.mts, 31, 12))
+>i : Symbol(i, Decl(bounds.mts, 31, 12))
+>m : Symbol(m, Decl(bounds.mts, 29, 7))
+>i : Symbol(i, Decl(bounds.mts, 31, 12))
+>sum : Symbol(sum, Decl(bounds.mts, 22, 7))
+>a : Symbol(a, Decl(bounds.mts, 21, 21))
+>i : Symbol(i, Decl(bounds.mts, 31, 12))
+
+    for (let i = 0; i <= a.length; i++) sum += a[i];                     // <= instead of <
+>i : Symbol(i, Decl(bounds.mts, 32, 12))
+>i : Symbol(i, Decl(bounds.mts, 32, 12))
+>a.length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+>a : Symbol(a, Decl(bounds.mts, 21, 21))
+>length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+>i : Symbol(i, Decl(bounds.mts, 32, 12))
+>sum : Symbol(sum, Decl(bounds.mts, 22, 7))
+>a : Symbol(a, Decl(bounds.mts, 21, 21))
+>i : Symbol(i, Decl(bounds.mts, 32, 12))
+
+    for (var i = 0; i < a.length; i++) sum += a[i];                      // var, not let
+>i : Symbol(i, Decl(bounds.mts, 33, 12))
+>i : Symbol(i, Decl(bounds.mts, 33, 12))
+>a.length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+>a : Symbol(a, Decl(bounds.mts, 21, 21))
+>length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+>i : Symbol(i, Decl(bounds.mts, 33, 12))
+>sum : Symbol(sum, Decl(bounds.mts, 22, 7))
+>a : Symbol(a, Decl(bounds.mts, 21, 21))
+>i : Symbol(i, Decl(bounds.mts, 33, 12))
+
+    for (let k = 0; k < a.length; k++) [0].forEach(() => { sum += a[k]; }); // inside a closure
+>k : Symbol(k, Decl(bounds.mts, 34, 12))
+>k : Symbol(k, Decl(bounds.mts, 34, 12))
+>a.length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+>a : Symbol(a, Decl(bounds.mts, 21, 21))
+>length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+>k : Symbol(k, Decl(bounds.mts, 34, 12))
+>[0].forEach : Symbol(Array.forEach, Decl(lib.es5.d.ts, --, --))
+>forEach : Symbol(Array.forEach, Decl(lib.es5.d.ts, --, --))
+>sum : Symbol(sum, Decl(bounds.mts, 22, 7))
+>a : Symbol(a, Decl(bounds.mts, 21, 21))
+>k : Symbol(k, Decl(bounds.mts, 34, 12))
+
+    return sum;
+>sum : Symbol(sum, Decl(bounds.mts, 22, 7))
+}
+
+export function reassigned(a: SharedArray<number>, b: SharedArray<number>) {
+>reassigned : Symbol(reassigned, Decl(bounds.mts, 36, 1))
+>a : Symbol(a, Decl(bounds.mts, 38, 27))
+>SharedArray : Symbol(SharedArray, Decl(bounds.mts, 0, 8))
+>b : Symbol(b, Decl(bounds.mts, 38, 50))
+>SharedArray : Symbol(SharedArray, Decl(bounds.mts, 0, 8))
+
+    let c = a;
+>c : Symbol(c, Decl(bounds.mts, 39, 7))
+>a : Symbol(a, Decl(bounds.mts, 38, 27))
+
+    let sum = 0;
+>sum : Symbol(sum, Decl(bounds.mts, 40, 7))
+
+    for (let i = 0; i < c.length; i++) sum += c[i];                      // c is reassigned below
+>i : Symbol(i, Decl(bounds.mts, 41, 12))
+>i : Symbol(i, Decl(bounds.mts, 41, 12))
+>c.length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+>c : Symbol(c, Decl(bounds.mts, 39, 7))
+>length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+>i : Symbol(i, Decl(bounds.mts, 41, 12))
+>sum : Symbol(sum, Decl(bounds.mts, 40, 7))
+>c : Symbol(c, Decl(bounds.mts, 39, 7))
+>i : Symbol(i, Decl(bounds.mts, 41, 12))
+
+    c = b;
+>c : Symbol(c, Decl(bounds.mts, 39, 7))
+>b : Symbol(b, Decl(bounds.mts, 38, 50))
+
+    for (let i = 0; i < a.length; i++) a[i] = sum;                       // a itself is never assigned: eliminated
+>i : Symbol(i, Decl(bounds.mts, 43, 12))
+>i : Symbol(i, Decl(bounds.mts, 43, 12))
+>a.length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+>a : Symbol(a, Decl(bounds.mts, 38, 27))
+>length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+>i : Symbol(i, Decl(bounds.mts, 43, 12))
+>a : Symbol(a, Decl(bounds.mts, 38, 27))
+>i : Symbol(i, Decl(bounds.mts, 43, 12))
+>sum : Symbol(sum, Decl(bounds.mts, 40, 7))
+
+    return sum;
+>sum : Symbol(sum, Decl(bounds.mts, 40, 7))
+}
+

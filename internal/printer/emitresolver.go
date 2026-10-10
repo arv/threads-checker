@@ -119,6 +119,7 @@ type EmitResolver interface {
 	// own/shared threads typed layouts
 	GetOwnCellType(expression *ast.Node) OwnCellType
 	GetOwnConversion(expression *ast.Node) OwnConversion
+	IsOwnElementAccessInBounds(elementAccess *ast.Node) bool
 
 	// JSX Emit
 	GetJsxFactoryEntity(location *ast.Node) *ast.Node

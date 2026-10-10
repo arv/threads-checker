@@ -1,9 +1,12 @@
 package checker
 
 import (
+	"math"
+
 	"github.com/microsoft/typescript-go/internal/ast"
 	"github.com/microsoft/typescript-go/internal/core"
 	"github.com/microsoft/typescript-go/internal/diagnostics"
+	"github.com/microsoft/typescript-go/internal/jsnum"
 	"github.com/microsoft/typescript-go/internal/printer"
 )
 
@@ -520,4 +523,171 @@ func (c *Checker) getOwnAssignmentTargetType(target *ast.Node) *Type {
 
 func (c *Checker) isOwnCellExpression(expr *ast.Node) bool {
 	return expr != nil && ast.IsExpression(expr) && c.isOwnCellType(c.getTypeOfExpression(expr))
+}
+
+// Bounds-check elimination
+//
+// The emit may drop the bounds check of a SharedArray element access `A[I]` (and access the element
+// directly) when the checker proves that I is an integer in [0, A.length). The proof is purely
+// syntactic and rests on exactly these conditions:
+//
+//  1. The access is `A[I]` with A and I plain identifiers, A's type a SharedArray, and no `?.`.
+//  2. A is a `const`, or a parameter or `let`/`var` variable that is never assigned (anywhere in the
+//     function or file that declares it, nested functions included). A SharedArray's length never
+//     changes, so A.length is the same at every read.
+//  3. The access is inside the body (not the head) of a `for (let I = <init>; I < <bound>; <update>)`
+//     loop that declares I, with no function boundary between the loop and the access, where
+//     - <init> has a non-negative integer literal type below 2^31 (a literal, or a `const` of one),
+//     - <bound> is `A.length`, or an identifier declared `const n = A.length`, for the same A,
+//     - <update> is `I++`, `++I` or `I += 1`,
+//     - and I is assigned nowhere else in the loop's head or body, nested functions included.
+//
+// Then I starts at a non-negative integer, only grows by one, and the body only runs after `I <
+// A.length` held for the current value of I. Anything else keeps the check.
+
+// Reports whether the emit may access the element of `A[I]` without a bounds check.
+func (c *Checker) isOwnElementAccessInBounds(access *ast.Node) bool {
+	if c.compilerOptions.OwnRuntime == "" || !ast.IsElementAccessExpression(access) || ast.IsOptionalChain(access) {
+		return false
+	}
+	array := ast.SkipParentheses(access.Expression())
+	index := ast.SkipParentheses(access.AsElementAccessExpression().ArgumentExpression)
+	if !ast.IsIdentifier(array) || !ast.IsIdentifier(index) {
+		return false
+	}
+	arraySymbol, indexSymbol := c.getResolvedSymbol(array), c.getResolvedSymbol(index)
+	if arraySymbol == c.unknownSymbol || indexSymbol == c.unknownSymbol || !c.isOwnUnassignedVariable(arraySymbol) {
+		return false
+	}
+	if c.getOwnSharedArrayElementType(c.getTypeOfSymbol(arraySymbol)) == nil {
+		return false
+	}
+	for node := access.Parent; node != nil; node = node.Parent {
+		if ast.IsFunctionLike(node) || ast.IsClassStaticBlockDeclaration(node) || ast.IsSourceFile(node) {
+			return false
+		}
+		if ast.IsForStatement(node) && ownIsWithin(access, node.AsForStatement().Statement) && c.isOwnCountingLoop(node, indexSymbol, arraySymbol) {
+			return true
+		}
+	}
+	return false
+}
+
+// A `const`, or a parameter or variable that is never assigned.
+func (c *Checker) isOwnUnassignedVariable(symbol *ast.Symbol) bool {
+	decl := symbol.ValueDeclaration
+	if decl == nil || symbol.Flags&ast.SymbolFlagsAlias != 0 {
+		return false
+	}
+	switch {
+	case ast.IsVariableDeclaration(decl) && ast.GetCombinedNodeFlags(decl)&ast.NodeFlagsConstant != 0:
+		return true
+	case ast.IsVariableDeclaration(decl) || ast.IsParameterDeclaration(decl):
+		return c.isParameterOrMutableLocalVariable(symbol) && !c.isSymbolAssigned(symbol)
+	}
+	return false
+}
+
+// `for (let I = <init>; I < <bound>; <update>)` as described above.
+func (c *Checker) isOwnCountingLoop(loop *ast.Node, indexSymbol *ast.Symbol, arraySymbol *ast.Symbol) bool {
+	n := loop.AsForStatement()
+	if n.Initializer == nil || !ast.IsVariableDeclarationList(n.Initializer) || n.Initializer.Flags&ast.NodeFlagsLet == 0 {
+		return false
+	}
+	var declaration *ast.Node
+	for _, decl := range n.Initializer.AsVariableDeclarationList().Declarations.Nodes {
+		if ast.IsIdentifier(decl.Name()) && c.getSymbolOfDeclaration(decl) == indexSymbol {
+			declaration = decl
+		}
+	}
+	if declaration == nil || declaration.Initializer() == nil || !c.isOwnNonNegativeIntegerLiteral(declaration.Initializer()) {
+		return false
+	}
+	// I < <bound>
+	if n.Condition == nil || n.Incrementor == nil {
+		return false
+	}
+	condition := ast.SkipParentheses(n.Condition)
+	if !ast.IsBinaryExpression(condition) || condition.AsBinaryExpression().OperatorToken.Kind != ast.KindLessThanToken ||
+		!c.isOwnReferenceTo(condition.AsBinaryExpression().Left, indexSymbol) || !c.isOwnLengthOf(condition.AsBinaryExpression().Right, arraySymbol) {
+		return false
+	}
+	// I++, ++I or I += 1
+	update := ast.SkipParentheses(n.Incrementor)
+	switch {
+	case ast.IsPrefixUnaryExpression(update):
+		if update.AsPrefixUnaryExpression().Operator != ast.KindPlusPlusToken || !c.isOwnReferenceTo(update.AsPrefixUnaryExpression().Operand, indexSymbol) {
+			return false
+		}
+	case ast.IsPostfixUnaryExpression(update):
+		if update.AsPostfixUnaryExpression().Operator != ast.KindPlusPlusToken || !c.isOwnReferenceTo(update.AsPostfixUnaryExpression().Operand, indexSymbol) {
+			return false
+		}
+	case ast.IsBinaryExpression(update):
+		b := update.AsBinaryExpression()
+		if b.OperatorToken.Kind != ast.KindPlusEqualsToken || !c.isOwnReferenceTo(b.Left, indexSymbol) ||
+			!ast.IsNumericLiteral(ast.SkipParentheses(b.Right)) || ast.SkipParentheses(b.Right).Text() != "1" {
+			return false
+		}
+	default:
+		return false
+	}
+	// No other writes to I in the head or the body.
+	return !c.isOwnAssignedIn(n.Initializer, indexSymbol) && !c.isOwnAssignedIn(n.Condition, indexSymbol) && !c.isOwnAssignedIn(n.Statement, indexSymbol)
+}
+
+func (c *Checker) isOwnReferenceTo(expr *ast.Node, symbol *ast.Symbol) bool {
+	expr = ast.SkipParentheses(expr)
+	return ast.IsIdentifier(expr) && c.getResolvedSymbol(expr) == symbol
+}
+
+// `A.length`, or an identifier declared `const n = A.length`.
+func (c *Checker) isOwnLengthOf(expr *ast.Node, arraySymbol *ast.Symbol) bool {
+	expr = ast.SkipParentheses(expr)
+	if ast.IsIdentifier(expr) {
+		symbol := c.getResolvedSymbol(expr)
+		decl := symbol.ValueDeclaration
+		if symbol == c.unknownSymbol || decl == nil || !ast.IsVariableDeclaration(decl) || ast.GetCombinedNodeFlags(decl)&ast.NodeFlagsConstant == 0 || decl.Initializer() == nil {
+			return false
+		}
+		expr = ast.SkipParentheses(decl.Initializer())
+	}
+	return ast.IsPropertyAccessExpression(expr) && expr.Name().Text() == "length" && c.isOwnReferenceTo(expr.Expression(), arraySymbol)
+}
+
+// A non-negative integer literal type below 2^31: a literal, or a `const` initialized with one.
+func (c *Checker) isOwnNonNegativeIntegerLiteral(expr *ast.Node) bool {
+	t := c.getTypeOfExpression(expr)
+	if t.flags&TypeFlagsNumberLiteral == 0 {
+		return false
+	}
+	value, ok := t.AsLiteralType().Value().(jsnum.Number)
+	return ok && value >= 0 && value < 1<<31 && value == jsnum.Number(math.Trunc(float64(value)))
+}
+
+// Reports whether a symbol is assigned (or updated) anywhere within node, nested functions included.
+func (c *Checker) isOwnAssignedIn(node *ast.Node, symbol *ast.Symbol) bool {
+	if node == nil {
+		return false
+	}
+	found := false
+	var visit ast.Visitor
+	visit = func(n *ast.Node) bool {
+		if found || ast.IsTypeNode(n) {
+			return found
+		}
+		if ast.IsIdentifier(n) {
+			if getAssignmentTargetKind(n) != AssignmentKindNone && c.getResolvedSymbol(n) == symbol {
+				found = true
+			}
+			return found
+		}
+		return n.ForEachChild(visit)
+	}
+	if ast.IsIdentifier(node) {
+		visit(node)
+	} else {
+		node.ForEachChild(visit)
+	}
+	return found
 }
