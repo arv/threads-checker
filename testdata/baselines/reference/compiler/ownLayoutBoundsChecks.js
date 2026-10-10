@@ -122,9 +122,9 @@ export function reassigned(a: SharedArray<number>, b: SharedArray<number>) {
 
 
 //// [bounds.mjs]
-import { __F64, __I32, __OOB, __newSharedArray, __register, __sharedStruct } from "./own.mjs";
+import { __F64, __I32, __OOB, __hold, __newSharedArray, __register, __release, __retain, __sharedStruct } from "./own.mjs";
 import { SharedArray } from "./own.mjs";
-export const P = __sharedStruct("P", ["x", "y"]);
+export const P = __sharedStruct("P", ["x", "y"], []);
 const START = 1;
 export function eliminated(a, ps) {
     let sum = 0;
@@ -141,9 +141,14 @@ export function eliminated(a, ps) {
             sum += __F64[((ps + 16 + j * 24) >> 3) + 1] - __F64[((ps + 16 + i * 24) >> 3) + 1]; // nested loops
     }
     const local = __newSharedArray(8, 4);
-    for (let i = 0; i < __I32[(local + 4) >> 2]; i++)
-        __F64[((local + 16) >> 3) + i]++; // a const array
-    return sum;
+    try {
+        for (let i = 0; i < __I32[(local + 4) >> 2]; i++)
+            __F64[((local + 16) >> 3) + i]++; // a const array
+        return sum;
+    }
+    finally {
+        __release(local);
+    }
 }
 export function kept(a, b, lo) {
     let sum = 0;
@@ -173,17 +178,23 @@ export function kept(a, b, lo) {
     for (var i = 0; i < __I32[(a + 4) >> 2]; i++)
         sum += (i >>> 0) === i && i < __I32[(a + 4) >> 2] ? __F64[((a + 16) >> 3) + i] : __OOB[i]; // var, not let
     for (let k = 0; k < __I32[(a + 4) >> 2]; k++)
-        [0].forEach(() => { sum += (k >>> 0) === k && k < __I32[(a + 4) >> 2] ? __F64[((a + 16) >> 3) + k] : __OOB[k]; }); // inside a closure
+        [0].forEach(__hold(() => { sum += (k >>> 0) === k && k < __I32[(a + 4) >> 2] ? __F64[((a + 16) >> 3) + k] : __OOB[k]; }, a)); // inside a closure
     return sum;
 }
 export function reassigned(a, b) {
-    let c = a;
-    let sum = 0;
-    for (let i = 0; i < __I32[(c + 4) >> 2]; i++)
-        sum += (i >>> 0) === i && i < __I32[(c + 4) >> 2] ? __F64[((c + 16) >> 3) + i] : __OOB[i]; // c is reassigned below
-    c = b;
-    for (let i = 0; i < __I32[(a + 4) >> 2]; i++)
-        __F64[((a + 16) >> 3) + i] = sum; // a itself is never assigned: eliminated
-    return sum;
+    var _a;
+    let c = __retain(a);
+    try {
+        let sum = 0;
+        for (let i = 0; i < __I32[(c + 4) >> 2]; i++)
+            sum += (i >>> 0) === i && i < __I32[(c + 4) >> 2] ? __F64[((c + 16) >> 3) + i] : __OOB[i]; // c is reassigned below
+        _a = c, c = __retain(b), __release(_a);
+        for (let i = 0; i < __I32[(a + 4) >> 2]; i++)
+            __F64[((a + 16) >> 3) + i] = sum; // a itself is never assigned: eliminated
+        return sum;
+    }
+    finally {
+        __release(c);
+    }
 }
 __register(import.meta.url, { eliminated, kept, reassigned });

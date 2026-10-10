@@ -4,6 +4,7 @@ package tstransforms
 
 import (
 	"slices"
+	"strconv"
 
 	"github.com/microsoft/typescript-go/internal/ast"
 	"github.com/microsoft/typescript-go/internal/binder"
@@ -643,7 +644,8 @@ const sharedStructRuntimeFunctionName = transformers.OwnRuntimeSharedStructHelpe
 func (tx *RuntimeSyntaxTransformer) visitSharedStructDeclaration(node *ast.SharedStructDeclaration) *ast.Node {
 	f := tx.Factory()
 	helper := f.NewIdentifier(sharedStructRuntimeFunctionName)
-	if transformers.UsesOwnRuntime(tx.EmitContext(), tx.compilerOptions, tx.currentSourceFile.AsSourceFile(), tx.getEmitModuleFormatOfFile) {
+	usesOwnRuntime := transformers.UsesOwnRuntime(tx.EmitContext(), tx.compilerOptions, tx.currentSourceFile.AsSourceFile(), tx.getEmitModuleFormatOfFile)
+	if usesOwnRuntime {
 		helper = f.NewUnscopedHelperName(sharedStructRuntimeFunctionName)
 	}
 	var fieldNames []*ast.Expression
@@ -653,14 +655,27 @@ func (tx *RuntimeSyntaxTransformer) visitSharedStructDeclaration(node *ast.Share
 		}
 	}
 	name := node.Name()
+	args := []*ast.Expression{
+		f.NewStringLiteral(name.Text(), ast.TokenFlagsNone),
+		f.NewArrayLiteralExpression(f.NewNodeList(fieldNames), false /*multiLine*/),
+	}
+	if usesOwnRuntime && tx.emitResolver != nil {
+		// The indexes of the reference fields, which the runtime releases when it frees a block.
+		var refs []*ast.Expression
+		if original := tx.EmitContext().MostOriginal(node.AsNode()); original != nil && original.Flags&ast.NodeFlagsSynthesized == 0 {
+			for k, isRef := range tx.emitResolver.GetOwnCellType(original).Refs {
+				if isRef {
+					refs = append(refs, f.NewNumericLiteral(strconv.Itoa(k), ast.TokenFlagsNone))
+				}
+			}
+		}
+		args = append(args, f.NewArrayLiteralExpression(f.NewNodeList(refs), false /*multiLine*/))
+	}
 	call := f.NewCallExpression(
 		helper,
 		nil, /*questionDotToken*/
 		nil, /*typeArguments*/
-		f.NewNodeList([]*ast.Expression{
-			f.NewStringLiteral(name.Text(), ast.TokenFlagsNone),
-			f.NewArrayLiteralExpression(f.NewNodeList(fieldNames), false /*multiLine*/),
-		}),
+		f.NewNodeList(args),
 		ast.NodeFlagsNone,
 	)
 	declaration := f.NewVariableDeclaration(name, nil /*exclamationToken*/, nil /*typeNode*/, call)

@@ -120,10 +120,10 @@ export function allocate(n: number) {
 
 
 //// [layout.mjs]
-import { __F64, __I32, __OOB, __newSharedArray, __newStruct, __register, __sharedStruct } from "./own.mjs";
+import { __F64, __I32, __OOB, __newSharedArray, __newStruct, __register, __release, __retain, __sharedStruct } from "./own.mjs";
 import { SharedArray } from "./own.mjs";
-export const Vec = __sharedStruct("Vec", ["x", "y", "z"]);
-export const Particle = __sharedStruct("Particle", ["pos", "mass", "trail"]);
+export const Vec = __sharedStruct("Vec", ["x", "y", "z"], []);
+export const Particle = __sharedStruct("Particle", ["pos", "mass", "trail"], [0, 2]);
 export function fields(v, p) {
     const x = __F64[(v >> 3) + 1]; // read: slot 1
     __F64[(v >> 3) + 3] = x + __F64[(v >> 3) + 2]; // write
@@ -131,16 +131,21 @@ export function fields(v, p) {
     __F64[(v >> 3) + 2]++; // postfix
     --__F64[(v >> 3) + 3]; // prefix
     const m = __F64[(make() >> 3) + 2]; // object with side effects: no temporary needed
-    __F64[(__F64[(p >> 3) + 1] >> 3) + 1] = __F64[(p >> 3) + 2]; // chain through a struct-typed field
-    return v === __F64[(p >> 3) + 1]; // addresses compare as numbers
+    __F64[(__I32[(p >> 2) + 2] >> 3) + 1] = __F64[(p >> 3) + 2]; // chain through a struct-typed field
+    return v === __I32[(p >> 2) + 2]; // addresses compare as numbers
 }
 export function elements(vs, i) {
-    var _a, _b, _c;
+    var _a, _b, _c, _d;
     const v = (i >>> 0) === i && i < __I32[(vs + 4) >> 2] ? vs + 16 + i * 32 : __OOB[i]; // element address, bounds-checked
     __F64[(((i >>> 0) === i && i < __I32[(vs + 4) >> 2] ? vs + 16 + i * 32 : __OOB[i]) >> 3) + 1] = __F64[((_a = i + 1, (_a >>> 0) === _a && _a < __I32[(vs + 4) >> 2] ? vs + 16 + _a * 32 : __OOB[_a]) >> 3) + 2]; // chains; index not simple: temporary
     const n = __I32[(vs + 4) >> 2]; // header word
-    const w = (_b = arrays(), _c = pick(), (_c >>> 0) === _c && _c < __I32[(_b + 4) >> 2] ? _b + 16 + _c * 32 : __OOB[_c]); // array and index not simple: temporaries
-    return n + __F64[(w >> 3) + 3] + __F64[(v >> 3) + 1];
+    const w = (_d = __retain((_b = __retain(arrays()), _c = pick(), (_c >>> 0) === _c && _c < __I32[(_b + 4) >> 2] ? _b + 16 + _c * 32 : __OOB[_c])), __release(_b), _d); // array and index not simple: temporaries
+    try {
+        return n + __F64[(w >> 3) + 3] + __F64[(v >> 3) + 1];
+    }
+    finally {
+        __release(w);
+    }
 }
 export function numbers(a, p, i) {
     var _a, _b;
@@ -148,14 +153,30 @@ export function numbers(a, p, i) {
     __F64[((a + 16) >> 3) + ((i >>> 0) === i && i < __I32[(a + 4) >> 2] ? i : __OOB[i])] = first * 2; // write
     __F64[_a = i + 1, ((a + 16) >> 3) + ((_a >>> 0) === _a && _a < __I32[(a + 4) >> 2] ? _a : __OOB[_a])] += 3; // compound assignment, index not simple
     __F64[((a + 16) >> 3) + ((i >>> 0) === i && i < __I32[(a + 4) >> 2] ? i : __OOB[i])]++;
-    __F64[_b = __F64[(p >> 3) + 3], ((_b + 16) >> 3) + ((i >>> 0) === i && i < __I32[(_b + 4) >> 2] ? i : __OOB[i])] = __I32[(a + 4) >> 2]; // array from a field: temporary
+    __F64[_b = __I32[(p >> 2) + 6], ((_b + 16) >> 3) + ((i >>> 0) === i && i < __I32[(_b + 4) >> 2] ? i : __OOB[i])] = __I32[(a + 4) >> 2]; // array from a field: temporary
     return (i >>> 0) === i && i < __I32[(a + 4) >> 2] ? __F64[((a + 16) >> 3) + i] : __OOB[i];
 }
 export function allocate(n) {
+    var _a;
     const v = __newStruct(Vec);
-    const vs = __newSharedArray(Vec, n);
-    const ns = __newSharedArray(8, n);
-    __F64[((ns + 16) >> 3) + ((0 >>> 0) === 0 && 0 < __I32[(ns + 4) >> 2] ? 0 : __OOB[0])] = __F64[(v >> 3) + 1];
-    return vs;
+    try {
+        let vs = __newSharedArray(Vec, n);
+        try {
+            const ns = __newSharedArray(8, n);
+            try {
+                __F64[((ns + 16) >> 3) + ((0 >>> 0) === 0 && 0 < __I32[(ns + 4) >> 2] ? 0 : __OOB[0])] = __F64[(v >> 3) + 1];
+                return (_a = vs, vs = 0, _a);
+            }
+            finally {
+                __release(ns);
+            }
+        }
+        finally {
+            __release(vs);
+        }
+    }
+    finally {
+        __release(v);
+    }
 }
 __register(import.meta.url, { fields, elements, numbers, allocate });

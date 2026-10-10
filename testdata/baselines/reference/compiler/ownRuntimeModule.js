@@ -157,14 +157,14 @@ export function main(threadCounts: readonly number[]) {
 
 
 //// [nbody.mjs]
-import { __F64, __newStruct, __register, __sharedStruct } from "./own.mjs";
+import { __F64, __hold, __newStruct, __ref, __register, __release, __sharedStruct } from "./own.mjs";
 // The n-body example as an ES module for the own.mjs runtime. With `ownRuntime` set, the compiler
 // imports the runtime helpers this module needs and registers its top-level functions, so that
 // spawned threads can find `worker` by name.
 import { Barrier, log, partition, scope, share, Slots, take } from "./own.mjs";
 const BODIES = 800, STEPS = 30, DT = 0.001, SOFTEN = 0.01;
 /** Counts steps across threads. */
-const Progress = __sharedStruct("Progress", ["steps"]);
+const Progress = __sharedStruct("Progress", ["steps"], []);
 function makeBodies() {
     let seed = 1;
     const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
@@ -216,13 +216,18 @@ function worker(t, mine, board, barrier, progress) {
 }
 function simulate(threads) {
     const board = new Slots(threads), barrier = new Barrier(threads), progress = __newStruct(Progress);
-    return scope(s => {
-        const parts = partition(makeBodies(), threads);
-        const ts = [];
-        for (let t = 0; t < threads; t++)
-            ts.push(s.spawn(worker, t, take(parts, t), board, barrier, progress));
-        return energy(ts.flatMap(th => th.join()));
-    });
+    try {
+        return scope(__hold(s => {
+            const parts = partition(makeBodies(), threads);
+            const ts = [];
+            for (let t = 0; t < threads; t++)
+                ts.push(s.spawn(worker, t, take(parts, t), board, barrier, __ref(progress)));
+            return energy(ts.flatMap(th => th.join()));
+        }, progress));
+    }
+    finally {
+        __release(progress);
+    }
 }
 export function main(threadCounts) {
     for (const threads of threadCounts) {

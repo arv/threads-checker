@@ -23,8 +23,9 @@ import (
 //	__register(import.meta.url, { worker, simulate, main });
 //
 // The typed layouts of shared structs and SharedArrays use more helpers (`__F64`, `__I32`,
-// `__newStruct`, `__newSharedArray`, `__OOB`, `__box`, `__unbox`; see tstransforms/ownlayout.go). The
-// import lists exactly the helpers the emitted module references.
+// `__newStruct`, `__newSharedArray`, `__OOB`, `__box`, `__unbox`), and so does their reference
+// counting (`__retain`, `__release`, `__store`, `__ref`, `__quiescent`, `__hold`; see
+// tstransforms/ownlayout.go). The import lists exactly the helpers the emitted module references.
 //
 // The helpers are referenced through helper names, so a file that declares its own `__register`
 // gets `import { __register as __register_1 }` instead of a conflict.
@@ -39,6 +40,12 @@ const (
 	OwnRuntimeOutOfBoundsHelper    = "__OOB"
 	OwnRuntimeBoxHelper            = "__box"
 	OwnRuntimeUnboxHelper          = "__unbox"
+	OwnRuntimeRetainHelper         = "__retain"
+	OwnRuntimeReleaseHelper        = "__release"
+	OwnRuntimeStoreHelper          = "__store"
+	OwnRuntimeRefHelper            = "__ref"
+	OwnRuntimeQuiescentHelper      = "__quiescent"
+	OwnRuntimeHoldHelper           = "__hold"
 )
 
 var ownRuntimeHelpers = []string{ // sorted
@@ -46,10 +53,16 @@ var ownRuntimeHelpers = []string{ // sorted
 	OwnRuntimeI32Helper,
 	OwnRuntimeOutOfBoundsHelper,
 	OwnRuntimeBoxHelper,
+	OwnRuntimeHoldHelper,
 	OwnRuntimeNewSharedArrayHelper,
 	OwnRuntimeNewStructHelper,
+	OwnRuntimeQuiescentHelper,
+	OwnRuntimeRefHelper,
 	OwnRuntimeRegisterHelper,
+	OwnRuntimeReleaseHelper,
+	OwnRuntimeRetainHelper,
 	OwnRuntimeSharedStructHelper,
+	OwnRuntimeStoreHelper,
 	OwnRuntimeUnboxHelper,
 }
 

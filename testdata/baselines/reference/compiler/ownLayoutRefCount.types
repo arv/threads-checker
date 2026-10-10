@@ -1,0 +1,625 @@
+//// [tests/cases/compiler/ownLayoutRefCount.ts] ////
+
+=== own.d.mts ===
+// Types for the own/shared threads runtime own.mjs (the runtime itself lives in porffor). Programs
+// import their API from "./own.mjs"; the compiler adds the imports of the helpers it emits
+// (`__sharedStruct`, `__register`) when `ownRuntime` is set.
+//
+// `sending T` marks a value whose ownership moves to the receiver: the sender must not use it
+// afterwards. `shared T` marks a value any number of threads may read at once: deeply immutable, or
+// a cell that synchronizes internally (Slots, Barrier, a shared struct).
+
+/** One slot per thread: a thread publishes into its own slot, and everyone reads every slot. */
+export interface SlotsCell<T> {
+    readonly length: number;
+>length : number
+
+    /** Publishes `value` in slot `index`, replacing what was there. */
+    set(index: number, value: T): void;
+>set : (index: number, value: T) => void
+>index : number
+>value : T
+
+    /** The value in slot `index`. */
+    get(index: number): shared T;
+>get : (index: number) => shared T
+>index : number
+
+    /** The arrays in all slots, concatenated in slot order. */
+    flat(): shared (T extends readonly (infer E)[] ? E : T)[];
+>flat : () => shared (T extends readonly (infer E)[] ? E : T)[]
+}
+export declare const Slots: new <T>(count: number) => shared SlotsCell<T>;
+>Slots : new <T>(count: number) => shared SlotsCell<T>
+>count : number
+
+/** A reusable barrier for a fixed number of threads. */
+export interface BarrierCell {
+    /** Blocks until all threads have called `wait`. */
+    wait(): void;
+>wait : () => void
+}
+export declare const Barrier: new (threads: number) => shared BarrierCell;
+>Barrier : new (threads: number) => shared BarrierCell
+>threads : number
+
+/** Freezes a value the caller owns into a deeply immutable value every thread can read. */
+export declare function share<T>(value: sending T): shared T;
+>share : <T>(value: sending T) => shared T
+>value : T
+
+/** A thread started inside a `scope`; joining it moves the thread's result back. */
+export interface Thread<R> {
+    join(): sending R;
+>join : () => sending R
+}
+
+/** Spawns threads that cannot outlive the scope. Every argument is sent to the new thread. */
+export interface Scope {
+    spawn<A extends unknown[], R>(f: (...args: A) => sending R, ...args: sending A): shared Thread<R>;
+>spawn : <A extends unknown[], R>(f: (...args: A) => sending R, ...args: sending A) => shared Thread<R>
+>f : (...args: A) => sending R
+>args : A
+>args : A
+}
+
+/** Runs `body` and joins every thread it spawned before returning. */
+export declare function scope<R>(body: (s: shared Scope) => R): R;
+>scope : <R>(body: (s: shared Scope) => R) => R
+>body : (s: shared Scope) => R
+>s : Scope
+
+/** Splits an owned array into `parts` owned, disjoint chunks of nearly equal size. Trusted. */
+export declare function partition<T>(items: sending T[], parts: number): (sending T[])[];
+>partition : <T>(items: sending T[], parts: number) => (sending T[])[]
+>items : T[]
+>parts : number
+
+/** Takes element `index` out of an array of owned values, so the caller owns it. Trusted. */
+export declare function take<T>(items: (sending T)[], index: number): sending T;
+>take : <T>(items: (sending T)[], index: number) => sending T
+>items : T[]
+>index : number
+
+/** Prints a line, synchronously, from any thread. */
+export declare function log(...args: unknown[]): void;
+>log : (...args: unknown[]) => void
+>args : unknown[]
+
+/** A shared struct's value as a type: what `new SharedArray(Struct, n)` takes. */
+export interface SharedStructType<T> {
+    new (): T;
+}
+
+/**
+ * A fixed-length array in the shared heap, of numbers or of shared structs stored inline. Threads
+ * share it with no copying. With `ownRuntime` the compiler lays it out in the shared heap and turns
+ * `a[i]` and `a.length` into typed-array accesses.
+ */
+export interface SharedArray<T> {
+    readonly length: number;
+>length : number
+
+    [index: number]: T;
+>index : number
+}
+export declare const SharedArray: {
+>SharedArray : { new (type: NumberConstructor, length: number): SharedArray<number>; new <T>(type: SharedStructType<T>, length: number): SharedArray<T>; }
+
+    new (type: NumberConstructor, length: number): SharedArray<number>;
+>type : NumberConstructor
+>length : number
+
+    new <T>(type: SharedStructType<T>, length: number): SharedArray<T>;
+>type : SharedStructType<T>
+>length : number
+
+};
+
+
+=== list.mts ===
+import { log, scope } from "./own.mjs";
+>log : (...args: unknown[]) => void
+>scope : <R>(body: (s: shared import("./own.mjs").Scope) => R) => R
+
+export shared struct Node { value: number; next: Node | null }
+>Node : Node
+>value : number
+>next : Node | null
+
+export shared struct Box { item: Node | null }
+>Box : Box
+>item : Node | null
+
+// The linked list: building it (`head` is reassigned, so it is owned, and `node` is new), and
+// returning it (the owned local's count moves out).
+export function makeList(n: number): Node | null {
+>makeList : (n: number) => Node | null
+>n : number
+
+    let head: Node | null = null;
+>head : Node | null
+
+    for (let i = 0; i < n; i++) {
+>i : number
+>0 : 0
+>i < n : boolean
+>i : number
+>n : number
+>i++ : number
+>i : number
+
+        const node = new Node();
+>node : Node
+>new Node() : Node
+>Node : new () => Node
+
+        node.value = i;
+>node.value = i : number
+>node.value : number
+>node : Node
+>value : number
+>i : number
+
+        node.next = head;                    // a borrow stored in a reference field: retained
+>node.next = head : Node | null
+>node.next : Node | null
+>node : Node
+>next : Node | null
+>head : Node | null
+
+        head = node;                         // the new value is retained before the old is released
+>head = node : Node
+>head : Node | null
+>node : Node
+    }
+    return head;
+>head : Node | null
+}
+
+// Traversal: `n` is reassigned, so it is owned (its declaration moves out of the loop); the loop
+// reads a reference field, so each iteration ends at a quiescent point.
+export function sum(head: Node | null): number {
+>sum : (head: Node | null) => number
+>head : Node | null
+
+    let s = 0;
+>s : number
+>0 : 0
+
+    for (let n = head; n !== null; n = n.next) s += n.value;
+>n : Node | null
+>head : Node | null
+>n !== null : boolean
+>n : Node | null
+>n = n.next : Node | null
+>n : Node | null
+>n.next : Node | null
+>n : Node
+>next : Node | null
+>s += n.value : number
+>s : number
+>n.value : number
+>n : Node
+>value : number
+
+    return s;
+>s : number
+}
+
+// A function returning a node: a borrow is retained, a new node is returned as it is.
+export function second(head: Node): Node | null {
+>second : (head: Node) => Node | null
+>head : Node
+
+    return head.next;
+>head.next : Node | null
+>head : Node
+>next : Node | null
+}
+export function created(value: number): Node {
+>created : (value: number) => Node
+>value : number
+
+    const node = new Node();
+>node : Node
+>new Node() : Node
+>Node : new () => Node
+
+    node.value = value;
+>node.value = value : number
+>node.value : number
+>node : Node
+>value : number
+>value : number
+
+    return node;
+>node : Node
+}
+export function either(c: boolean, p: Node): Node {
+>either : (c: boolean, p: Node) => Node
+>c : boolean
+>p : Node
+
+    return c ? p : new Node();               // each branch +1
+>c ? p : new Node() : Node
+>c : boolean
+>p : Node
+>new Node() : Node
+>Node : new () => Node
+}
+
+// A field overwritten in a loop: a quiescent point at the end of each iteration (and before
+// `continue`). A numeric loop gets none.
+export function replace(box: Box, rounds: number) {
+>replace : (box: Box, rounds: number) => number
+>box : Box
+>rounds : number
+
+    for (let i = 0; i < rounds; i++) {
+>i : number
+>0 : 0
+>i < rounds : boolean
+>i : number
+>rounds : number
+>i++ : number
+>i : number
+
+        if (i % 2 === 0) continue;
+>i % 2 === 0 : boolean
+>i % 2 : number
+>i : number
+>2 : 2
+>0 : 0
+
+        box.item = created(i);
+>box.item = created(i) : Node
+>box.item : Node | null
+>box : Box
+>item : Node | null
+>created(i) : Node
+>created : (value: number) => Node
+>i : number
+    }
+    let total = 0;
+>total : number
+>0 : 0
+
+    for (let i = 0; i < rounds; i++) total += i;
+>i : number
+>0 : 0
+>i < rounds : boolean
+>i : number
+>rounds : number
+>i++ : number
+>i : number
+>total += i : number
+>total : number
+>i : number
+
+    return total;
+>total : number
+}
+
+declare function ambient(): Node;            // not compiled here: its result is a borrow
+>ambient : () => Node
+
+declare function identity<T>(x: T): T;       // generic: its result is a borrow
+>identity : <T>(x: T) => T
+>x : T
+
+// Rule 1: locals.
+export function locals(p: Node, box: Box) {
+>locals : (p: Node, box: Box) => number
+>p : Node
+>box : Box
+
+    const a = p;                             // a stable borrow: borrowed, no counting
+>a : Node
+>p : Node
+
+    const b = new Node();                    // owned: released when the block ends
+>b : Node
+>new Node() : Node
+>Node : new () => Node
+
+    const c = box.item;                      // an unstable borrow: retained
+>c : Node | null
+>box.item : Node | null
+>box : Box
+>item : Node | null
+
+    let d: Node | null = null;               // reassigned: owned
+>d : Node | null
+
+    d = p;
+>d = p : Node
+>d : Node | null
+>p : Node
+
+    d = new Node();
+>d = new Node() : Node
+>d : Node | null
+>new Node() : Node
+>Node : new () => Node
+
+    let e: Node | undefined;                 // never assigned: 0
+>e : Node | undefined
+
+    const f = d;                             // d may be reassigned: retained
+>f : Node
+>d : Node
+
+    const g = ambient();                     // retained
+>g : Node
+>ambient() : Node
+>ambient : () => Node
+
+    const h = identity(p);                   // retained
+>h : Node
+>identity(p) : Node
+>identity : <T>(x: T) => T
+>p : Node
+
+    return a.value + b.value + (c === null ? 0 : c.value) + (e === undefined ? 1 : 0) + f.value + g.value + h.value;
+>a.value + b.value + (c === null ? 0 : c.value) + (e === undefined ? 1 : 0) + f.value + g.value + h.value : number
+>a.value + b.value + (c === null ? 0 : c.value) + (e === undefined ? 1 : 0) + f.value + g.value : number
+>a.value + b.value + (c === null ? 0 : c.value) + (e === undefined ? 1 : 0) + f.value : number
+>a.value + b.value + (c === null ? 0 : c.value) + (e === undefined ? 1 : 0) : number
+>a.value + b.value + (c === null ? 0 : c.value) : number
+>a.value + b.value : number
+>a.value : number
+>a : Node
+>value : number
+>b.value : number
+>b : Node
+>value : number
+>(c === null ? 0 : c.value) : number
+>c === null ? 0 : c.value : number
+>c === null : boolean
+>c : Node | null
+>0 : 0
+>c.value : number
+>c : Node
+>value : number
+>(e === undefined ? 1 : 0) : 0 | 1
+>e === undefined ? 1 : 0 : 0 | 1
+>e === undefined : boolean
+>e : Node | undefined
+>undefined : undefined
+>1 : 1
+>0 : 0
+>f.value : number
+>f : Node
+>value : number
+>g.value : number
+>g : Node
+>value : number
+>h.value : number
+>h : Node
+>value : number
+}
+
+// Parameters borrow, unless reassigned, defaulted to a value they must own, or of an async function.
+export function parameters(n: Node | null, fallback: Node = new Node(), optional?: Node, none: Node | null = null) {
+>parameters : (n: Node | null, fallback?: Node, optional?: Node, none?: Node | null) => number
+>n : Node | null
+>fallback : Node
+>new Node() : Node
+>Node : new () => Node
+>optional : Node | undefined
+>none : Node | null
+
+    n = n ?? fallback;                       // `??` on an address is `||` (null is 0)
+>n = n ?? fallback : Node
+>n : Node | null
+>n ?? fallback : Node
+>n : Node | null
+>fallback : Node
+
+    switch (none) {
+>none : Node | null
+
+        case null: return n.value + (optional === undefined ? 0 : optional.value);
+>n.value + (optional === undefined ? 0 : optional.value) : number
+>n.value : number
+>n : Node
+>value : number
+>(optional === undefined ? 0 : optional.value) : number
+>optional === undefined ? 0 : optional.value : number
+>optional === undefined : boolean
+>optional : Node | undefined
+>undefined : undefined
+>0 : 0
+>optional.value : number
+>optional : Node
+>value : number
+    }
+    return 0;
+>0 : 0
+}
+export async function later(n: Node) {
+>later : (n: Node) => Promise<number>
+>n : Node
+
+    await null;
+>await null : null
+
+    return n.value;
+>n.value : number
+>n : Node
+>value : number
+}
+
+// Rule 3: an owned value used at once is released after its statement.
+export function temporaries(c: boolean): number {
+>temporaries : (c: boolean) => number
+>c : boolean
+
+    created(1);
+>created(1) : Node
+>created : (value: number) => Node
+>1 : 1
+
+    const v = created(2).value;
+>v : number
+>created(2).value : number
+>created(2) : Node
+>created : (value: number) => Node
+>2 : 2
+>value : number
+
+    return v + sum(makeList(3)) + (c ? sum(created(4)) : 0);
+>v + sum(makeList(3)) + (c ? sum(created(4)) : 0) : number
+>v + sum(makeList(3)) : number
+>v : number
+>sum(makeList(3)) : number
+>sum : (head: Node | null) => number
+>makeList(3) : Node | null
+>makeList : (n: number) => Node | null
+>3 : 3
+>(c ? sum(created(4)) : 0) : number
+>c ? sum(created(4)) : 0 : number
+>c : boolean
+>sum(created(4)) : number
+>sum : (head: Node | null) => number
+>created(4) : Node
+>created : (value: number) => Node
+>4 : 4
+>0 : 0
+}
+
+// Rules 4, 5 and 9: arguments, field stores and null.
+function use(n: Node | null): number { return n === null ? 0 : n.value; }
+>use : (n: Node | null) => number
+>n : Node | null
+>n === null ? 0 : n.value : number
+>n === null : boolean
+>n : Node | null
+>0 : 0
+>n.value : number
+>n : Node
+>value : number
+
+export function stores(box: Box, p: Node) {
+>stores : (box: Box, p: Node) => void
+>box : Box
+>p : Node
+
+    use(box.item);                           // an unstable borrow passed to a function: retained around the call
+>use(box.item) : number
+>use : (n: Node | null) => number
+>box.item : Node | null
+>box : Box
+>item : Node | null
+
+    use(p);                                  // a stable borrow: as it is
+>use(p) : number
+>use : (n: Node | null) => number
+>p : Node
+
+    box.item = p;                            // a borrow: retained
+>box.item = p : Node
+>box.item : Node | null
+>box : Box
+>item : Node | null
+>p : Node
+
+    box.item = created(1);                   // owned: stored as it is
+>box.item = created(1) : Node
+>box.item : Node | null
+>box : Box
+>item : Node | null
+>created(1) : Node
+>created : (value: number) => Node
+>1 : 1
+
+    box.item = null;
+>box.item = null : null
+>box.item : Node | null
+>box : Box
+>item : Node | null
+
+    box.item ??= p;
+>box.item ??= p : Node
+>box.item : Node | null
+>box : Box
+>item : Node | null
+>p : Node
+
+    p.next = box.item;
+>p.next = box.item : Node
+>p.next : Node | null
+>p : Node
+>next : Node | null
+>box.item : Node
+>box : Box
+>item : Node
+
+    box.item!.value = use(p);                // an unstable object and a call in the value: retained first
+>box.item!.value = use(p) : number
+>box.item!.value : number
+>box.item! : Node
+>box.item : Node
+>box : Box
+>item : Node
+>value : number
+>use(p) : number
+>use : (n: Node | null) => number
+>p : Node
+
+    log(box.item);                           // boxed: the handle holds its own count
+>log(box.item) : void
+>log : (...args: unknown[]) => void
+>box.item : Node
+>box : Box
+>item : Node
+}
+
+// Rules 7 and 8: spawn takes a counted argument, and a closure holds what it captures.
+export function threads(box: Box) {
+>threads : (box: Box) => () => number
+>box : Box
+
+    const list = makeList(3);
+>list : Node | null
+>makeList(3) : Node | null
+>makeList : (n: number) => Node | null
+>3 : 3
+
+    scope(s => {
+>scope(s => {        s.spawn(sum, list);        s.spawn(stores, box, created(4));    }) : void
+>scope : <R>(body: (s: shared import("./own.mjs").Scope) => R) => R
+>s => {        s.spawn(sum, list);        s.spawn(stores, box, created(4));    } : (s: import("./own.mjs").Scope) => void
+>s : import("./own.mjs").Scope
+
+        s.spawn(sum, list);
+>s.spawn(sum, list) : import("./own.mjs").Thread<number>
+>s.spawn : <A extends unknown[], R>(f: (...args: A) => sending R, ...args: sending A) => shared import("./own.mjs").Thread<R>
+>s : import("./own.mjs").Scope
+>spawn : <A extends unknown[], R>(f: (...args: A) => sending R, ...args: sending A) => shared import("./own.mjs").Thread<R>
+>sum : (head: Node | null) => number
+>list : Node | null
+
+        s.spawn(stores, box, created(4));
+>s.spawn(stores, box, created(4)) : import("./own.mjs").Thread<void>
+>s.spawn : <A extends unknown[], R>(f: (...args: A) => sending R, ...args: sending A) => shared import("./own.mjs").Thread<R>
+>s : import("./own.mjs").Scope
+>spawn : <A extends unknown[], R>(f: (...args: A) => sending R, ...args: sending A) => shared import("./own.mjs").Thread<R>
+>stores : (box: Box, p: Node) => void
+>box : Box
+>created(4) : Node
+>created : (value: number) => Node
+>4 : 4
+
+    });
+    function total() { return sum(list); }
+>total : () => number
+>sum(list) : number
+>sum : (head: Node | null) => number
+>list : Node | null
+
+    return total;
+>total : () => number
+}
+

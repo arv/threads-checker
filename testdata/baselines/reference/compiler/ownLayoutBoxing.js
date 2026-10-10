@@ -138,9 +138,9 @@ export function angleBracket(u: unknown) {
 
 
 //// [boxing.mjs]
-import { __F64, __box, __register, __sharedStruct, __unbox } from "./own.mjs";
+import { __F64, __box, __register, __release, __retain, __sharedStruct, __unbox } from "./own.mjs";
 import { log } from "./own.mjs";
-export const Vec = __sharedStruct("Vec", ["x", "y"]);
+export const Vec = __sharedStruct("Vec", ["x", "y"], []);
 export function roundTrip(v) {
     const u = __box(v); // box
     const v2 = __unbox(u); // unbox
@@ -152,7 +152,7 @@ export function boxed(v, other, a) {
     const text = `${__box(v)} and ` + __box(v); // strings
     const kind = typeof __box(v);
     const same = __box(v) === other; // equality with a non-struct value
-    const isNull = v === null; // stays raw
+    const isNull = v === 0; // stays raw
     const union = __box(v);
     const object = __box(v);
     const list = [__box(v), __box(a)];
@@ -161,8 +161,13 @@ export function boxed(v, other, a) {
     const s = __box(v).toString(); // not a field
     const { x } = __box(v); // destructured through the handle
     const has = "x" in __box(v);
-    const same2 = identity(v); // generic: decided by the instantiation, stays raw
-    return [text, kind, same, isNull, union, object, list, record, copy, s, x, has, __F64[(same2 >> 3) + 2]];
+    const same2 = __retain(identity(v)); // generic: decided by the instantiation, stays raw
+    try {
+        return [text, kind, same, isNull, union, object, list, record, copy, s, x, has, __F64[(same2 >> 3) + 2]];
+    }
+    finally {
+        __release(same2);
+    }
 }
 export function unboxed(u, a) {
     takeVec(__unbox(anything)); // any into a struct parameter
@@ -181,7 +186,7 @@ export function returns(v) {
     return __box(v); // box
 }
 export function returnsVec(u) {
-    return __unbox(u); // unbox (the assertion)
+    return __retain(__unbox(u)); // unbox (the assertion)
 }
 __register(import.meta.url, { roundTrip, boxed, unboxed, isVec, returns, returnsVec });
 //// [assertion.js]

@@ -50,8 +50,8 @@ function scriptFunction() { send([1]); }
 //// [main.mjs]
 import { __newStruct, __register, __sharedStruct } from "./own.mjs";
 import { share } from "./own.mjs";
-export const Point = __sharedStruct("Point", ["x", "y"]);
-const Local = __sharedStruct("Local", ["n"]);
+export const Point = __sharedStruct("Point", ["x", "y"], []);
+const Local = __sharedStruct("Local", ["n"], []);
 export function exported(p) { return p; }
 function notExported() { return share([1]); }
 function overloaded(x) { return x; }
@@ -66,7 +66,7 @@ function outer() { function nested() { } return nested; }
 __register(import.meta.url, { exported, notExported, overloaded, main, outer });
 //// [structOnly.mjs]
 import { __sharedStruct } from "./own.mjs";
-export const Only = __sharedStruct("Only", ["v"]);
+export const Only = __sharedStruct("Only", ["v"], []);
 //// [functionsOnly.mjs]
 import { __register } from "./own.mjs";
 export function f(x) { return x; }
@@ -77,7 +77,7 @@ export function plain() { return 1; }
 //// [collision.mjs]
 import { __register as __register_1, __sharedStruct as __sharedStruct_1 } from "./own.mjs";
 export function __register(x) { return x; }
-export const S = __sharedStruct_1("S", ["v"]);
+export const S = __sharedStruct_1("S", ["v"], []);
 function __sharedStruct() { }
 __register_1(import.meta.url, { __register, __sharedStruct });
 //// [nameless.mjs]
