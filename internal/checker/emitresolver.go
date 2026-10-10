@@ -136,6 +136,35 @@ func (r *EmitResolver) IsOwnRefArgument(argument *ast.Node) bool {
 	return r.checker.isOwnRefArgument(argument)
 }
 
+// The shared struct a `struct({...})` call of the original tree declares, if it is one (own/shared
+// threads extension, plain API).
+func (r *EmitResolver) GetOwnStructCall(call *ast.Node) *printer.OwnStructCall {
+	if !isOwnOriginalNode(call) || !ast.IsCallExpression(call) {
+		return nil
+	}
+	r.checkerMu.Lock()
+	defer r.checkerMu.Unlock()
+	if r.checker.getOwnCallMarker(call) != "struct" {
+		return nil
+	}
+	info := r.checker.getOwnStructOfCall(call)
+	if info == nil {
+		return nil
+	}
+	return &printer.OwnStructCall{Name: info.name, Layout: printer.OwnCellType{Kind: printer.OwnCellStruct, Fields: info.fields, Refs: info.refs}}
+}
+
+// Reports whether a call of the original tree is `consume(x)` (own/shared threads extension, plain
+// API), which is emitted as x.
+func (r *EmitResolver) IsOwnConsumeCall(call *ast.Node) bool {
+	if !isOwnOriginalNode(call) {
+		return false
+	}
+	r.checkerMu.Lock()
+	defer r.checkerMu.Unlock()
+	return r.checker.isOwnConsumeCall(call)
+}
+
 func isOwnOriginalNode(node *ast.Node) bool {
 	return node != nil && node.Flags&ast.NodeFlagsSynthesized == 0 && ast.GetSourceFileOfNode(node) != nil
 }

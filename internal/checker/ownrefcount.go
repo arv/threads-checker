@@ -107,6 +107,13 @@ func (c *Checker) computeOwnRawCount(expr *ast.Node) printer.OwnCount {
 	case ast.KindNewExpression:
 		return printer.OwnCountOwned
 	case ast.KindCallExpression:
+		if c.isOwnConsumeCall(expr) {
+			// `consume(x)` is x.
+			if inner := c.getOwnCount(expr.Arguments()[0]); inner != printer.OwnCountNone {
+				return inner
+			}
+			return printer.OwnCountUnstable
+		}
 		if c.isOwnCountedCall(expr) {
 			return printer.OwnCountOwned
 		}
@@ -204,15 +211,18 @@ func isOwnAmbientDeclaration(decl *ast.Node) bool {
 	return file == nil || file.IsDeclarationFile
 }
 
-// The element type of a channel, if t is one: `ChannelCell<T>`, the interface that chan.d.mts
-// declares. A for-of over a channel receives its values, which the receiver owns.
+// The element type of a channel, if t is one: `Channel<T>`, the class that threads.d.mts declares
+// (or `ChannelCell<T>`, the interface of chan.d.mts). A for-of over a channel receives its values,
+// which the receiver owns.
 func (c *Checker) getOwnChannelElementType(t *Type) *Type {
 	if c.compilerOptions.OwnRuntime == "" || t == nil || t.objectFlags&ObjectFlagsReference == 0 {
 		return nil
 	}
 	target := t.Target()
-	if target == nil || target.symbol == nil || target.symbol.Name != "ChannelCell" ||
-		!core.Some(target.symbol.Declarations, func(d *ast.Node) bool { return ast.IsInterfaceDeclaration(d) && isOwnAmbientDeclaration(d) }) {
+	if target == nil || target.symbol == nil || target.symbol.Name != "ChannelCell" && target.symbol.Name != "Channel" ||
+		!core.Some(target.symbol.Declarations, func(d *ast.Node) bool {
+			return (ast.IsInterfaceDeclaration(d) || ast.IsClassDeclaration(d)) && isOwnAmbientDeclaration(d)
+		}) {
 		return nil
 	}
 	if args := c.getTypeArguments(t); len(args) > 0 {
@@ -249,6 +259,8 @@ func (c *Checker) isOwnHoldable(expr *ast.Node) bool {
 		return symbol != nil && !c.isOwnAssigned(symbol)
 	case ast.KindAsExpression, ast.KindSatisfiesExpression, ast.KindNonNullExpression, ast.KindTypeAssertionExpression, ast.KindConsumeExpression:
 		return c.isOwnHoldable(expr.Expression())
+	case ast.KindCallExpression:
+		return c.isOwnConsumeCall(expr) && c.isOwnHoldable(expr.Arguments()[0])
 	case ast.KindElementAccessExpression:
 		return c.getOwnCellTypeOfExpression(expr.Expression()).Kind == printer.OwnCellArrayOfStruct && c.isOwnHoldable(expr.Expression())
 	case ast.KindConditionalExpression:
@@ -368,6 +380,8 @@ func (c *Checker) isOwnReturnedLocal(body *ast.Node, symbol *ast.Symbol) bool {
 			return c.ownReferencedVariable(expr) == symbol
 		case ast.KindParenthesizedExpression, ast.KindAsExpression, ast.KindSatisfiesExpression, ast.KindNonNullExpression, ast.KindTypeAssertionExpression, ast.KindConsumeExpression:
 			return returns(expr.Expression())
+		case ast.KindCallExpression:
+			return c.isOwnConsumeCall(expr) && returns(expr.Arguments()[0])
 		case ast.KindConditionalExpression:
 			n := expr.AsConditionalExpression()
 			return returns(n.WhenTrue) || returns(n.WhenFalse)
@@ -781,6 +795,9 @@ func (c *Checker) checkOwnRefCounts(file *ast.SourceFile) {
 				c.error(init, diagnostics.A_for_of_or_for_in_variable_cannot_have_type_0_Colon_its_value_is_an_address_in_the_shared_heap, c.typeToString(t, nil))
 			}
 		case ast.KindCallExpression:
+			if c.getOwnCallMarker(node) == "struct" {
+				c.checkOwnStructCall(node)
+			}
 			// A runtime function that returns addresses in an ordinary array or tuple (`select` on
 			// channels of counted values): nothing could count them.
 			if signature := c.getResolvedSignature(node, nil, CheckModeNormal); signature != nil && signature.declaration != nil && isOwnAmbientDeclaration(signature.declaration) {

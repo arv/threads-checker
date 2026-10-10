@@ -329,11 +329,15 @@ func (s *ownState) signature() string {
 
 // Entry point
 
-// Reports whether any file of the program may use the own/shared threads syntax. The analysis does
-// not run otherwise.
+// Reports whether any file of the program may use the own/shared threads syntax, or the program uses
+// its runtime (`--ownRuntime`), whose markers are plain TypeScript. The analysis does not run
+// otherwise.
 func (c *Checker) programUsesOwnershipSyntax() bool {
 	if c.ownershipSyntaxState == 0 {
 		c.ownershipSyntaxState = 2
+		if c.compilerOptions.OwnRuntime != "" {
+			c.ownershipSyntaxState = 1 // the plain API's markers have no syntax to look for
+		}
 		for _, file := range c.files {
 			if file.Flags&ast.NodeFlagsPossiblyContainsOwnershipSyntax != 0 {
 				c.ownershipSyntaxState = 1
@@ -913,7 +917,7 @@ func (f *ownFunction) eval(node *ast.Node, s *ownState) ownValue {
 		ast.KindTypeAssertionExpression, ast.KindPartiallyEmittedExpression, ast.KindAwaitExpression:
 		return f.eval(node.Expression(), s)
 	case ast.KindConsumeExpression:
-		return f.evalConsume(node, s)
+		return f.evalConsume(node, node.Expression(), s)
 	case ast.KindTemplateExpression:
 		for _, span := range node.AsTemplateExpression().TemplateSpans.Nodes {
 			f.eval(span.Expression(), s)
@@ -967,6 +971,9 @@ func (f *ownFunction) eval(node *ast.Node, s *ownState) ownValue {
 	case ast.KindFunctionExpression, ast.KindArrowFunction, ast.KindClassExpression:
 		return f.closureValue(node, s)
 	case ast.KindCallExpression:
+		if a.c.isOwnConsumeCall(node) {
+			return f.evalConsume(node, node.Arguments()[0], s) // `consume(x)`
+		}
 		return f.evalCall(node, s)
 	case ast.KindNewExpression:
 		return f.evalNew(node, s)
@@ -1079,8 +1086,8 @@ func (f *ownFunction) checkUse(node *ast.Node, name string, v ownValue, s *ownSt
 
 // `consume x` hands x's value over to the enclosing expression and ends x's lifetime: later uses of
 // x are errors. The value itself is only sent if it is then passed to a `sending` parameter.
-func (f *ownFunction) evalConsume(node *ast.Node, s *ownState) ownValue {
-	operand := node.Expression()
+func (f *ownFunction) evalConsume(node *ast.Node, operand *ast.Node, s *ownState) ownValue {
+	operand = ast.SkipParentheses(operand)
 	v := f.eval(operand, s)
 	if ast.IsIdentifier(operand) {
 		if sym := f.a.symbolOfIdentifier(operand); sym != nil && f.a.isLocalTo(sym, f.node) {
@@ -1551,7 +1558,9 @@ func ownLineOf(node *ast.Node) int {
 func ownExpressionName(expr *ast.Node) string {
 	expr = ast.SkipParentheses(expr)
 	if ast.IsConsumeExpression(expr) {
-		expr = expr.Expression()
+		expr = ast.SkipParentheses(expr.Expression())
+	} else if ast.IsCallExpression(expr) && len(expr.Arguments()) == 1 && ast.IsIdentifier(expr.Expression()) && expr.Expression().Text() == "consume" {
+		expr = ast.SkipParentheses(expr.Arguments()[0]) // `consume(x)`
 	}
 	if ast.IsIdentifier(expr) {
 		return expr.Text()
@@ -1811,8 +1820,8 @@ func (a *ownAnalyzer) resolveTypeNode(t *ast.Node) *ast.Node {
 		for ast.IsParenthesizedTypeNode(t) || ast.IsTypeOperatorNode(t) && t.AsTypeOperatorNode().Operator == ast.KindReadonlyKeyword {
 			t = t.Type()
 		}
-		if !ast.IsTypeReferenceNode(t) {
-			return t
+		if !ast.IsTypeReferenceNode(t) || a.c.getOwnTypeMarker(t) != "" {
+			return t // `Sending<T>` and `Shared<T>` are aliases of T: keep the marker
 		}
 		sym := a.c.getSymbolAtLocation(t.AsTypeReferenceNode().TypeName, true /*ignoreErrors*/)
 		if sym == nil || sym.Flags&ast.SymbolFlagsTypeAlias == 0 {
@@ -1837,6 +1846,8 @@ func (a *ownAnalyzer) isSharedTypeNode(t *ast.Node) bool {
 	switch t.Kind {
 	case ast.KindSharedType:
 		return true
+	case ast.KindTypeReference:
+		return a.c.getOwnTypeMarker(t) == "Shared"
 	case ast.KindUnionType:
 		sawShared := false
 		for _, member := range t.AsUnionTypeNode().Types.Nodes {
@@ -1857,7 +1868,21 @@ func (a *ownAnalyzer) isSharedTypeNode(t *ast.Node) bool {
 
 func (a *ownAnalyzer) isSendingTypeNode(t *ast.Node) bool {
 	t = a.resolveTypeNode(t)
-	return t != nil && t.Kind == ast.KindSendingType
+	return t != nil && (t.Kind == ast.KindSendingType || a.c.getOwnTypeMarker(t) == "Sending")
+}
+
+// The T of `sending T`, `shared T`, `Sending<T>` or `Shared<T>`.
+func (a *ownAnalyzer) markedTypeOperand(t *ast.Node) *ast.Node {
+	t = a.resolveTypeNode(t)
+	switch {
+	case t == nil:
+		return nil
+	case t.Kind == ast.KindSendingType || t.Kind == ast.KindSharedType:
+		return t.Type()
+	case ast.IsTypeReferenceNode(t) && len(t.TypeArguments()) == 1:
+		return t.TypeArguments()[0]
+	}
+	return nil
 }
 
 // The declared type of a parameter, or the type of the corresponding parameter of the contextual
@@ -1949,12 +1974,12 @@ func (a *ownAnalyzer) isConsumingSignature(decl *ast.Node) bool {
 	if a.returnKind(decl) != ownReturnsShared {
 		return false
 	}
-	result := ownTypeParameterName(decl, a.resolveTypeNode(decl.Type()).Type())
+	result := ownTypeParameterName(decl, a.markedTypeOperand(decl.Type()))
 	if result == "" {
 		return false
 	}
 	for _, p := range ownSignatureParameters(decl) {
-		if t := p.Type(); t != nil && a.isSendingTypeNode(t) && ownTypeParameterName(decl, a.resolveTypeNode(t).Type()) == result {
+		if t := p.Type(); t != nil && a.isSendingTypeNode(t) && ownTypeParameterName(decl, a.markedTypeOperand(t)) == result {
 			return true
 		}
 	}
@@ -2055,8 +2080,9 @@ func (a *ownAnalyzer) isPrimitiveOrSharedStructType(t *Type) bool {
 		}
 		return true
 	}
-	if t.flags&(TypeFlagsPrimitive|TypeFlagsNever) != 0 || a.c.getOwnSharedArrayElementType(t) != nil {
-		// SharedArrays (with `--ownRuntime`) are cells in the shared heap, like shared structs.
+	if t.flags&(TypeFlagsPrimitive|TypeFlagsNever) != 0 || a.c.getOwnSharedArrayElementType(t) != nil || a.c.isOwnCellBranded(t) {
+		// SharedArrays (with `--ownRuntime`) are cells in the shared heap, like shared structs, and so
+		// is every Cell of the plain API.
 		return true
 	}
 	if t.symbol != nil {

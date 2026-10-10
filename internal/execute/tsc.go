@@ -54,6 +54,9 @@ func CommandLine(ctx context.Context, sys tsc.System, commandLineArgs []string, 
 		switch strings.ToLower(commandLineArgs[0]) {
 		case "-b", "--b", "-build", "--build":
 			return tscBuildCompilation(ctx, sys, tsoptions.ParseBuildCommandLine(commandLineArgs, sys), testing)
+		case "own":
+			// `tsgo own check`: the ownership checker of the own/shared threads extension (own.go).
+			return ownCommandLine(ctx, sys, commandLineArgs[1:])
 			// case "-f":
 			// 	return fmtMain(sys, commandLineArgs[1], commandLineArgs[1])
 		}

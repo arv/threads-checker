@@ -234,6 +234,11 @@ func (tx *OwnLayoutTransformer) visitValue(node *ast.Node, original *ast.Node, c
 		return tx.Factory().UpdateParenthesizedExpression(node.AsParenthesizedExpression(), tx.visitIn(node.Expression(), ctx))
 	case ast.KindPartiallyEmittedExpression:
 		return tx.Factory().UpdatePartiallyEmittedExpression(node.AsPartiallyEmittedExpression(), tx.visitIn(node.Expression(), ctx))
+	case ast.KindCallExpression:
+		if original != nil && tx.emitResolver.IsOwnConsumeCall(original) {
+			// `consume(x)` is x at run time.
+			return tx.visitIn(node.Arguments()[0], ctx)
+		}
 	}
 	count := printer.OwnCountNone
 	if original != nil {
@@ -868,8 +873,13 @@ func (tx *OwnLayoutTransformer) lower(node *ast.Node, ctx ownContext) *ast.Node 
 		return tx.Factory().UpdateNewExpression(n, tx.Visitor().VisitNode(n.Expression), nil /*typeArguments*/, tx.visitArguments(n.Arguments, false /*conditional*/))
 	case ast.KindCallExpression:
 		n := node.AsCallExpression()
-		callee := tx.Visitor().VisitNode(n.Expression)
 		original := tx.original(node)
+		if original != nil {
+			if structCall := tx.emitResolver.GetOwnStructCall(original); structCall != nil {
+				return tx.finish(tx.sharedStruct(structCall), node)
+			}
+		}
+		callee := tx.Visitor().VisitNode(n.Expression)
 		args := tx.visitArguments(n.Arguments, original != nil && ast.IsOptionalChain(original))
 		return tx.Factory().UpdateCallExpression(n, callee, n.QuestionDotToken, nil /*typeArguments*/, args, n.Flags)
 	case ast.KindPropertyAccessExpression, ast.KindElementAccessExpression:
@@ -907,6 +917,24 @@ func (tx *OwnLayoutTransformer) lower(node *ast.Node, ctx ownContext) *ast.Node 
 		}
 	}
 	return tx.Visitor().VisitEachChild(node)
+}
+
+// `struct({ a: f64, next: ref<T>() })` as `__sharedStruct("S", ["a", "next"], [1])`, as a `shared
+// struct` declaration is emitted.
+func (tx *OwnLayoutTransformer) sharedStruct(structCall *printer.OwnStructCall) *ast.Node {
+	fields := core.Map(structCall.Layout.Fields, func(name string) *ast.Node {
+		return tx.Factory().NewStringLiteral(name, ast.TokenFlagsNone)
+	})
+	var refs []*ast.Node
+	for k, isRef := range structCall.Layout.Refs {
+		if isRef {
+			refs = append(refs, tx.number(k))
+		}
+	}
+	return tx.call(transformers.OwnRuntimeSharedStructHelper,
+		tx.Factory().NewStringLiteral(structCall.Name, ast.TokenFlagsNone),
+		tx.Factory().NewArrayLiteralExpression(tx.Factory().NewNodeList(fields), false /*multiLine*/),
+		tx.Factory().NewArrayLiteralExpression(tx.Factory().NewNodeList(refs), false /*multiLine*/))
 }
 
 // The converted value of a shorthand property's name (`__box(b)` for `{ b }`).

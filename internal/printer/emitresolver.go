@@ -102,6 +102,13 @@ const (
 	OwnConversionZero                // `0`: null or undefined flows into a struct-typed place (or is compared with one)
 )
 
+// A shared struct that a `struct({...})` call of the plain API declares: its name (the variable it
+// initializes) and layout.
+type OwnStructCall struct {
+	Name   string
+	Layout OwnCellType
+}
+
 // How a struct or SharedArray value (a raw address) is counted (see REFCOUNT.md in porffor's
 // threads/escape-proto and checker/ownrefcount.go).
 type OwnCount int32
@@ -151,6 +158,8 @@ type EmitResolver interface {
 	GetOwnCaptures(function *ast.Node) []*ast.Node
 	IsOwnQuiescentLoop(loop *ast.Node) bool
 	IsOwnRefArgument(argument *ast.Node) bool
+	GetOwnStructCall(call *ast.Node) *OwnStructCall
+	IsOwnConsumeCall(call *ast.Node) bool
 
 	// JSX Emit
 	GetJsxFactoryEntity(location *ast.Node) *ast.Node

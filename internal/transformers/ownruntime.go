@@ -16,9 +16,10 @@ import (
 //
 //	import { __register, __sharedStruct } from "./own.mjs";
 //
-// `__sharedStruct` builds the runtime value of a `shared struct` declaration, and `__register` is
-// called at the end of the module with all of its top-level functions, so that the runtime can find
-// them by name in other threads:
+// `__sharedStruct` builds the runtime value of a `shared struct` declaration (or of a `struct({...})`
+// call of the plain API), and `__register` is called at the end of every module that uses the
+// extension's syntax or imports the runtime, with all of its top-level functions, so that the runtime
+// can find them by name in other threads:
 //
 //	__register(import.meta.url, { worker, simulate, main });
 //
@@ -97,6 +98,17 @@ func OwnRuntimeRegisteredFunctions(file *ast.SourceFile) []string {
 	return names
 }
 
+// Reports whether a file imports the runtime module (the plain API, which has no syntax to look for).
+func importsOwnRuntime(file *ast.SourceFile, specifier string) bool {
+	return core.Some(file.Statements.Nodes, func(statement *ast.Node) bool {
+		if !ast.IsImportDeclaration(statement) && !ast.IsExportDeclaration(statement) {
+			return false
+		}
+		module := statement.ModuleSpecifier()
+		return module != nil && ast.IsStringLiteral(module) && module.Text() == specifier
+	})
+}
+
 // The runtime helpers that a transformed file references, sorted.
 func ownRuntimeHelpersUsedBy(emitContext *printer.EmitContext, file *ast.SourceFile) []string {
 	used := map[string]bool{}
@@ -121,7 +133,7 @@ func CreateOwnRuntimeStatements(emitContext *printer.EmitContext, options *core.
 	original := emitContext.MostOriginal(file.AsNode()).AsSourceFile()
 	f := emitContext.Factory
 	var functions []string
-	if original.Flags&ast.NodeFlagsPossiblyContainsOwnershipSyntax != 0 {
+	if original.Flags&ast.NodeFlagsPossiblyContainsOwnershipSyntax != 0 || importsOwnRuntime(original, options.OwnRuntime) {
 		functions = OwnRuntimeRegisteredFunctions(original)
 	}
 	helpers := ownRuntimeHelpersUsedBy(emitContext, file)

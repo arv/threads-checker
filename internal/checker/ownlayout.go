@@ -31,6 +31,10 @@ type ownLayoutState struct {
 	conversions     map[*ast.Node]printer.OwnConversion // box and unbox conversions by expression
 	conversionFiles map[*ast.SourceFile]bool            // files whose conversions are computed
 	refs            ownRefCountState                    // reference counting (ownrefcount.go)
+	runtimeTypes    map[string]*Type                    // the runtime module's interfaces and classes, by name (ownmarkers.go)
+	structs         map[*Type]*ast.Node                 // the `struct(...)` calls, by the type of their structs' values
+	structCalls     map[*ast.Node]*ownStructInfo        // the same, by call
+	structDecls     map[*ast.Symbol]*ownStructInfo      // the `shared struct` declarations
 }
 
 // The files that the `ownRuntime` specifier resolves to (from any file that imports it).
@@ -50,15 +54,61 @@ func (c *Checker) isOwnRuntimeFile(file *ast.SourceFile) bool {
 	return file != nil && c.ownLayout.runtimeFiles[file.FileName()]
 }
 
-// The shared struct whose instances have type t, if any (not the struct's constructor).
-func (c *Checker) getOwnStructOfType(t *Type) *ast.Symbol {
-	if t == nil || t.flags&TypeFlagsObject == 0 || t.symbol == nil || !core.Some(t.symbol.Declarations, ast.IsSharedStructDeclaration) {
+// The shared struct whose instances have type t, if any (not the struct's constructor): a `shared
+// struct` declaration, or a `struct(...)` call (whose values' type may be intersected with Cell).
+func (c *Checker) getOwnStructOfType(t *Type) *ownStructInfo {
+	if t == nil {
 		return nil
 	}
-	if c.getDeclaredTypeOfSymbol(t.symbol) != t {
+	if t.flags&TypeFlagsIntersection != 0 {
+		for _, member := range t.Types() {
+			if info := c.getOwnStructOfType(member); info != nil {
+				return info
+			}
+		}
 		return nil
 	}
-	return t.symbol
+	if t.flags&TypeFlagsObject == 0 {
+		return nil
+	}
+	if t.symbol != nil && core.Some(t.symbol.Declarations, ast.IsSharedStructDeclaration) {
+		if c.getDeclaredTypeOfSymbol(t.symbol) != t {
+			return nil
+		}
+		return c.getOwnStructOfDeclaration(t.symbol)
+	}
+	if c.compilerOptions.OwnRuntime == "" {
+		return nil
+	}
+	if call := c.getOwnStructRegistry()[t]; call != nil {
+		return c.getOwnStructOfCall(call)
+	}
+	return nil
+}
+
+// The layout of a `shared struct` declaration: its fields in declaration order, and which of them
+// are reference fields (a shared struct or a SharedArray, possibly with null or undefined).
+func (c *Checker) getOwnStructOfDeclaration(s *ast.Symbol) *ownStructInfo {
+	if info, ok := c.ownLayout.structDecls[s]; ok {
+		return info
+	}
+	decl := core.Find(s.Declarations, ast.IsSharedStructDeclaration)
+	info := &ownStructInfo{decl: decl, name: s.Name}
+	if c.ownLayout.structDecls == nil {
+		c.ownLayout.structDecls = map[*ast.Symbol]*ownStructInfo{}
+	}
+	c.ownLayout.structDecls[s] = info // before its fields: a field may refer to the struct itself
+	for _, member := range decl.Members() {
+		if ast.IsPropertySignatureDeclaration(member) && member.Name() != nil {
+			info.fields = append(info.fields, member.Name().Text())
+			isRef := false
+			if symbol := c.getSymbolOfDeclaration(member); symbol != nil {
+				isRef = c.isOwnCellType(c.getTypeOfSymbol(symbol))
+			}
+			info.refs = append(info.refs, isRef)
+		}
+	}
+	return info
 }
 
 // The element type of a SharedArray type, if t is one.
@@ -104,36 +154,17 @@ func (c *Checker) getOwnCellType(t *Type) printer.OwnCellType {
 	}
 	t = members[0]
 	if s := c.getOwnStructOfType(t); s != nil {
-		fields, refs := c.ownStructLayout(s)
-		return printer.OwnCellType{Kind: printer.OwnCellStruct, Fields: fields, Refs: refs}
+		return printer.OwnCellType{Kind: printer.OwnCellStruct, Fields: s.fields, Refs: s.refs}
 	}
 	if element := c.getOwnSharedArrayElementType(t); element != nil {
 		if element.flags&TypeFlagsNumber != 0 {
 			return printer.OwnCellType{Kind: printer.OwnCellArrayOfNumber}
 		}
 		if s := c.getOwnStructOfType(element); s != nil {
-			fields, refs := c.ownStructLayout(s)
-			return printer.OwnCellType{Kind: printer.OwnCellArrayOfStruct, Fields: fields, Refs: refs}
+			return printer.OwnCellType{Kind: printer.OwnCellArrayOfStruct, Fields: s.fields, Refs: s.refs}
 		}
 	}
 	return printer.OwnCellType{}
-}
-
-// The names of a shared struct's fields, in slot order, and which of them are reference fields (a
-// shared struct or a SharedArray, possibly with null or undefined) rather than numbers.
-func (c *Checker) ownStructLayout(s *ast.Symbol) (fields []string, refs []bool) {
-	decl := core.Find(s.Declarations, ast.IsSharedStructDeclaration)
-	for _, member := range decl.Members() {
-		if ast.IsPropertySignatureDeclaration(member) && member.Name() != nil {
-			fields = append(fields, member.Name().Text())
-			isRef := false
-			if symbol := c.getSymbolOfDeclaration(member); symbol != nil {
-				isRef = c.isOwnCellType(c.getTypeOfSymbol(symbol))
-			}
-			refs = append(refs, isRef)
-		}
-	}
-	return fields, refs
 }
 
 // Reports whether a value of type t is a shared struct or a SharedArray (possibly with null or
@@ -160,6 +191,7 @@ func (c *Checker) getOwnCellTypeOfExpression(expr *ast.Node) printer.OwnCellType
 		}
 		return printer.OwnCellType{}
 	}
+
 	if !ast.IsExpression(expr) {
 		return printer.OwnCellType{}
 	}
