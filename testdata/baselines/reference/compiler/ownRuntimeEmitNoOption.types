@@ -1,0 +1,127 @@
+//// [tests/cases/compiler/ownRuntimeEmitNoOption.ts] ////
+
+=== own.d.mts ===
+export declare function share<T>(x: sending T): shared T;
+>share : <T>(x: sending T) => shared T
+>x : T
+
+=== main.mts ===
+import { share } from "./own.mjs";
+>share : <T>(x: sending T) => shared T
+
+export shared struct Point { x: number; y: number }
+>Point : Point
+>x : number
+>y : number
+
+shared struct Local { n: number }
+>Local : Local
+>n : number
+
+export function exported(p: sending number[]): sending number[] { return p; }
+>exported : (p: sending number[]) => sending number[]
+>p : number[]
+>p : number[]
+
+function notExported() { return share([1]); }
+>notExported : () => number[]
+>share([1]) : number[]
+>share : <T>(x: sending T) => shared T
+>[1] : number[]
+>1 : 1
+
+function overloaded(x: string): string;
+>overloaded : { (x: string): string; (x: number): number; }
+>x : string
+
+function overloaded(x: number): number;
+>overloaded : { (x: string): string; (x: number): number; }
+>x : number
+
+function overloaded(x: any) { return x; }
+>overloaded : { (x: string): string; (x: number): number; }
+>x : any
+>x : any
+
+declare function ambient(): void;
+>ambient : () => void
+
+export default function main() { notExported(); return new Local(); }
+>main : () => any
+>notExported() : number[]
+>notExported : () => number[]
+>new Local() : any
+>Local : any
+
+const arrow = () => 1;
+>arrow : () => number
+>() => 1 : () => number
+>1 : 1
+
+namespace NS { export function inner() {} }
+>NS : typeof NS
+>inner : () => void
+
+function outer() { function nested() {} return nested; }
+>outer : () => () => void
+>nested : () => void
+>nested : () => void
+
+=== structOnly.mts ===
+export shared struct Only { v: number }
+>Only : Only
+>v : number
+
+=== functionsOnly.mts ===
+export function f(x: sending number[]) { return x; }
+>f : (x: sending number[]) => number[]
+>x : number[]
+>x : number[]
+
+function g() {}
+>g : () => void
+
+=== plain.mts ===
+export function plain() { return 1; }
+>plain : () => number
+>1 : 1
+
+=== collision.mts ===
+export function __register(x: sending number[]) { return x; }
+>__register : (x: sending number[]) => number[]
+>x : number[]
+>x : number[]
+
+export shared struct S { v: number }
+>S : S
+>v : number
+
+function __sharedStruct() {}
+>__sharedStruct : () => void
+
+=== nameless.mts ===
+export default function (x: sending number[]) { return x; }
+>x : number[]
+>x : number[]
+
+function helper() {}
+>helper : () => void
+
+=== cjs.cts ===
+export function c(x: sending number[]) { return x; }
+>c : (x: sending number[]) => number[]
+>x : number[]
+>x : number[]
+
+=== script.ts ===
+declare function send<T>(x: sending T): void;
+>send : <T>(x: sending T) => void
+>x : T
+
+function scriptFunction() { send([1]); }
+>scriptFunction : () => void
+>send([1]) : void
+>send : <T>(x: sending T) => void
+>[1] : number[]
+>1 : 1
+

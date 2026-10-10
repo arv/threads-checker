@@ -26,12 +26,13 @@ type RuntimeSyntaxTransformer struct {
 	currentNamespace                    *ast.ModuleDeclarationNode
 	resolver                            binder.ReferenceResolver
 	emitResolver                        printer.EmitResolver
+	getEmitModuleFormatOfFile           func(file ast.HasFileName) core.ModuleKind
 }
 
 func NewRuntimeSyntaxTransformer(opt *transformers.TransformOptions) *transformers.Transformer {
 	compilerOptions := opt.CompilerOptions
 	emitContext := opt.Context
-	tx := &RuntimeSyntaxTransformer{compilerOptions: compilerOptions, resolver: opt.Resolver, emitResolver: opt.EmitResolver}
+	tx := &RuntimeSyntaxTransformer{compilerOptions: compilerOptions, resolver: opt.Resolver, emitResolver: opt.EmitResolver, getEmitModuleFormatOfFile: opt.GetEmitModuleFormatOfFile}
 	return tx.NewTransformer(tx.visit, emitContext)
 }
 
@@ -624,21 +625,27 @@ func (tx *RuntimeSyntaxTransformer) visitVariableStatement(node *ast.VariableSta
 }
 
 // The runtime function that a shared struct declaration is lowered to a call of.
-const sharedStructRuntimeFunctionName = "__sharedStruct"
+const sharedStructRuntimeFunctionName = transformers.OwnRuntimeSharedStructHelper
 
 // Lowers a shared struct declaration
 //
 //	export shared struct Name { a: T; readonly b: U }
 //
-// to a placeholder runtime call that lists the field names in declaration order:
+// to a runtime call that lists the field names in declaration order:
 //
 //	export const Name = __sharedStruct("Name", ["a", "b"]);
 //
-// TODO(own-shared): replace the placeholder with a real lowering that lays the fields out in a
-// SharedArrayBuffer and generates typed accessors. Until then `__sharedStruct` must be provided by
-// the runtime; it is not an emit helper.
+// With `--ownRuntime` the module imports `__sharedStruct` from the runtime (see
+// transformers.CreateOwnRuntimeStatements) and the call uses that binding; otherwise it is a free
+// identifier that the environment must provide.
+//
+// TODO(own-shared): lower to a SharedArrayBuffer layout with typed accessors instead.
 func (tx *RuntimeSyntaxTransformer) visitSharedStructDeclaration(node *ast.SharedStructDeclaration) *ast.Node {
 	f := tx.Factory()
+	helper := f.NewIdentifier(sharedStructRuntimeFunctionName)
+	if transformers.UsesOwnRuntime(tx.EmitContext(), tx.compilerOptions, tx.currentSourceFile.AsSourceFile(), tx.getEmitModuleFormatOfFile) {
+		helper = f.NewUnscopedHelperName(sharedStructRuntimeFunctionName)
+	}
 	var fieldNames []*ast.Expression
 	for _, member := range node.Members.Nodes {
 		if fieldName := tx.getSharedStructFieldName(member); fieldName != nil {
@@ -647,7 +654,7 @@ func (tx *RuntimeSyntaxTransformer) visitSharedStructDeclaration(node *ast.Share
 	}
 	name := node.Name()
 	call := f.NewCallExpression(
-		f.NewIdentifier(sharedStructRuntimeFunctionName),
+		helper,
 		nil, /*questionDotToken*/
 		nil, /*typeArguments*/
 		f.NewNodeList([]*ast.Expression{

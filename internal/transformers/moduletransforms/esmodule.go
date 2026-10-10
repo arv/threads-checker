@@ -65,7 +65,13 @@ func (tx *ESModuleTransformer) visitSourceFile(node *ast.SourceFile) *ast.Node {
 	tx.EmitContext().AddEmitHelper(result.AsNode(), tx.EmitContext().ReadEmitHelpers()...)
 
 	externalHelpersImportDeclaration := createExternalHelpersImportDeclarationIfNeeded(tx.EmitContext(), result, tx.compilerOptions, tx.getEmitModuleFormatOfFile(node), false /*hasExportStarsToExportValues*/, false /*hasImportStar*/, false /*hasImportDefault*/)
-	if externalHelpersImportDeclaration != nil || tx.importRequireStatements != nil {
+	// own/shared threads extension: `import { __register, ... } from "<ownRuntime>"` at the top and
+	// `__register(import.meta.url, { ... })` at the end.
+	var ownRuntimeImport, ownRuntimeRegistration *ast.Statement
+	if transformers.UsesOwnRuntime(tx.EmitContext(), tx.compilerOptions, node, tx.getEmitModuleFormatOfFile) {
+		ownRuntimeImport, ownRuntimeRegistration = transformers.CreateOwnRuntimeStatements(tx.EmitContext(), tx.compilerOptions, node)
+	}
+	if externalHelpersImportDeclaration != nil || tx.importRequireStatements != nil || ownRuntimeImport != nil {
 		prologue, rest := tx.Factory().SplitStandardPrologue(result.Statements.Nodes)
 		custom, rest := tx.Factory().SplitCustomPrologue(rest)
 		statements := slices.Clone(prologue)
@@ -76,10 +82,21 @@ func (tx *ESModuleTransformer) visitSourceFile(node *ast.SourceFile) *ast.Node {
 			// for CJS output files via visitImportEqualsDeclaration.
 			statements = append(statements, tx.Visitor().VisitNode(externalHelpersImportDeclaration))
 		}
+		if ownRuntimeImport != nil {
+			statements = append(statements, ownRuntimeImport)
+		}
 		if tx.importRequireStatements != nil {
 			statements = append(statements, tx.importRequireStatements.statements...)
 		}
 		statements = append(statements, rest...)
+		statementList := tx.Factory().NewNodeList(statements)
+		statementList.Loc = result.Statements.Loc
+		result = tx.Factory().UpdateSourceFile(result, statementList, node.EndOfFileToken).AsSourceFile()
+	}
+
+	if ownRuntimeRegistration != nil {
+		statements := slices.Clone(result.Statements.Nodes)
+		statements = append(statements, ownRuntimeRegistration)
 		statementList := tx.Factory().NewNodeList(statements)
 		statementList.Loc = result.Statements.Loc
 		result = tx.Factory().UpdateSourceFile(result, statementList, node.EndOfFileToken).AsSourceFile()
