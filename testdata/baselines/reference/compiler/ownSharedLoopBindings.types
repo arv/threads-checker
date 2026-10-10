@@ -1,0 +1,250 @@
+//// [tests/cases/compiler/ownSharedLoopBindings.ts] ////
+
+=== ownSharedLoopBindings.ts ===
+// A variable declared in a loop's body is a fresh binding in every iteration: what an earlier
+// iteration sent must not stick to it. A variable declared outside the loop keeps its state across
+// iterations. Lines marked "error" are expected to be reported.
+
+type Pos = { x: number };
+>Pos : Pos
+>x : number
+
+type Positions = { t: number; pos: Pos[] };
+>Positions : Positions
+>t : number
+>pos : Pos[]
+
+declare function share<T>(x: sending T): shared T;
+>share : <T>(x: sending T) => shared T
+>x : T
+
+declare function send<T>(x: sending T): void;
+>send : <T>(x: sending T) => void
+>x : T
+
+declare function recv(): sending Positions | undefined;
+>recv : () => sending Positions | undefined
+
+declare function use(xs: readonly shared Pos[]): void;
+>use : (xs: readonly shared Pos[]) => void
+>xs : readonly Pos[]
+
+// The n-body gather: each step builds `slots` from received messages, then shares it.
+export function gather(steps: number, threads: number) {
+>gather : (steps: number, threads: number) => void
+>steps : number
+>threads : number
+
+    for (let s = 0; s < steps; s++) {
+>s : number
+>0 : 0
+>s < steps : boolean
+>s : number
+>steps : number
+>s++ : number
+>s : number
+
+        const slots: Pos[][] = [];
+>slots : Pos[][]
+>[] : never[]
+
+        for (let k = 0; k < threads; k++) {
+>k : number
+>0 : 0
+>k < threads : boolean
+>k : number
+>threads : number
+>k++ : number
+>k : number
+
+            const m = recv()!;
+>m : Positions
+>recv()! : Positions
+>recv() : Positions | undefined
+>recv : () => sending Positions | undefined
+
+            slots[m.t] = m.pos;
+>slots[m.t] = m.pos : Pos[]
+>slots[m.t] : Pos[]
+>slots : Pos[][]
+>m.t : number
+>m : Positions
+>t : number
+>m.pos : Pos[]
+>m : Positions
+>pos : Pos[]
+        }
+        const all = share(slots.flat());
+>all : Pos[]
+>share(slots.flat()) : Pos[]
+>share : <T>(x: sending T) => shared T
+>slots.flat() : Pos[]
+>slots.flat : <A, D extends number = 1>(this: A, depth?: D | undefined) => FlatArray<A, D>[]
+>slots : Pos[][]
+>flat : <A, D extends number = 1>(this: A, depth?: D | undefined) => FlatArray<A, D>[]
+
+        use(all);
+>use(all) : void
+>use : (xs: readonly shared Pos[]) => void
+>all : Pos[]
+    }
+}
+
+export function nested(steps: number) {
+>nested : (steps: number) => void
+>steps : number
+
+    for (let s = 0; s < steps; s++) {
+>s : number
+>0 : 0
+>s < steps : boolean
+>s : number
+>steps : number
+>s++ : number
+>s : number
+
+        do {
+            const { pos } = recv()!;          // destructured: fresh bindings too
+>pos : Pos[]
+>recv()! : Positions
+>recv() : Positions | undefined
+>recv : () => sending Positions | undefined
+
+            send(pos);
+>send(pos) : void
+>send : <T>(x: sending T) => void
+>pos : Pos[]
+
+        } while (steps > s);
+>steps > s : boolean
+>steps : number
+>s : number
+
+        let last: Pos[] = [];
+>last : Pos[]
+>[] : never[]
+
+        while (last.length < 3) {
+>last.length < 3 : boolean
+>last.length : number
+>last : Pos[]
+>length : number
+>3 : 3
+
+            const next = recv()!.pos;
+>next : Pos[]
+>recv()!.pos : Pos[]
+>recv()! : Positions
+>recv() : Positions | undefined
+>recv : () => sending Positions | undefined
+>pos : Pos[]
+
+            last.push(...next);
+>last.push(...next) : number
+>last.push : (...items: Pos[]) => number
+>last : Pos[]
+>push : (...items: Pos[]) => number
+>...next : Pos
+>next : Pos[]
+        }
+        send(last);
+>send(last) : void
+>send : <T>(x: sending T) => void
+>last : Pos[]
+    }
+}
+
+export function outside(steps: number) {
+>outside : (steps: number) => void
+>steps : number
+
+    const slots: Pos[][] = [];
+>slots : Pos[][]
+>[] : never[]
+
+    for (let s = 0; s < steps; s++) {
+>s : number
+>0 : 0
+>s < steps : boolean
+>s : number
+>steps : number
+>s++ : number
+>s : number
+
+        const all = share(slots.flat());      // error: sent in an earlier iteration
+>all : Pos[]
+>share(slots.flat()) : Pos[]
+>share : <T>(x: sending T) => shared T
+>slots.flat() : Pos[]
+>slots.flat : <A, D extends number = 1>(this: A, depth?: D | undefined) => FlatArray<A, D>[]
+>slots : Pos[][]
+>flat : <A, D extends number = 1>(this: A, depth?: D | undefined) => FlatArray<A, D>[]
+
+        use(all);
+>use(all) : void
+>use : (xs: readonly shared Pos[]) => void
+>all : Pos[]
+    }
+}
+
+export function linked(steps: number) {
+>linked : (steps: number) => void
+>steps : number
+
+    const outer: Pos[] = [];
+>outer : Pos[]
+>[] : never[]
+
+    for (let s = 0; s < steps; s++) {
+>s : number
+>0 : 0
+>s < steps : boolean
+>s : number
+>steps : number
+>s++ : number
+>s : number
+
+        const inner = outer;                  // error: a fresh binding, but `outer` was sent through it
+>inner : Pos[]
+>outer : Pos[]
+
+        send(inner);                          // error: in an earlier iteration
+>send(inner) : void
+>send : <T>(x: sending T) => void
+>inner : Pos[]
+    }
+}
+
+export function sameIteration(steps: number) {
+>sameIteration : (steps: number) => void
+>steps : number
+
+    for (let s = 0; s < steps; s++) {
+>s : number
+>0 : 0
+>s < steps : boolean
+>s : number
+>steps : number
+>s++ : number
+>s : number
+
+        const xs: Pos[] = [];
+>xs : Pos[]
+>[] : never[]
+
+        send(xs);
+>send(xs) : void
+>send : <T>(x: sending T) => void
+>xs : Pos[]
+
+        xs.push({ x: 1 });                    // error: sent above, in this iteration
+>xs.push({ x: 1 }) : number
+>xs.push : (...items: Pos[]) => number
+>xs : Pos[]
+>push : (...items: Pos[]) => number
+>{ x: 1 } : { x: number; }
+>x : number
+>1 : 1
+    }
+}
+

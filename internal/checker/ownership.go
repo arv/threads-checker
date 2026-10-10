@@ -386,6 +386,7 @@ type ownAnalyzer struct {
 	reported   map[ownReportKey]struct{}
 	shared     map[*ast.Symbol]bool
 	captures   map[*ast.Node]*ownCaptures
+	loopFresh  map[*ast.Node]map[*ast.Symbol]bool // by loop: the variables bound afresh in each iteration
 }
 
 func (a *ownAnalyzer) newRegion() ownRegion {
@@ -646,7 +647,16 @@ func (f *ownFunction) loop(node *ast.Node, labels []string, s *ownState) {
 		f.eval(node.Expression(), s)
 		iterated = ownSharedValue // property names
 	}
+	// Each iteration has fresh bindings of the variables the loop's body declares with `let` or
+	// `const`: what an earlier iteration did with them must not flow into the next one over the back
+	// edge, where joining the old binding with the new one would merge the new value with whatever
+	// the old one was sent with. They are dead there anyway. A variable declared outside the loop
+	// keeps its state across iterations.
+	fresh := f.a.loopBindings(node)
 	head := s.copy()
+	for sym := range fresh {
+		delete(head.vars, sym)
+	}
 	headSignature := head.signature()
 	var exit *ownState
 	var breaks []*ownState
@@ -693,6 +703,9 @@ func (f *ownFunction) loop(node *ast.Node, labels []string, s *ownState) {
 		}
 		f.targets = f.targets[:len(f.targets)-1]
 		breaks = t.breaks
+		for sym := range fresh {
+			delete(st.vars, sym)
+		}
 		next := joinOwnStates(head, st)
 		nextSignature := next.signature()
 		head = next
@@ -702,6 +715,53 @@ func (f *ownFunction) loop(node *ast.Node, labels []string, s *ownState) {
 		headSignature = nextSignature
 	}
 	*s = *joinAllOwnStates(exit, breaks)
+}
+
+// The variables with a fresh binding in each iteration of a loop: those its body declares with `let`
+// or `const` (catch clause variables included), outside the functions and classes in it. (A for-of
+// variable is fresh too, but it is bound to the same value, the iterable's elements, in every
+// iteration; it stays, so that the state of that value is part of the loop's fixpoint.)
+func (a *ownAnalyzer) loopBindings(loop *ast.Node) map[*ast.Symbol]bool {
+	if bindings, ok := a.loopFresh[loop]; ok {
+		return bindings
+	}
+	bindings := map[*ast.Symbol]bool{}
+	var bindName func(name *ast.Node, decl *ast.Node)
+	bindName = func(name *ast.Node, decl *ast.Node) {
+		switch {
+		case name == nil:
+		case ast.IsIdentifier(name):
+			if sym := a.c.getSymbolOfDeclaration(decl); sym != nil {
+				bindings[sym] = true
+			}
+		case ast.IsBindingPattern(name):
+			for _, element := range name.Elements() {
+				if ast.IsBindingElement(element) {
+					bindName(element.Name(), element)
+				}
+			}
+		}
+	}
+	var visit ast.Visitor
+	visit = func(node *ast.Node) bool {
+		switch {
+		case ast.IsTypeNode(node) || ast.IsFunctionLike(node) || ast.IsClassLike(node):
+			return false
+		case ast.IsVariableDeclaration(node):
+			if ast.IsCatchClause(node.Parent) || node.Parent.Flags&ast.NodeFlagsBlockScoped != 0 {
+				bindName(node.Name(), node)
+			}
+		}
+		return node.ForEachChild(visit)
+	}
+	if body := loop.Statement(); body != nil {
+		visit(body)
+	}
+	if a.loopFresh == nil {
+		a.loopFresh = map[*ast.Node]map[*ast.Symbol]bool{}
+	}
+	a.loopFresh[loop] = bindings
+	return bindings
 }
 
 func (f *ownFunction) switchStatement(node *ast.Node, s *ownState) {
