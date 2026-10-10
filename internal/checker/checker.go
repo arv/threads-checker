@@ -11157,7 +11157,8 @@ func (c *Checker) checkIdentifier(node *ast.Node, checkMode CheckMode) *Type {
 		t != c.autoType && t != c.autoArrayType && (!c.strictNullChecks || t.flags&(TypeFlagsAnyOrUnknown|TypeFlagsVoid) != 0 || IsInTypeQuery(node) || c.isInAmbientOrTypeNode(node) || node.Parent.Kind == ast.KindExportSpecifier) ||
 		ast.IsNonNullExpression(node.Parent) ||
 		ast.IsVariableDeclaration(declaration) && declaration.AsVariableDeclaration().ExclamationToken != nil ||
-		declaration.Flags&ast.NodeFlagsAmbient != 0
+		declaration.Flags&ast.NodeFlagsAmbient != 0 ||
+		ast.IsSharedStructDeclaration(declaration) // initialized by its declaration, like a class
 	var initialType *Type
 	switch {
 	case isAutomaticTypeInNonNull:
