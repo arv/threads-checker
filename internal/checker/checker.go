@@ -579,7 +579,8 @@ var nextCheckerID atomic.Uint32
 
 type Checker struct {
 	id                                          uint32
-	ownershipSyntaxState                        uint8 // 0: not computed, 1: the program uses the own/shared syntax, 2: it does not
+	ownershipSyntaxState                        uint8          // 0: not computed, 1: the program uses the own/shared syntax, 2: it does not
+	ownLayout                                   ownLayoutState // typed layouts of the own/shared threads extension (ownlayout.go)
 	program                                     Program
 	compilerOptions                             *core.CompilerOptions
 	files                                       []*ast.SourceFile
@@ -2203,6 +2204,9 @@ func (c *Checker) checkSourceFile(ctx context.Context, sourceFile *ast.SourceFil
 		if !sourceFile.IsDeclarationFile && !c.isCanceled() && c.programUsesOwnershipSyntax() {
 			c.checkOwnership(sourceFile)
 		}
+		if !sourceFile.IsDeclarationFile && !c.isCanceled() && c.compilerOptions.OwnRuntime != "" {
+			c.computeOwnConversions(sourceFile, true /*report*/)
+		}
 		c.saveDeferredDiagnostics = false
 		c.produceDeferredDiagnostics()
 		c.reportedUnreachableNodes.Clear()
@@ -2280,6 +2284,9 @@ func (c *Checker) checkSourceElementWorker(node *ast.Node) {
 		c.checkAccessorDeclaration(node)
 	case ast.KindTypeReference:
 		c.checkTypeReferenceNode(node)
+		if c.compilerOptions.OwnRuntime != "" {
+			c.checkSharedArrayElementType(node, c.getTypeFromTypeNode(node))
+		}
 	case ast.KindTypePredicate:
 		c.checkTypePredicate(node)
 	case ast.KindTypeQuery:
@@ -5016,16 +5023,16 @@ func (c *Checker) checkInterfaceDeclaration(node *ast.Node) {
 }
 
 // Checks `shared struct Name { field: Type; ... }`. The struct declares an interface-like object type
-// with the struct's fields and a value (typed as any for now).
-//
-// TODO(own-shared): check that field types are shareable (primitives, other shared structs, `shared T`)
-// and compute the SharedArrayBuffer layout.
+// with the struct's fields and a value: a constructor with no parameters (see
+// getTypeOfSharedStructValue). With `--ownRuntime` the fields are also checked for the typed layout
+// (see ownlayout.go).
 func (c *Checker) checkSharedStructDeclaration(node *ast.Node) {
 	c.checkExportsOnMergedDeclarations(node)
 	symbol := c.getSymbolOfDeclaration(node)
 	c.getDeclaredTypeOfSymbol(symbol)
 	c.checkObjectTypeForDuplicateDeclarations(node, false /*checkPrivateNames*/)
 	c.checkSourceElements(node.Members())
+	c.checkSharedStructLayout(node)
 }
 
 type InheritanceInfo struct {
@@ -16562,8 +16569,7 @@ func (c *Checker) getTypeOfVariableOrParameterOrPropertyWorker(symbol *ast.Symbo
 	case ast.KindEnumMember:
 		result = c.getTypeOfEnumMember(symbol)
 	case ast.KindSharedStructDeclaration:
-		// TODO(own-shared): give the struct's runtime value (its constructor) a real type.
-		result = c.anyType
+		result = c.getTypeOfSharedStructValue(symbol)
 	default:
 		panic("Unhandled case in getTypeOfVariableOrParameterOrPropertyWorker: " + declaration.Kind.String())
 	}

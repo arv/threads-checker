@@ -74,6 +74,32 @@ const (
 	TypeReferenceSerializationKindObjectType
 )
 
+// The typed layout of a value of the own/shared threads extension (with `--ownRuntime`): a shared
+// struct or a SharedArray, which is represented by the byte address of its block in the shared heap.
+type OwnCellKind int32
+
+const (
+	OwnCellNone          OwnCellKind = iota
+	OwnCellStruct                    // a shared struct: 8-byte slots, one per field
+	OwnCellArrayOfNumber             // a SharedArray<number>: f64 elements after a 16-byte header
+	OwnCellArrayOfStruct             // a SharedArray<S> for a shared struct S: S's slots inline after the header
+)
+
+type OwnCellType struct {
+	Kind   OwnCellKind
+	Fields []string // the struct's fields in slot order (for OwnCellArrayOfStruct, the element struct's)
+}
+
+// How the emit converts an expression between the raw address of a struct or SharedArray and the
+// runtime's handle object for it.
+type OwnConversion int32
+
+const (
+	OwnConversionNone  OwnConversion = iota
+	OwnConversionBox                 // `__box(E)`: a raw address flows into a place typed otherwise
+	OwnConversionUnbox               // `__unbox(E)`: a handle (or other value) flows into a struct-typed place
+)
+
 type EmitResolver interface {
 	binder.ReferenceResolver
 	IsReferencedAliasDeclaration(node *ast.Node) bool
@@ -89,6 +115,10 @@ type EmitResolver interface {
 
 	// const enum inlining
 	GetConstantValue(node *ast.Node) any
+
+	// own/shared threads typed layouts
+	GetOwnCellType(expression *ast.Node) OwnCellType
+	GetOwnConversion(expression *ast.Node) OwnConversion
 
 	// JSX Emit
 	GetJsxFactoryEntity(location *ast.Node) *ast.Node

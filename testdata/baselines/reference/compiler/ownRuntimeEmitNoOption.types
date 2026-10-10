@@ -47,11 +47,11 @@ declare function ambient(): void;
 >ambient : () => void
 
 export default function main() { notExported(); return new Local(); }
->main : () => any
+>main : () => Local
 >notExported() : number[]
 >notExported : () => number[]
->new Local() : any
->Local : any
+>new Local() : Local
+>Local : new () => Local
 
 const arrow = () => 1;
 >arrow : () => number

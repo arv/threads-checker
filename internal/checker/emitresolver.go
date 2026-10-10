@@ -50,6 +50,26 @@ func newEmitResolver(checker *Checker) *EmitResolver {
 	return e
 }
 
+// The typed layout (own/shared threads extension) of an expression of the original tree.
+func (r *EmitResolver) GetOwnCellType(expression *ast.Node) printer.OwnCellType {
+	if expression == nil || expression.Flags&ast.NodeFlagsSynthesized != 0 || ast.GetSourceFileOfNode(expression) == nil {
+		return printer.OwnCellType{}
+	}
+	r.checkerMu.Lock()
+	defer r.checkerMu.Unlock()
+	return r.checker.getOwnCellTypeOfExpression(expression)
+}
+
+// The box or unbox conversion (own/shared threads extension) of an expression of the original tree.
+func (r *EmitResolver) GetOwnConversion(expression *ast.Node) printer.OwnConversion {
+	if expression == nil || expression.Flags&ast.NodeFlagsSynthesized != 0 || ast.GetSourceFileOfNode(expression) == nil {
+		return printer.OwnConversionNone
+	}
+	r.checkerMu.Lock()
+	defer r.checkerMu.Unlock()
+	return r.checker.getOwnConversion(expression)
+}
+
 func (r *EmitResolver) GetJsxFactoryEntity(location *ast.Node) *ast.Node {
 	r.checkerMu.Lock()
 	defer r.checkerMu.Unlock()

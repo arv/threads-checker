@@ -1278,8 +1278,7 @@ func (f *ownFunction) evalNew(node *ast.Node, s *ownState) ownValue {
 	a := f.a
 	n := node.AsNewExpression()
 	if a.isSharedStructReference(n.Expression) {
-		// `new S(...)` of a shared struct: the instance is shared. (The struct's value is typed `any`
-		// for now, so this cannot be read from the type of the expression.)
+		// `new S(...)` of a shared struct: the instance is shared.
 		if n.Arguments != nil {
 			for _, arg := range n.Arguments.Nodes {
 				f.eval(arg, s)
@@ -1902,7 +1901,8 @@ func (a *ownAnalyzer) isPrimitiveOrSharedStructType(t *Type) bool {
 		}
 		return true
 	}
-	if t.flags&(TypeFlagsPrimitive|TypeFlagsNever) != 0 {
+	if t.flags&(TypeFlagsPrimitive|TypeFlagsNever) != 0 || a.c.getOwnSharedArrayElementType(t) != nil {
+		// SharedArrays (with `--ownRuntime`) are cells in the shared heap, like shared structs.
 		return true
 	}
 	if t.symbol != nil {

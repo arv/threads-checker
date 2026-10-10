@@ -530,9 +530,9 @@ function simulate(threads: number): number {
 >new Barrier(threads) : BarrierCell
 >Barrier : new (threads: number) => shared BarrierCell
 >threads : number
->progress : any
->new Progress() : any
->Progress : any
+>progress : Progress
+>new Progress() : Progress
+>Progress : new () => Progress
 
     return scope(s => {
 >scope(s => {        const parts = partition(makeBodies(), threads);        const ts: (shared Thread<Body[]>)[] = [];        for (let t = 0; t < threads; t++) ts.push(s.spawn(worker, t, take(parts, t), board, barrier, progress));        return energy(ts.flatMap(th => th.join()));    }) : number
@@ -576,7 +576,7 @@ function simulate(threads: number): number {
 >t : number
 >board : SlotsCell<Pos[]>
 >barrier : BarrierCell
->progress : any
+>progress : Progress
 
         return energy(ts.flatMap(th => th.join()));
 >energy(ts.flatMap(th => th.join())) : number
