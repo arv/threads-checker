@@ -1,6 +1,7 @@
 package diagnostics
 
-// Diagnostics of the ownership (region) analysis of the "own and shared threads" extension.
+// Diagnostics of the "own and shared threads" extension: the ownership (region) analysis and the
+// `ownRuntime` option.
 //
 // These are hand-written rather than generated: diagnostics_generated.go is produced from the
 // TypeScript submodule's diagnosticMessages.json, which knows nothing about the extension. The codes
@@ -30,6 +31,10 @@ var X_0_is_sent_here = &Message{code: 96011, category: CategoryMessage, key: "_0
 
 var X_0_is_consumed_here = &Message{code: 96012, category: CategoryMessage, key: "_0_is_consumed_here_96012", text: "'{0}' is consumed here."}
 
+var Specify_the_module_that_files_using_the_own_Slashshared_threads_syntax_import_their_runtime_helpers_from_e_g_Dot_Slashown_mjs = &Message{code: 96013, category: CategoryMessage, key: "Specify_the_module_that_files_using_the_own_Slashshared_threads_syntax_import_their_runtime_helpers_96013", text: "Specify the module that files using the own/shared threads syntax import their runtime helpers from, e.g. './own.mjs'."}
+
+var Option_0_can_only_be_used_when_module_is_set_to_es2015_or_later = &Message{code: 96014, category: CategoryError, key: "Option_0_can_only_be_used_when_module_is_set_to_es2015_or_later_96014", text: "Option '{0}' can only be used when 'module' is set to 'es2015' or later."}
+
 // Looks up an extension diagnostic by key, for diagnostics that are re-localized from their key
 // (keyToMessage only knows the generated messages).
 func ownershipKeyToMessage(key Key) *Message {
@@ -46,6 +51,8 @@ func ownershipKeyToMessage(key Key) *Message {
 		Cannot_change_0_Colon_it_is_a_shared_value_which_is_immutable,
 		X_0_is_sent_here,
 		X_0_is_consumed_here,
+		Specify_the_module_that_files_using_the_own_Slashshared_threads_syntax_import_their_runtime_helpers_from_e_g_Dot_Slashown_mjs,
+		Option_0_can_only_be_used_when_module_is_set_to_es2015_or_later,
 	} {
 		if m.key == key {
 			return m

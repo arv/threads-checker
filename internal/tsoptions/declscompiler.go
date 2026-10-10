@@ -1083,6 +1083,15 @@ var optionsForCompiler = []*CommandLineOption{
 		DefaultValueDescription: false,
 	},
 	{
+		// own/shared threads extension
+		Name:             "ownRuntime",
+		Kind:             CommandLineOptionTypeString,
+		AffectsEmit:      true,
+		AffectsBuildInfo: true,
+		Category:         diagnostics.Emit,
+		Description:      diagnostics.Specify_the_module_that_files_using_the_own_Slashshared_threads_syntax_import_their_runtime_helpers_from_e_g_Dot_Slashown_mjs,
+	},
+	{
 		Name:                    "noEmitHelpers",
 		Kind:                    CommandLineOptionTypeBoolean,
 		AffectsEmit:             true,

@@ -460,6 +460,8 @@ func parseCompilerOptions(key string, value any, allOptions *core.CompilerOption
 		allOptions.PathsBasePath = ParseString(value)
 	case "outDir":
 		allOptions.OutDir = ParseString(value)
+	case "ownRuntime":
+		allOptions.OwnRuntime = ParseString(value)
 	case "newLine":
 		allOptions.NewLine = floatOrInt32ToFlag[core.NewLineKind](value)
 	case "watch":

@@ -1137,6 +1137,11 @@ func (p *Program) verifyCompilerOptions() {
 		}
 	}
 
+	// own/shared threads extension: the runtime helpers are imported with an ES `import`.
+	if options.OwnRuntime != "" && options.GetEmitModuleKind() < core.ModuleKindES2015 {
+		createDiagnosticForOptionName(diagnostics.Option_0_can_only_be_used_when_module_is_set_to_es2015_or_later, "ownRuntime", "")
+	}
+
 	moduleKind := options.GetEmitModuleKind()
 
 	if options.AllowImportingTsExtensions.IsTrue() && !(options.NoEmit.IsTrue() || options.EmitDeclarationOnly.IsTrue() || options.RewriteRelativeImportExtensions.IsTrue()) {

@@ -428,6 +428,9 @@ Specify an output folder for all emitted files.
 [94m--outFile[39m
 Specify a file that bundles all outputs into one JavaScript file. If 'declaration' is true, also designates a file that bundles all .d.ts output.
 
+[94m--ownRuntime[39m
+Specify the module that files using the own/shared threads syntax import their runtime helpers from, e.g. './own.mjs'.
+
 [94m--preserveConstEnums[39m
 Disable erasing 'const enum' declarations in generated code.
 type: boolean

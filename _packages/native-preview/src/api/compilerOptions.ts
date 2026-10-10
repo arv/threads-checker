@@ -74,6 +74,8 @@ export interface CompilerOptions {
     noImplicitOverride?: boolean;
     noUncheckedSideEffectImports?: boolean;
     outDir?: string;
+    /** own/shared threads extension: module to import runtime helpers from */
+    ownRuntime?: string;
     paths?: Record<string, string[]>;
     preserveConstEnums?: boolean;
     preserveSymlinks?: boolean;

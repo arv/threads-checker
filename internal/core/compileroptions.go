@@ -84,6 +84,7 @@ type CompilerOptions struct {
 	NoImplicitOverride                        Tristate                                  `json:"noImplicitOverride,omitzero"`
 	NoUncheckedSideEffectImports              Tristate                                  `json:"noUncheckedSideEffectImports,omitzero"`
 	OutDir                                    string                                    `json:"outDir,omitzero"`
+	OwnRuntime                                string                                    `json:"ownRuntime,omitzero"` // own/shared threads extension: module to import runtime helpers from
 	Paths                                     *collections.OrderedMap[string, []string] `json:"paths,omitzero"`
 	PreserveConstEnums                        Tristate                                  `json:"preserveConstEnums,omitzero"`
 	PreserveSymlinks                          Tristate                                  `json:"preserveSymlinks,omitzero"`

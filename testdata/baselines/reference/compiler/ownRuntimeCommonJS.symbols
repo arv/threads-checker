@@ -1,0 +1,14 @@
+//// [tests/cases/compiler/ownRuntimeCommonJS.ts] ////
+
+=== ownRuntimeCommonJS.ts ===
+// `ownRuntime` needs ES module output: with CommonJS it is an error, and it is ignored.
+
+export shared struct S { v: number }
+>S : Symbol(S, Decl(ownRuntimeCommonJS.ts, 0, 0))
+>v : Symbol(S.v, Decl(ownRuntimeCommonJS.ts, 2, 24))
+
+export function f(x: sending number[]) { return x; }
+>f : Symbol(f, Decl(ownRuntimeCommonJS.ts, 2, 36))
+>x : Symbol(x, Decl(ownRuntimeCommonJS.ts, 3, 18))
+>x : Symbol(x, Decl(ownRuntimeCommonJS.ts, 3, 18))
+
