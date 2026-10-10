@@ -30,6 +30,7 @@ type ownLayoutState struct {
 	runtimeFiles    map[string]bool                     // the files `ownRuntime` resolves to
 	conversions     map[*ast.Node]printer.OwnConversion // box and unbox conversions by expression
 	conversionFiles map[*ast.SourceFile]bool            // files whose conversions are computed
+	refs            ownRefCountState                    // reference counting (ownrefcount.go)
 }
 
 // The files that the `ownRuntime` specifier resolves to (from any file that imports it).
@@ -103,29 +104,36 @@ func (c *Checker) getOwnCellType(t *Type) printer.OwnCellType {
 	}
 	t = members[0]
 	if s := c.getOwnStructOfType(t); s != nil {
-		return printer.OwnCellType{Kind: printer.OwnCellStruct, Fields: ownStructFields(s)}
+		fields, refs := c.ownStructLayout(s)
+		return printer.OwnCellType{Kind: printer.OwnCellStruct, Fields: fields, Refs: refs}
 	}
 	if element := c.getOwnSharedArrayElementType(t); element != nil {
 		if element.flags&TypeFlagsNumber != 0 {
 			return printer.OwnCellType{Kind: printer.OwnCellArrayOfNumber}
 		}
 		if s := c.getOwnStructOfType(element); s != nil {
-			return printer.OwnCellType{Kind: printer.OwnCellArrayOfStruct, Fields: ownStructFields(s)}
+			fields, refs := c.ownStructLayout(s)
+			return printer.OwnCellType{Kind: printer.OwnCellArrayOfStruct, Fields: fields, Refs: refs}
 		}
 	}
 	return printer.OwnCellType{}
 }
 
-// The names of a shared struct's fields, in slot order.
-func ownStructFields(s *ast.Symbol) []string {
+// The names of a shared struct's fields, in slot order, and which of them are reference fields (a
+// shared struct or a SharedArray, possibly with null or undefined) rather than numbers.
+func (c *Checker) ownStructLayout(s *ast.Symbol) (fields []string, refs []bool) {
 	decl := core.Find(s.Declarations, ast.IsSharedStructDeclaration)
-	var fields []string
 	for _, member := range decl.Members() {
 		if ast.IsPropertySignatureDeclaration(member) && member.Name() != nil {
 			fields = append(fields, member.Name().Text())
+			isRef := false
+			if symbol := c.getSymbolOfDeclaration(member); symbol != nil {
+				isRef = c.isOwnCellType(c.getTypeOfSymbol(symbol))
+			}
+			refs = append(refs, isRef)
 		}
 	}
-	return fields
+	return fields, refs
 }
 
 // Reports whether a value of type t is a shared struct or a SharedArray (possibly with null or
@@ -140,9 +148,19 @@ func (c *Checker) isOwnCellType(t *Type) bool {
 	})
 }
 
-// The layout type of an expression, for the emit resolver.
+// The layout type of an expression (or of the instances of a shared struct declaration), for the
+// emit resolver.
 func (c *Checker) getOwnCellTypeOfExpression(expr *ast.Node) printer.OwnCellType {
-	if c.compilerOptions.OwnRuntime == "" || !ast.IsExpression(expr) {
+	if c.compilerOptions.OwnRuntime == "" {
+		return printer.OwnCellType{}
+	}
+	if ast.IsSharedStructDeclaration(expr) {
+		if symbol := c.getSymbolOfDeclaration(expr); symbol != nil {
+			return c.getOwnCellType(c.getDeclaredTypeOfSymbol(symbol))
+		}
+		return printer.OwnCellType{}
+	}
+	if !ast.IsExpression(expr) {
 		return printer.OwnCellType{}
 	}
 	return c.getOwnCellType(c.getTypeOfExpression(expr))
@@ -155,7 +173,8 @@ func (c *Checker) getTypeOfSharedStructValue(symbol *ast.Symbol) *Type {
 	return c.newAnonymousType(symbol, ast.SymbolTable{}, nil, []*Signature{signature}, nil)
 }
 
-// Checks the fields of a shared struct for the layout: numbers, shared structs and SharedArrays.
+// Checks the fields of a shared struct for the layout: numbers, and reference fields (a shared struct
+// or a SharedArray, possibly with null or undefined).
 func (c *Checker) checkSharedStructLayout(node *ast.Node) {
 	if c.compilerOptions.OwnRuntime == "" || node.Flags&ast.NodeFlagsAmbient != 0 {
 		return
@@ -165,7 +184,7 @@ func (c *Checker) checkSharedStructLayout(node *ast.Node) {
 			continue
 		}
 		t := c.getTypeOfSymbol(c.getSymbolOfDeclaration(member))
-		if t.flags&TypeFlagsNumber != 0 && t.flags&TypeFlagsUnion == 0 || c.getOwnStructOfType(t) != nil || c.getOwnSharedArrayElementType(t) != nil {
+		if t.flags&TypeFlagsNumber != 0 && t.flags&TypeFlagsUnion == 0 || len(c.ownNonNullishMembers(t)) == 1 && c.isOwnCellType(t) {
 			continue
 		}
 		location := member.Type()
@@ -265,9 +284,11 @@ func (c *Checker) setOwnTarget(expr *ast.Node, targetRaw bool) {
 	sourceRaw := sourceCell && !c.isOwnNarrowedReference(expr)
 	switch {
 	case targetRaw && !sourceRaw && len(c.ownNonNullishMembers(t)) > 0:
-		// A handle (or any value that is not typed as a struct) into a struct-typed place; null and
-		// undefined stay as they are.
+		// A handle (or any value that is not typed as a struct) into a struct-typed place.
 		c.ownLayout.conversions[expr] = printer.OwnConversionUnbox
+	case targetRaw && t.flags&TypeFlagsNullable != 0 && len(c.ownNonNullishMembers(t)) == 0:
+		// null and undefined are 0 where an address is expected.
+		c.ownLayout.conversions[expr] = printer.OwnConversionZero
 	case !targetRaw && sourceRaw:
 		c.ownLayout.conversions[expr] = printer.OwnConversionBox
 	default:
@@ -404,6 +425,13 @@ func (c *Checker) computeOwnConversion(node *ast.Node, report bool) {
 		c.setOwnTargetType(node.Expression(), c.getTypeFromTypeNode(node.Type()))
 	case ast.KindForOfStatement, ast.KindForInStatement:
 		c.setOwnTarget(node.Expression(), false)
+	case ast.KindCaseClause:
+		// `case null:` against an address compares with 0.
+		if switchExpression := node.Parent.Parent.Expression(); c.isOwnCellExpression(switchExpression) && !c.isOwnNarrowedReference(switchExpression) {
+			if t := c.getTypeOfExpression(node.Expression()); t.flags&TypeFlagsNullable != 0 && len(c.ownNonNullishMembers(t)) == 0 {
+				c.setOwnTarget(node.Expression(), true)
+			}
+		}
 	case ast.KindPropertyAccessExpression:
 		object := node.Expression()
 		t := c.getTypeOfExpression(object)
@@ -475,10 +503,18 @@ func (c *Checker) computeOwnBinaryConversion(node *ast.Node, report bool) {
 			c.setOwnTarget(n.Left, true)
 			c.setOwnTarget(n.Right, true)
 		case leftCell:
-			// Compare addresses with null and undefined, handles with anything else.
-			c.setOwnTarget(n.Left, rightType.flags&TypeFlagsNullable != 0 && len(c.ownNonNullishMembers(rightType)) == 0)
+			// Compare addresses with null and undefined (as 0), handles with anything else.
+			rightNullish := rightType.flags&TypeFlagsNullable != 0 && len(c.ownNonNullishMembers(rightType)) == 0
+			c.setOwnTarget(n.Left, rightNullish)
+			if rightNullish {
+				c.setOwnTarget(n.Right, true)
+			}
 		case rightCell:
-			c.setOwnTarget(n.Right, leftType.flags&TypeFlagsNullable != 0 && len(c.ownNonNullishMembers(leftType)) == 0)
+			leftNullish := leftType.flags&TypeFlagsNullable != 0 && len(c.ownNonNullishMembers(leftType)) == 0
+			c.setOwnTarget(n.Right, leftNullish)
+			if leftNullish {
+				c.setOwnTarget(n.Left, true)
+			}
 		}
 	case ast.KindInKeyword:
 		c.setOwnTarget(n.Right, false)

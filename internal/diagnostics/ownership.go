@@ -45,6 +45,18 @@ var Optional_chaining_is_not_supported_on_0_Colon_its_value_is_an_address_in_the
 
 var X_0_cannot_be_destructured_here_Colon_its_value_is_an_address_in_the_shared_heap = &Message{code: 96019, category: CategoryError, key: "_0_cannot_be_destructured_here_Colon_its_value_is_an_address_in_the_shared_heap_96019", text: "'{0}' cannot be destructured here: its value is an address in the shared heap."}
 
+var X_0_cannot_be_reassigned_Colon_a_closure_captures_it_and_its_value_is_a_counted_address_in_the_shared_heap = &Message{code: 96020, category: CategoryError, key: "_0_cannot_be_reassigned_Colon_a_closure_captures_it_and_its_value_is_a_counted_address_in_the_shared_96020", text: "'{0}' cannot be reassigned: a closure captures it, and its value is a counted address in the shared heap."}
+
+var A_value_of_type_0_cannot_be_stored_in_an_ordinary_array_or_object_Colon_reference_counting_cannot_see_it_there_Use_a_SharedArray_or_a_shared_struct_field_or_a_place_typed_unknown_which_holds_a_handle = &Message{code: 96021, category: CategoryError, key: "A_value_of_type_0_cannot_be_stored_in_an_ordinary_array_or_object_Colon_reference_counting_cannot_se_96021", text: "A value of type '{0}' cannot be stored in an ordinary array or object: reference counting cannot see it there. Use a SharedArray or a shared struct field, or a place typed 'unknown', which holds a handle."}
+
+var A_for_of_or_for_in_variable_cannot_have_type_0_Colon_its_value_is_an_address_in_the_shared_heap = &Message{code: 96022, category: CategoryError, key: "A_for_of_or_for_in_variable_cannot_have_type_0_Colon_its_value_is_an_address_in_the_shared_heap_96022", text: "A 'for-of' or 'for-in' variable cannot have type '{0}': its value is an address in the shared heap."}
+
+var X_0_cannot_be_captured_by_a_method_or_a_class_Colon_its_value_is_a_counted_address_in_the_shared_heap_which_only_functions_and_arrow_functions_can_hold = &Message{code: 96023, category: CategoryError, key: "_0_cannot_be_captured_by_a_method_or_a_class_Colon_its_value_is_a_counted_address_in_the_shared_heap_96023", text: "'{0}' cannot be captured by a method or a class: its value is a counted address in the shared heap, which only functions and arrow functions can hold."}
+
+var X_0_cannot_be_bound_by_destructuring_Colon_its_value_is_an_address_in_the_shared_heap = &Message{code: 96024, category: CategoryError, key: "_0_cannot_be_bound_by_destructuring_Colon_its_value_is_an_address_in_the_shared_heap_96024", text: "'{0}' cannot be bound by destructuring: its value is an address in the shared heap."}
+
+var A_generator_s_parameter_cannot_have_type_0_Colon_the_generator_runs_after_its_caller_s_borrow_ends = &Message{code: 96025, category: CategoryError, key: "A_generator_s_parameter_cannot_have_type_0_Colon_the_generator_runs_after_its_caller_s_borrow_ends_96025", text: "A generator's parameter cannot have type '{0}': the generator runs after its caller's borrow ends."}
+
 // Looks up an extension diagnostic by key, for diagnostics that are re-localized from their key
 // (keyToMessage only knows the generated messages).
 func ownershipKeyToMessage(key Key) *Message {
@@ -68,6 +80,12 @@ func ownershipKeyToMessage(key Key) *Message {
 		The_elements_of_a_SharedArray_of_shared_structs_are_stored_inline_Colon_assign_their_fields_instead,
 		Optional_chaining_is_not_supported_on_0_Colon_its_value_is_an_address_in_the_shared_heap,
 		X_0_cannot_be_destructured_here_Colon_its_value_is_an_address_in_the_shared_heap,
+		X_0_cannot_be_reassigned_Colon_a_closure_captures_it_and_its_value_is_a_counted_address_in_the_shared_heap,
+		A_value_of_type_0_cannot_be_stored_in_an_ordinary_array_or_object_Colon_reference_counting_cannot_see_it_there_Use_a_SharedArray_or_a_shared_struct_field_or_a_place_typed_unknown_which_holds_a_handle,
+		A_for_of_or_for_in_variable_cannot_have_type_0_Colon_its_value_is_an_address_in_the_shared_heap,
+		X_0_cannot_be_captured_by_a_method_or_a_class_Colon_its_value_is_a_counted_address_in_the_shared_heap_which_only_functions_and_arrow_functions_can_hold,
+		X_0_cannot_be_bound_by_destructuring_Colon_its_value_is_an_address_in_the_shared_heap,
+		A_generator_s_parameter_cannot_have_type_0_Colon_the_generator_runs_after_its_caller_s_borrow_ends,
 	} {
 		if m.key == key {
 			return m

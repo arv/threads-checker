@@ -1,0 +1,357 @@
+//// [tests/cases/compiler/ownLayoutRefCountErrors.ts] ////
+
+=== own.d.mts ===
+// Types for the own/shared threads runtime own.mjs (the runtime itself lives in porffor). Programs
+// import their API from "./own.mjs"; the compiler adds the imports of the helpers it emits
+// (`__sharedStruct`, `__register`) when `ownRuntime` is set.
+//
+// `sending T` marks a value whose ownership moves to the receiver: the sender must not use it
+// afterwards. `shared T` marks a value any number of threads may read at once: deeply immutable, or
+// a cell that synchronizes internally (Slots, Barrier, a shared struct).
+
+/** One slot per thread: a thread publishes into its own slot, and everyone reads every slot. */
+export interface SlotsCell<T> {
+>SlotsCell : Symbol(SlotsCell, Decl(own.d.mts, 0, 0))
+>T : Symbol(T, Decl(own.d.mts, 9, 27))
+
+    readonly length: number;
+>length : Symbol(SlotsCell.length, Decl(own.d.mts, 9, 31))
+
+    /** Publishes `value` in slot `index`, replacing what was there. */
+    set(index: number, value: T): void;
+>set : Symbol(SlotsCell.set, Decl(own.d.mts, 10, 28))
+>index : Symbol(index, Decl(own.d.mts, 12, 8))
+>value : Symbol(value, Decl(own.d.mts, 12, 22))
+>T : Symbol(T, Decl(own.d.mts, 9, 27))
+
+    /** The value in slot `index`. */
+    get(index: number): shared T;
+>get : Symbol(SlotsCell.get, Decl(own.d.mts, 12, 39))
+>index : Symbol(index, Decl(own.d.mts, 14, 8))
+>T : Symbol(T, Decl(own.d.mts, 9, 27))
+
+    /** The arrays in all slots, concatenated in slot order. */
+    flat(): shared (T extends readonly (infer E)[] ? E : T)[];
+>flat : Symbol(SlotsCell.flat, Decl(own.d.mts, 14, 33))
+>T : Symbol(T, Decl(own.d.mts, 9, 27))
+>E : Symbol(E, Decl(own.d.mts, 16, 45))
+>E : Symbol(E, Decl(own.d.mts, 16, 45))
+>T : Symbol(T, Decl(own.d.mts, 9, 27))
+}
+export declare const Slots: new <T>(count: number) => shared SlotsCell<T>;
+>Slots : Symbol(Slots, Decl(own.d.mts, 18, 20))
+>T : Symbol(T, Decl(own.d.mts, 18, 33))
+>count : Symbol(count, Decl(own.d.mts, 18, 36))
+>SlotsCell : Symbol(SlotsCell, Decl(own.d.mts, 0, 0))
+>T : Symbol(T, Decl(own.d.mts, 18, 33))
+
+/** A reusable barrier for a fixed number of threads. */
+export interface BarrierCell {
+>BarrierCell : Symbol(BarrierCell, Decl(own.d.mts, 18, 74))
+
+    /** Blocks until all threads have called `wait`. */
+    wait(): void;
+>wait : Symbol(BarrierCell.wait, Decl(own.d.mts, 21, 30))
+}
+export declare const Barrier: new (threads: number) => shared BarrierCell;
+>Barrier : Symbol(Barrier, Decl(own.d.mts, 25, 20))
+>threads : Symbol(threads, Decl(own.d.mts, 25, 35))
+>BarrierCell : Symbol(BarrierCell, Decl(own.d.mts, 18, 74))
+
+/** Freezes a value the caller owns into a deeply immutable value every thread can read. */
+export declare function share<T>(value: sending T): shared T;
+>share : Symbol(share, Decl(own.d.mts, 25, 74))
+>T : Symbol(T, Decl(own.d.mts, 28, 30))
+>value : Symbol(value, Decl(own.d.mts, 28, 33))
+>T : Symbol(T, Decl(own.d.mts, 28, 30))
+>T : Symbol(T, Decl(own.d.mts, 28, 30))
+
+/** A thread started inside a `scope`; joining it moves the thread's result back. */
+export interface Thread<R> {
+>Thread : Symbol(Thread, Decl(own.d.mts, 28, 61))
+>R : Symbol(R, Decl(own.d.mts, 31, 24))
+
+    join(): sending R;
+>join : Symbol(Thread.join, Decl(own.d.mts, 31, 28))
+>R : Symbol(R, Decl(own.d.mts, 31, 24))
+}
+
+/** Spawns threads that cannot outlive the scope. Every argument is sent to the new thread. */
+export interface Scope {
+>Scope : Symbol(Scope, Decl(own.d.mts, 33, 1))
+
+    spawn<A extends unknown[], R>(f: (...args: A) => sending R, ...args: sending A): shared Thread<R>;
+>spawn : Symbol(Scope.spawn, Decl(own.d.mts, 36, 24))
+>A : Symbol(A, Decl(own.d.mts, 37, 10))
+>R : Symbol(R, Decl(own.d.mts, 37, 30))
+>f : Symbol(f, Decl(own.d.mts, 37, 34))
+>args : Symbol(args, Decl(own.d.mts, 37, 38))
+>A : Symbol(A, Decl(own.d.mts, 37, 10))
+>R : Symbol(R, Decl(own.d.mts, 37, 30))
+>args : Symbol(args, Decl(own.d.mts, 37, 63))
+>A : Symbol(A, Decl(own.d.mts, 37, 10))
+>Thread : Symbol(Thread, Decl(own.d.mts, 28, 61))
+>R : Symbol(R, Decl(own.d.mts, 37, 30))
+}
+
+/** Runs `body` and joins every thread it spawned before returning. */
+export declare function scope<R>(body: (s: shared Scope) => R): R;
+>scope : Symbol(scope, Decl(own.d.mts, 38, 1))
+>R : Symbol(R, Decl(own.d.mts, 41, 30))
+>body : Symbol(body, Decl(own.d.mts, 41, 33))
+>s : Symbol(s, Decl(own.d.mts, 41, 40))
+>Scope : Symbol(Scope, Decl(own.d.mts, 33, 1))
+>R : Symbol(R, Decl(own.d.mts, 41, 30))
+>R : Symbol(R, Decl(own.d.mts, 41, 30))
+
+/** Splits an owned array into `parts` owned, disjoint chunks of nearly equal size. Trusted. */
+export declare function partition<T>(items: sending T[], parts: number): (sending T[])[];
+>partition : Symbol(partition, Decl(own.d.mts, 41, 66))
+>T : Symbol(T, Decl(own.d.mts, 44, 34))
+>items : Symbol(items, Decl(own.d.mts, 44, 37))
+>T : Symbol(T, Decl(own.d.mts, 44, 34))
+>parts : Symbol(parts, Decl(own.d.mts, 44, 56))
+>T : Symbol(T, Decl(own.d.mts, 44, 34))
+
+/** Takes element `index` out of an array of owned values, so the caller owns it. Trusted. */
+export declare function take<T>(items: (sending T)[], index: number): sending T;
+>take : Symbol(take, Decl(own.d.mts, 44, 89))
+>T : Symbol(T, Decl(own.d.mts, 47, 29))
+>items : Symbol(items, Decl(own.d.mts, 47, 32))
+>T : Symbol(T, Decl(own.d.mts, 47, 29))
+>index : Symbol(index, Decl(own.d.mts, 47, 53))
+>T : Symbol(T, Decl(own.d.mts, 47, 29))
+
+/** Prints a line, synchronously, from any thread. */
+export declare function log(...args: unknown[]): void;
+>log : Symbol(log, Decl(own.d.mts, 47, 80))
+>args : Symbol(args, Decl(own.d.mts, 50, 28))
+
+/** A shared struct's value as a type: what `new SharedArray(Struct, n)` takes. */
+export interface SharedStructType<T> {
+>SharedStructType : Symbol(SharedStructType, Decl(own.d.mts, 50, 54))
+>T : Symbol(T, Decl(own.d.mts, 53, 34))
+
+    new (): T;
+>T : Symbol(T, Decl(own.d.mts, 53, 34))
+}
+
+/**
+ * A fixed-length array in the shared heap, of numbers or of shared structs stored inline. Threads
+ * share it with no copying. With `ownRuntime` the compiler lays it out in the shared heap and turns
+ * `a[i]` and `a.length` into typed-array accesses.
+ */
+export interface SharedArray<T> {
+>SharedArray : Symbol(SharedArray, Decl(own.d.mts, 55, 1), Decl(own.d.mts, 66, 20))
+>T : Symbol(T, Decl(own.d.mts, 62, 29))
+
+    readonly length: number;
+>length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+
+    [index: number]: T;
+>index : Symbol(index, Decl(own.d.mts, 64, 5))
+>T : Symbol(T, Decl(own.d.mts, 62, 29))
+}
+export declare const SharedArray: {
+>SharedArray : Symbol(SharedArray, Decl(own.d.mts, 55, 1), Decl(own.d.mts, 66, 20))
+
+    new (type: NumberConstructor, length: number): SharedArray<number>;
+>type : Symbol(type, Decl(own.d.mts, 67, 9))
+>NumberConstructor : Symbol(NumberConstructor, Decl(lib.es5.d.ts, --, --), Decl(lib.es2015.core.d.ts, --, --))
+>length : Symbol(length, Decl(own.d.mts, 67, 33))
+>SharedArray : Symbol(SharedArray, Decl(own.d.mts, 55, 1), Decl(own.d.mts, 66, 20))
+
+    new <T>(type: SharedStructType<T>, length: number): SharedArray<T>;
+>T : Symbol(T, Decl(own.d.mts, 68, 9))
+>type : Symbol(type, Decl(own.d.mts, 68, 12))
+>SharedStructType : Symbol(SharedStructType, Decl(own.d.mts, 50, 54))
+>T : Symbol(T, Decl(own.d.mts, 68, 9))
+>length : Symbol(length, Decl(own.d.mts, 68, 38))
+>SharedArray : Symbol(SharedArray, Decl(own.d.mts, 55, 1), Decl(own.d.mts, 66, 20))
+>T : Symbol(T, Decl(own.d.mts, 68, 9))
+
+};
+
+
+=== errors.mts ===
+export shared struct Node { value: number; next: Node | null }
+>Node : Symbol(Node, Decl(errors.mts, 0, 0))
+>value : Symbol(Node.value, Decl(errors.mts, 0, 27))
+>next : Symbol(Node.next, Decl(errors.mts, 0, 42))
+>Node : Symbol(Node, Decl(errors.mts, 0, 0))
+
+let current: Node | null = null;             // a module's variable, which functions capture
+>current : Symbol(current, Decl(errors.mts, 2, 3))
+>Node : Symbol(Node, Decl(errors.mts, 0, 0))
+
+export function setCurrent(n: Node) {
+>setCurrent : Symbol(setCurrent, Decl(errors.mts, 2, 32))
+>n : Symbol(n, Decl(errors.mts, 3, 27))
+>Node : Symbol(Node, Decl(errors.mts, 0, 0))
+
+    current = n;                             // error: captured and reassigned
+>current : Symbol(current, Decl(errors.mts, 2, 3))
+>n : Symbol(n, Decl(errors.mts, 3, 27))
+}
+
+export function captured(head: Node) {
+>captured : Symbol(captured, Decl(errors.mts, 5, 1))
+>head : Symbol(head, Decl(errors.mts, 7, 25))
+>Node : Symbol(Node, Decl(errors.mts, 0, 0))
+
+    let n = head;
+>n : Symbol(n, Decl(errors.mts, 8, 7))
+>head : Symbol(head, Decl(errors.mts, 7, 25))
+
+    const f = () => n.value;
+>f : Symbol(f, Decl(errors.mts, 9, 9))
+>n.value : Symbol(Node.value, Decl(errors.mts, 0, 27))
+>n : Symbol(n, Decl(errors.mts, 8, 7))
+>value : Symbol(Node.value, Decl(errors.mts, 0, 27))
+
+    n = new Node();                          // error: captured and reassigned
+>n : Symbol(n, Decl(errors.mts, 8, 7))
+>Node : Symbol(Node, Decl(errors.mts, 0, 0))
+
+    return f;
+>f : Symbol(f, Decl(errors.mts, 9, 9))
+}
+
+export function containers(n: Node, list: Node[]) {
+>containers : Symbol(containers, Decl(errors.mts, 12, 1))
+>n : Symbol(n, Decl(errors.mts, 14, 27))
+>Node : Symbol(Node, Decl(errors.mts, 0, 0))
+>list : Symbol(list, Decl(errors.mts, 14, 35))
+>Node : Symbol(Node, Decl(errors.mts, 0, 0))
+
+    const array = [n];                       // error: an address in an ordinary array
+>array : Symbol(array, Decl(errors.mts, 15, 9))
+>n : Symbol(n, Decl(errors.mts, 14, 27))
+
+    const object = { n };                    // error: in an ordinary object
+>object : Symbol(object, Decl(errors.mts, 16, 9))
+>n : Symbol(n, Decl(errors.mts, 16, 20))
+
+    const named = { node: n };               // error
+>named : Symbol(named, Decl(errors.mts, 17, 9))
+>node : Symbol(node, Decl(errors.mts, 17, 19))
+>n : Symbol(n, Decl(errors.mts, 14, 27))
+
+    list[0] = n;                             // error
+>list : Symbol(list, Decl(errors.mts, 14, 35))
+>n : Symbol(n, Decl(errors.mts, 14, 27))
+
+    const holder: { node: Node | null } = { node: null };
+>holder : Symbol(holder, Decl(errors.mts, 19, 9))
+>node : Symbol(node, Decl(errors.mts, 19, 19))
+>Node : Symbol(Node, Decl(errors.mts, 0, 0))
+>node : Symbol(node, Decl(errors.mts, 19, 43))
+
+    holder.node = n;                         // error
+>holder.node : Symbol(node, Decl(errors.mts, 19, 19))
+>holder : Symbol(holder, Decl(errors.mts, 19, 9))
+>node : Symbol(node, Decl(errors.mts, 19, 19))
+>n : Symbol(n, Decl(errors.mts, 14, 27))
+
+    const boxed: unknown[] = [n];            // a handle: fine
+>boxed : Symbol(boxed, Decl(errors.mts, 21, 9))
+>n : Symbol(n, Decl(errors.mts, 14, 27))
+
+    return [array, object, named, boxed];
+>array : Symbol(array, Decl(errors.mts, 15, 9))
+>object : Symbol(object, Decl(errors.mts, 16, 9))
+>named : Symbol(named, Decl(errors.mts, 17, 9))
+>boxed : Symbol(boxed, Decl(errors.mts, 21, 9))
+}
+
+export class Holder {
+>Holder : Symbol(Holder, Decl(errors.mts, 23, 1))
+
+    node: Node = new Node();                 // error
+>node : Symbol(Holder.node, Decl(errors.mts, 25, 21))
+>Node : Symbol(Node, Decl(errors.mts, 0, 0))
+>Node : Symbol(Node, Decl(errors.mts, 0, 0))
+
+    constructor(public other: Node) {}       // error
+>other : Symbol(Holder.other, Decl(errors.mts, 27, 16))
+>Node : Symbol(Node, Decl(errors.mts, 0, 0))
+}
+
+export function destructuring(pair: { a: Node; b: number }, list: Node[]) {
+>destructuring : Symbol(destructuring, Decl(errors.mts, 28, 1))
+>pair : Symbol(pair, Decl(errors.mts, 30, 30))
+>a : Symbol(a, Decl(errors.mts, 30, 37))
+>Node : Symbol(Node, Decl(errors.mts, 0, 0))
+>b : Symbol(b, Decl(errors.mts, 30, 46))
+>list : Symbol(list, Decl(errors.mts, 30, 59))
+>Node : Symbol(Node, Decl(errors.mts, 0, 0))
+
+    const { a, b } = pair;                   // error: a
+>a : Symbol(a, Decl(errors.mts, 31, 11))
+>b : Symbol(b, Decl(errors.mts, 31, 14))
+>pair : Symbol(pair, Decl(errors.mts, 30, 30))
+
+    let x: Node | null = null;
+>x : Symbol(x, Decl(errors.mts, 32, 7))
+>Node : Symbol(Node, Decl(errors.mts, 0, 0))
+
+    [x] = list;                              // error
+>x : Symbol(x, Decl(errors.mts, 32, 7))
+>list : Symbol(list, Decl(errors.mts, 30, 59))
+
+    for (const n of list) {}                 // error: a for-of variable
+>n : Symbol(n, Decl(errors.mts, 34, 14))
+>list : Symbol(list, Decl(errors.mts, 30, 59))
+
+    return [a, b, x];
+>a : Symbol(a, Decl(errors.mts, 31, 11))
+>b : Symbol(b, Decl(errors.mts, 31, 14))
+>x : Symbol(x, Decl(errors.mts, 32, 7))
+}
+
+export function members(n: Node) {
+>members : Symbol(members, Decl(errors.mts, 36, 1))
+>n : Symbol(n, Decl(errors.mts, 38, 24))
+>Node : Symbol(Node, Decl(errors.mts, 0, 0))
+
+    const o = { get value() { return n.value; } };   // error: a method captures n
+>o : Symbol(o, Decl(errors.mts, 39, 9))
+>value : Symbol(value, Decl(errors.mts, 39, 15))
+>n.value : Symbol(Node.value, Decl(errors.mts, 0, 27))
+>n : Symbol(n, Decl(errors.mts, 38, 24))
+>value : Symbol(Node.value, Decl(errors.mts, 0, 27))
+
+    class C { v = n.value; }                          // error: a class captures n
+>C : Symbol(C, Decl(errors.mts, 39, 50))
+>v : Symbol(C.v, Decl(errors.mts, 40, 13))
+>n.value : Symbol(Node.value, Decl(errors.mts, 0, 27))
+>n : Symbol(n, Decl(errors.mts, 38, 24))
+>value : Symbol(Node.value, Decl(errors.mts, 0, 27))
+
+    return [o, C];
+>o : Symbol(o, Decl(errors.mts, 39, 9))
+>C : Symbol(C, Decl(errors.mts, 39, 50))
+}
+
+export function* generator(n: Node) {       // error: a generator runs after its caller's borrow ends
+>generator : Symbol(generator, Decl(errors.mts, 42, 1))
+>n : Symbol(n, Decl(errors.mts, 44, 27))
+>Node : Symbol(Node, Decl(errors.mts, 0, 0))
+
+    yield n.value;
+>n.value : Symbol(Node.value, Decl(errors.mts, 0, 27))
+>n : Symbol(n, Decl(errors.mts, 44, 27))
+>value : Symbol(Node.value, Decl(errors.mts, 0, 27))
+}
+
+export function rest(...nodes: Node[]) {    // error: the arguments are stored in an ordinary array
+>rest : Symbol(rest, Decl(errors.mts, 46, 1))
+>nodes : Symbol(nodes, Decl(errors.mts, 48, 21))
+>Node : Symbol(Node, Decl(errors.mts, 0, 0))
+
+    return nodes.length;
+>nodes.length : Symbol(Array.length, Decl(lib.es5.d.ts, --, --))
+>nodes : Symbol(nodes, Decl(errors.mts, 48, 21))
+>length : Symbol(Array.length, Decl(lib.es5.d.ts, --, --))
+}
+

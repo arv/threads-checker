@@ -2206,6 +2206,7 @@ func (c *Checker) checkSourceFile(ctx context.Context, sourceFile *ast.SourceFil
 		}
 		if !sourceFile.IsDeclarationFile && !c.isCanceled() && c.compilerOptions.OwnRuntime != "" {
 			c.computeOwnConversions(sourceFile, true /*report*/)
+			c.checkOwnRefCounts(sourceFile)
 		}
 		c.saveDeferredDiagnostics = false
 		c.produceDeferredDiagnostics()

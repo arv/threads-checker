@@ -1,0 +1,307 @@
+//// [tests/cases/compiler/ownLayoutRefCountErrors.ts] ////
+
+=== own.d.mts ===
+// Types for the own/shared threads runtime own.mjs (the runtime itself lives in porffor). Programs
+// import their API from "./own.mjs"; the compiler adds the imports of the helpers it emits
+// (`__sharedStruct`, `__register`) when `ownRuntime` is set.
+//
+// `sending T` marks a value whose ownership moves to the receiver: the sender must not use it
+// afterwards. `shared T` marks a value any number of threads may read at once: deeply immutable, or
+// a cell that synchronizes internally (Slots, Barrier, a shared struct).
+
+/** One slot per thread: a thread publishes into its own slot, and everyone reads every slot. */
+export interface SlotsCell<T> {
+    readonly length: number;
+>length : number
+
+    /** Publishes `value` in slot `index`, replacing what was there. */
+    set(index: number, value: T): void;
+>set : (index: number, value: T) => void
+>index : number
+>value : T
+
+    /** The value in slot `index`. */
+    get(index: number): shared T;
+>get : (index: number) => shared T
+>index : number
+
+    /** The arrays in all slots, concatenated in slot order. */
+    flat(): shared (T extends readonly (infer E)[] ? E : T)[];
+>flat : () => shared (T extends readonly (infer E)[] ? E : T)[]
+}
+export declare const Slots: new <T>(count: number) => shared SlotsCell<T>;
+>Slots : new <T>(count: number) => shared SlotsCell<T>
+>count : number
+
+/** A reusable barrier for a fixed number of threads. */
+export interface BarrierCell {
+    /** Blocks until all threads have called `wait`. */
+    wait(): void;
+>wait : () => void
+}
+export declare const Barrier: new (threads: number) => shared BarrierCell;
+>Barrier : new (threads: number) => shared BarrierCell
+>threads : number
+
+/** Freezes a value the caller owns into a deeply immutable value every thread can read. */
+export declare function share<T>(value: sending T): shared T;
+>share : <T>(value: sending T) => shared T
+>value : T
+
+/** A thread started inside a `scope`; joining it moves the thread's result back. */
+export interface Thread<R> {
+    join(): sending R;
+>join : () => sending R
+}
+
+/** Spawns threads that cannot outlive the scope. Every argument is sent to the new thread. */
+export interface Scope {
+    spawn<A extends unknown[], R>(f: (...args: A) => sending R, ...args: sending A): shared Thread<R>;
+>spawn : <A extends unknown[], R>(f: (...args: A) => sending R, ...args: sending A) => shared Thread<R>
+>f : (...args: A) => sending R
+>args : A
+>args : A
+}
+
+/** Runs `body` and joins every thread it spawned before returning. */
+export declare function scope<R>(body: (s: shared Scope) => R): R;
+>scope : <R>(body: (s: shared Scope) => R) => R
+>body : (s: shared Scope) => R
+>s : Scope
+
+/** Splits an owned array into `parts` owned, disjoint chunks of nearly equal size. Trusted. */
+export declare function partition<T>(items: sending T[], parts: number): (sending T[])[];
+>partition : <T>(items: sending T[], parts: number) => (sending T[])[]
+>items : T[]
+>parts : number
+
+/** Takes element `index` out of an array of owned values, so the caller owns it. Trusted. */
+export declare function take<T>(items: (sending T)[], index: number): sending T;
+>take : <T>(items: (sending T)[], index: number) => sending T
+>items : T[]
+>index : number
+
+/** Prints a line, synchronously, from any thread. */
+export declare function log(...args: unknown[]): void;
+>log : (...args: unknown[]) => void
+>args : unknown[]
+
+/** A shared struct's value as a type: what `new SharedArray(Struct, n)` takes. */
+export interface SharedStructType<T> {
+    new (): T;
+}
+
+/**
+ * A fixed-length array in the shared heap, of numbers or of shared structs stored inline. Threads
+ * share it with no copying. With `ownRuntime` the compiler lays it out in the shared heap and turns
+ * `a[i]` and `a.length` into typed-array accesses.
+ */
+export interface SharedArray<T> {
+    readonly length: number;
+>length : number
+
+    [index: number]: T;
+>index : number
+}
+export declare const SharedArray: {
+>SharedArray : { new (type: NumberConstructor, length: number): SharedArray<number>; new <T>(type: SharedStructType<T>, length: number): SharedArray<T>; }
+
+    new (type: NumberConstructor, length: number): SharedArray<number>;
+>type : NumberConstructor
+>length : number
+
+    new <T>(type: SharedStructType<T>, length: number): SharedArray<T>;
+>type : SharedStructType<T>
+>length : number
+
+};
+
+
+=== errors.mts ===
+export shared struct Node { value: number; next: Node | null }
+>Node : Node
+>value : number
+>next : Node | null
+
+let current: Node | null = null;             // a module's variable, which functions capture
+>current : Node | null
+
+export function setCurrent(n: Node) {
+>setCurrent : (n: Node) => void
+>n : Node
+
+    current = n;                             // error: captured and reassigned
+>current = n : Node
+>current : Node | null
+>n : Node
+}
+
+export function captured(head: Node) {
+>captured : (head: Node) => () => number
+>head : Node
+
+    let n = head;
+>n : Node
+>head : Node
+
+    const f = () => n.value;
+>f : () => number
+>() => n.value : () => number
+>n.value : number
+>n : Node
+>value : number
+
+    n = new Node();                          // error: captured and reassigned
+>n = new Node() : Node
+>n : Node
+>new Node() : Node
+>Node : new () => Node
+
+    return f;
+>f : () => number
+}
+
+export function containers(n: Node, list: Node[]) {
+>containers : (n: Node, list: Node[]) => (unknown[] | { n: Node; } | { node: Node; })[]
+>n : Node
+>list : Node[]
+
+    const array = [n];                       // error: an address in an ordinary array
+>array : Node[]
+>[n] : Node[]
+>n : Node
+
+    const object = { n };                    // error: in an ordinary object
+>object : { n: Node; }
+>{ n } : { n: Node; }
+>n : Node
+
+    const named = { node: n };               // error
+>named : { node: Node; }
+>{ node: n } : { node: Node; }
+>node : Node
+>n : Node
+
+    list[0] = n;                             // error
+>list[0] = n : Node
+>list[0] : Node
+>list : Node[]
+>0 : 0
+>n : Node
+
+    const holder: { node: Node | null } = { node: null };
+>holder : { node: Node | null; }
+>node : Node | null
+>{ node: null } : { node: null; }
+>node : null
+
+    holder.node = n;                         // error
+>holder.node = n : Node
+>holder.node : Node | null
+>holder : { node: Node | null; }
+>node : Node | null
+>n : Node
+
+    const boxed: unknown[] = [n];            // a handle: fine
+>boxed : unknown[]
+>[n] : Node[]
+>n : Node
+
+    return [array, object, named, boxed];
+>[array, object, named, boxed] : (unknown[] | { n: Node; } | { node: Node; })[]
+>array : Node[]
+>object : { n: Node; }
+>named : { node: Node; }
+>boxed : unknown[]
+}
+
+export class Holder {
+>Holder : Holder
+
+    node: Node = new Node();                 // error
+>node : Node
+>new Node() : Node
+>Node : new () => Node
+
+    constructor(public other: Node) {}       // error
+>other : Node
+}
+
+export function destructuring(pair: { a: Node; b: number }, list: Node[]) {
+>destructuring : (pair: { a: Node; b: number; }, list: Node[]) => (number | Node)[]
+>pair : { a: Node; b: number; }
+>a : Node
+>b : number
+>list : Node[]
+
+    const { a, b } = pair;                   // error: a
+>a : Node
+>b : number
+>pair : { a: Node; b: number; }
+
+    let x: Node | null = null;
+>x : Node | null
+
+    [x] = list;                              // error
+>[x] = list : Node[]
+>[x] : [Node | null]
+>x : Node | null
+>list : Node[]
+
+    for (const n of list) {}                 // error: a for-of variable
+>n : Node
+>list : Node[]
+
+    return [a, b, x];
+>[a, b, x] : (number | Node)[]
+>a : Node
+>b : number
+>x : Node
+}
+
+export function members(n: Node) {
+>members : (n: Node) => ({ readonly value: number; } | typeof C)[]
+>n : Node
+
+    const o = { get value() { return n.value; } };   // error: a method captures n
+>o : { readonly value: number; }
+>{ get value() { return n.value; } } : { readonly value: number; }
+>value : number
+>n.value : number
+>n : Node
+>value : number
+
+    class C { v = n.value; }                          // error: a class captures n
+>C : C
+>v : number
+>n.value : number
+>n : Node
+>value : number
+
+    return [o, C];
+>[o, C] : ({ readonly value: number; } | typeof C)[]
+>o : { readonly value: number; }
+>C : typeof C
+}
+
+export function* generator(n: Node) {       // error: a generator runs after its caller's borrow ends
+>generator : (n: Node) => Generator<number, void, unknown>
+>n : Node
+
+    yield n.value;
+>yield n.value : any
+>n.value : number
+>n : Node
+>value : number
+}
+
+export function rest(...nodes: Node[]) {    // error: the arguments are stored in an ordinary array
+>rest : (...nodes: Node[]) => number
+>nodes : Node[]
+
+    return nodes.length;
+>nodes.length : number
+>nodes : Node[]
+>length : number
+}
+

@@ -1,0 +1,176 @@
+errors.mts(5,5): error TS96020: 'current' cannot be reassigned: a closure captures it, and its value is a counted address in the shared heap.
+errors.mts(11,5): error TS96020: 'n' cannot be reassigned: a closure captures it, and its value is a counted address in the shared heap.
+errors.mts(16,20): error TS96021: A value of type 'Node' cannot be stored in an ordinary array or object: reference counting cannot see it there. Use a SharedArray or a shared struct field, or a place typed 'unknown', which holds a handle.
+errors.mts(17,22): error TS96021: A value of type 'Node' cannot be stored in an ordinary array or object: reference counting cannot see it there. Use a SharedArray or a shared struct field, or a place typed 'unknown', which holds a handle.
+errors.mts(18,27): error TS96021: A value of type 'Node' cannot be stored in an ordinary array or object: reference counting cannot see it there. Use a SharedArray or a shared struct field, or a place typed 'unknown', which holds a handle.
+errors.mts(19,15): error TS96021: A value of type 'Node' cannot be stored in an ordinary array or object: reference counting cannot see it there. Use a SharedArray or a shared struct field, or a place typed 'unknown', which holds a handle.
+errors.mts(21,19): error TS96021: A value of type 'Node' cannot be stored in an ordinary array or object: reference counting cannot see it there. Use a SharedArray or a shared struct field, or a place typed 'unknown', which holds a handle.
+errors.mts(27,18): error TS96021: A value of type 'Node' cannot be stored in an ordinary array or object: reference counting cannot see it there. Use a SharedArray or a shared struct field, or a place typed 'unknown', which holds a handle.
+errors.mts(28,24): error TS96021: A value of type 'Node' cannot be stored in an ordinary array or object: reference counting cannot see it there. Use a SharedArray or a shared struct field, or a place typed 'unknown', which holds a handle.
+errors.mts(32,13): error TS96024: 'a' cannot be bound by destructuring: its value is an address in the shared heap.
+errors.mts(34,6): error TS96024: 'x' cannot be bound by destructuring: its value is an address in the shared heap.
+errors.mts(35,16): error TS96022: A 'for-of' or 'for-in' variable cannot have type 'Node': its value is an address in the shared heap.
+errors.mts(40,38): error TS96023: 'n' cannot be captured by a method or a class: its value is a counted address in the shared heap, which only functions and arrow functions can hold.
+errors.mts(41,19): error TS96023: 'n' cannot be captured by a method or a class: its value is a counted address in the shared heap, which only functions and arrow functions can hold.
+errors.mts(45,28): error TS96025: A generator's parameter cannot have type 'Node': the generator runs after its caller's borrow ends.
+errors.mts(49,25): error TS96021: A value of type 'Node' cannot be stored in an ordinary array or object: reference counting cannot see it there. Use a SharedArray or a shared struct field, or a place typed 'unknown', which holds a handle.
+
+
+==== own.d.mts (0 errors) ====
+    // Types for the own/shared threads runtime own.mjs (the runtime itself lives in porffor). Programs
+    // import their API from "./own.mjs"; the compiler adds the imports of the helpers it emits
+    // (`__sharedStruct`, `__register`) when `ownRuntime` is set.
+    //
+    // `sending T` marks a value whose ownership moves to the receiver: the sender must not use it
+    // afterwards. `shared T` marks a value any number of threads may read at once: deeply immutable, or
+    // a cell that synchronizes internally (Slots, Barrier, a shared struct).
+    
+    /** One slot per thread: a thread publishes into its own slot, and everyone reads every slot. */
+    export interface SlotsCell<T> {
+        readonly length: number;
+        /** Publishes `value` in slot `index`, replacing what was there. */
+        set(index: number, value: T): void;
+        /** The value in slot `index`. */
+        get(index: number): shared T;
+        /** The arrays in all slots, concatenated in slot order. */
+        flat(): shared (T extends readonly (infer E)[] ? E : T)[];
+    }
+    export declare const Slots: new <T>(count: number) => shared SlotsCell<T>;
+    
+    /** A reusable barrier for a fixed number of threads. */
+    export interface BarrierCell {
+        /** Blocks until all threads have called `wait`. */
+        wait(): void;
+    }
+    export declare const Barrier: new (threads: number) => shared BarrierCell;
+    
+    /** Freezes a value the caller owns into a deeply immutable value every thread can read. */
+    export declare function share<T>(value: sending T): shared T;
+    
+    /** A thread started inside a `scope`; joining it moves the thread's result back. */
+    export interface Thread<R> {
+        join(): sending R;
+    }
+    
+    /** Spawns threads that cannot outlive the scope. Every argument is sent to the new thread. */
+    export interface Scope {
+        spawn<A extends unknown[], R>(f: (...args: A) => sending R, ...args: sending A): shared Thread<R>;
+    }
+    
+    /** Runs `body` and joins every thread it spawned before returning. */
+    export declare function scope<R>(body: (s: shared Scope) => R): R;
+    
+    /** Splits an owned array into `parts` owned, disjoint chunks of nearly equal size. Trusted. */
+    export declare function partition<T>(items: sending T[], parts: number): (sending T[])[];
+    
+    /** Takes element `index` out of an array of owned values, so the caller owns it. Trusted. */
+    export declare function take<T>(items: (sending T)[], index: number): sending T;
+    
+    /** Prints a line, synchronously, from any thread. */
+    export declare function log(...args: unknown[]): void;
+    
+    /** A shared struct's value as a type: what `new SharedArray(Struct, n)` takes. */
+    export interface SharedStructType<T> {
+        new (): T;
+    }
+    
+    /**
+     * A fixed-length array in the shared heap, of numbers or of shared structs stored inline. Threads
+     * share it with no copying. With `ownRuntime` the compiler lays it out in the shared heap and turns
+     * `a[i]` and `a.length` into typed-array accesses.
+     */
+    export interface SharedArray<T> {
+        readonly length: number;
+        [index: number]: T;
+    }
+    export declare const SharedArray: {
+        new (type: NumberConstructor, length: number): SharedArray<number>;
+        new <T>(type: SharedStructType<T>, length: number): SharedArray<T>;
+    };
+    
+    
+==== errors.mts (16 errors) ====
+    export shared struct Node { value: number; next: Node | null }
+    
+    let current: Node | null = null;             // a module's variable, which functions capture
+    export function setCurrent(n: Node) {
+        current = n;                             // error: captured and reassigned
+        ~~~~~~~
+!!! error TS96020: 'current' cannot be reassigned: a closure captures it, and its value is a counted address in the shared heap.
+    }
+    
+    export function captured(head: Node) {
+        let n = head;
+        const f = () => n.value;
+        n = new Node();                          // error: captured and reassigned
+        ~
+!!! error TS96020: 'n' cannot be reassigned: a closure captures it, and its value is a counted address in the shared heap.
+        return f;
+    }
+    
+    export function containers(n: Node, list: Node[]) {
+        const array = [n];                       // error: an address in an ordinary array
+                       ~
+!!! error TS96021: A value of type 'Node' cannot be stored in an ordinary array or object: reference counting cannot see it there. Use a SharedArray or a shared struct field, or a place typed 'unknown', which holds a handle.
+        const object = { n };                    // error: in an ordinary object
+                         ~
+!!! error TS96021: A value of type 'Node' cannot be stored in an ordinary array or object: reference counting cannot see it there. Use a SharedArray or a shared struct field, or a place typed 'unknown', which holds a handle.
+        const named = { node: n };               // error
+                              ~
+!!! error TS96021: A value of type 'Node' cannot be stored in an ordinary array or object: reference counting cannot see it there. Use a SharedArray or a shared struct field, or a place typed 'unknown', which holds a handle.
+        list[0] = n;                             // error
+                  ~
+!!! error TS96021: A value of type 'Node' cannot be stored in an ordinary array or object: reference counting cannot see it there. Use a SharedArray or a shared struct field, or a place typed 'unknown', which holds a handle.
+        const holder: { node: Node | null } = { node: null };
+        holder.node = n;                         // error
+                      ~
+!!! error TS96021: A value of type 'Node' cannot be stored in an ordinary array or object: reference counting cannot see it there. Use a SharedArray or a shared struct field, or a place typed 'unknown', which holds a handle.
+        const boxed: unknown[] = [n];            // a handle: fine
+        return [array, object, named, boxed];
+    }
+    
+    export class Holder {
+        node: Node = new Node();                 // error
+                     ~~~~~~~~~~
+!!! error TS96021: A value of type 'Node' cannot be stored in an ordinary array or object: reference counting cannot see it there. Use a SharedArray or a shared struct field, or a place typed 'unknown', which holds a handle.
+        constructor(public other: Node) {}       // error
+                           ~~~~~
+!!! error TS96021: A value of type 'Node' cannot be stored in an ordinary array or object: reference counting cannot see it there. Use a SharedArray or a shared struct field, or a place typed 'unknown', which holds a handle.
+    }
+    
+    export function destructuring(pair: { a: Node; b: number }, list: Node[]) {
+        const { a, b } = pair;                   // error: a
+                ~
+!!! error TS96024: 'a' cannot be bound by destructuring: its value is an address in the shared heap.
+        let x: Node | null = null;
+        [x] = list;                              // error
+         ~
+!!! error TS96024: 'x' cannot be bound by destructuring: its value is an address in the shared heap.
+        for (const n of list) {}                 // error: a for-of variable
+                   ~
+!!! error TS96022: A 'for-of' or 'for-in' variable cannot have type 'Node': its value is an address in the shared heap.
+        return [a, b, x];
+    }
+    
+    export function members(n: Node) {
+        const o = { get value() { return n.value; } };   // error: a method captures n
+                                         ~
+!!! error TS96023: 'n' cannot be captured by a method or a class: its value is a counted address in the shared heap, which only functions and arrow functions can hold.
+        class C { v = n.value; }                          // error: a class captures n
+                      ~
+!!! error TS96023: 'n' cannot be captured by a method or a class: its value is a counted address in the shared heap, which only functions and arrow functions can hold.
+        return [o, C];
+    }
+    
+    export function* generator(n: Node) {       // error: a generator runs after its caller's borrow ends
+                               ~
+!!! error TS96025: A generator's parameter cannot have type 'Node': the generator runs after its caller's borrow ends.
+        yield n.value;
+    }
+    
+    export function rest(...nodes: Node[]) {    // error: the arguments are stored in an ordinary array
+                            ~~~~~
+!!! error TS96021: A value of type 'Node' cannot be stored in an ordinary array or object: reference counting cannot see it there. Use a SharedArray or a shared struct field, or a place typed 'unknown', which holds a handle.
+        return nodes.length;
+    }
+    

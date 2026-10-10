@@ -88,6 +88,7 @@ const (
 type OwnCellType struct {
 	Kind   OwnCellKind
 	Fields []string // the struct's fields in slot order (for OwnCellArrayOfStruct, the element struct's)
+	Refs   []bool   // per field: a reference field (an i32 address, 0 for null) rather than an f64
 }
 
 // How the emit converts an expression between the raw address of a struct or SharedArray and the
@@ -98,6 +99,31 @@ const (
 	OwnConversionNone  OwnConversion = iota
 	OwnConversionBox                 // `__box(E)`: a raw address flows into a place typed otherwise
 	OwnConversionUnbox               // `__unbox(E)`: a handle (or other value) flows into a struct-typed place
+	OwnConversionZero                // `0`: null or undefined flows into a struct-typed place (or is compared with one)
+)
+
+// How a struct or SharedArray value (a raw address) is counted (see REFCOUNT.md in porffor's
+// threads/escape-proto and checker/ownrefcount.go).
+type OwnCount int32
+
+const (
+	OwnCountNone       OwnCount = iota // not a raw address: not counted by the emit
+	OwnCountNull                       // null or undefined: 0, which needs no count
+	OwnCountStable                     // a stable borrow: a parameter, a local, an element of one, an unboxed handle
+	OwnCountOwnedLocal                 // a stable borrow of an owned local of this function, whose count a return moves out
+	OwnCountUnstable                   // an unstable borrow: a reference field read, valid until the next quiescent point
+	OwnCountOwned                      // owned (+1): `new`, a call that returns a counted value
+)
+
+// How a variable or parameter of a struct or SharedArray type holds its value.
+type OwnLocal int32
+
+const (
+	OwnLocalNone       OwnLocal = iota // not counted
+	OwnLocalBorrowed                   // a borrow: no counting
+	OwnLocalOwned                      // holds a count, released when its block (or function) ends
+	OwnLocalOwnedMoved                 // owned, and a return moves its count out (so it is declared with `let`)
+	OwnLocalModule                     // a module's variable: holds a count, never released
 )
 
 type EmitResolver interface {
@@ -120,6 +146,11 @@ type EmitResolver interface {
 	GetOwnCellType(expression *ast.Node) OwnCellType
 	GetOwnConversion(expression *ast.Node) OwnConversion
 	IsOwnElementAccessInBounds(elementAccess *ast.Node) bool
+	GetOwnCount(expression *ast.Node) OwnCount
+	GetOwnLocal(declaration *ast.Node) OwnLocal
+	GetOwnCaptures(function *ast.Node) []*ast.Node
+	IsOwnQuiescentLoop(loop *ast.Node) bool
+	IsOwnSpawnArgument(argument *ast.Node) bool
 
 	// JSX Emit
 	GetJsxFactoryEntity(location *ast.Node) *ast.Node

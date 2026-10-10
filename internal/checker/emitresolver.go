@@ -81,6 +81,65 @@ func (r *EmitResolver) IsOwnElementAccessInBounds(elementAccess *ast.Node) bool 
 	return r.checker.isOwnElementAccessInBounds(elementAccess)
 }
 
+// How a struct or SharedArray value of the original tree is counted, before its box, unbox or null
+// conversion (own/shared threads extension).
+func (r *EmitResolver) GetOwnCount(expression *ast.Node) printer.OwnCount {
+	if !isOwnOriginalNode(expression) {
+		return printer.OwnCountNone
+	}
+	r.checkerMu.Lock()
+	defer r.checkerMu.Unlock()
+	return r.checker.getOwnRawCount(expression)
+}
+
+// How a variable or parameter of the original tree holds a struct or SharedArray value (own/shared
+// threads extension).
+func (r *EmitResolver) GetOwnLocal(declaration *ast.Node) printer.OwnLocal {
+	if !isOwnOriginalNode(declaration) {
+		return printer.OwnLocalNone
+	}
+	r.checkerMu.Lock()
+	defer r.checkerMu.Unlock()
+	return r.checker.getOwnLocal(declaration)
+}
+
+// The declarations of the counted variables that a function of the original tree captures from the
+// functions around it (own/shared threads extension).
+func (r *EmitResolver) GetOwnCaptures(function *ast.Node) []*ast.Node {
+	if !isOwnOriginalNode(function) {
+		return nil
+	}
+	r.checkerMu.Lock()
+	defer r.checkerMu.Unlock()
+	return r.checker.getOwnCaptures(function)
+}
+
+// Reports whether each iteration of a loop of the original tree ends at a quiescent point (own/shared
+// threads extension).
+func (r *EmitResolver) IsOwnQuiescentLoop(loop *ast.Node) bool {
+	if !isOwnOriginalNode(loop) {
+		return false
+	}
+	r.checkerMu.Lock()
+	defer r.checkerMu.Unlock()
+	return r.checker.isOwnQuiescentLoop(loop)
+}
+
+// Reports whether an argument of the original tree is a counted argument of `spawn` (own/shared
+// threads extension).
+func (r *EmitResolver) IsOwnSpawnArgument(argument *ast.Node) bool {
+	if !isOwnOriginalNode(argument) {
+		return false
+	}
+	r.checkerMu.Lock()
+	defer r.checkerMu.Unlock()
+	return r.checker.isOwnSpawnArgument(argument)
+}
+
+func isOwnOriginalNode(node *ast.Node) bool {
+	return node != nil && node.Flags&ast.NodeFlagsSynthesized == 0 && ast.GetSourceFileOfNode(node) != nil
+}
+
 func (r *EmitResolver) GetJsxFactoryEntity(location *ast.Node) *ast.Node {
 	r.checkerMu.Lock()
 	defer r.checkerMu.Unlock()

@@ -10,6 +10,7 @@ errors.mts(16,15): error TS96018: Optional chaining is not supported on 'Good | 
 errors.mts(17,17): error TS96016: The elements of a SharedArray must be numbers or a shared struct.
 errors.mts(21,29): error TS96019: 'Good' cannot be destructured here: its value is an address in the shared heap.
 errors.mts(22,16): error TS96019: 'Good' cannot be destructured here: its value is an address in the shared heap.
+errors.mts(22,18): error TS96024: 'b' cannot be bound by destructuring: its value is an address in the shared heap.
 
 
 ==== own.d.mts (0 errors) ====
@@ -84,7 +85,7 @@ errors.mts(22,16): error TS96019: 'Good' cannot be destructured here: its value 
         new <T>(type: SharedStructType<T>, length: number): SharedArray<T>;
     };
     
-==== errors.mts (12 errors) ====
+==== errors.mts (13 errors) ====
     import { SharedArray } from "./own.mjs";
     
     export shared struct Good { a: number; b: Good; c: SharedArray<number>; d: SharedArray<Good> }
@@ -131,6 +132,8 @@ errors.mts(22,16): error TS96019: 'Good' cannot be destructured here: its value 
         for (const { b } of list) {}
                    ~~~~~
 !!! error TS96019: 'Good' cannot be destructured here: its value is an address in the shared heap.
+                     ~
+!!! error TS96024: 'b' cannot be bound by destructuring: its value is an address in the shared heap.
         return a;
     }
     
