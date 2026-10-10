@@ -1,0 +1,405 @@
+//// [tests/cases/compiler/ownLayoutBoxing.ts] ////
+
+=== own.d.mts ===
+// Types for the own/shared threads runtime own.mjs (the runtime itself lives in porffor). Programs
+// import their API from "./own.mjs"; the compiler adds the imports of the helpers it emits
+// (`__sharedStruct`, `__register`) when `ownRuntime` is set.
+//
+// `sending T` marks a value whose ownership moves to the receiver: the sender must not use it
+// afterwards. `shared T` marks a value any number of threads may read at once: deeply immutable, or
+// a cell that synchronizes internally (Slots, Barrier, a shared struct).
+
+/** One slot per thread: a thread publishes into its own slot, and everyone reads every slot. */
+export interface SlotsCell<T> {
+>SlotsCell : Symbol(SlotsCell, Decl(own.d.mts, 0, 0))
+>T : Symbol(T, Decl(own.d.mts, 9, 27))
+
+    readonly length: number;
+>length : Symbol(SlotsCell.length, Decl(own.d.mts, 9, 31))
+
+    /** Publishes `value` in slot `index`, replacing what was there. */
+    set(index: number, value: T): void;
+>set : Symbol(SlotsCell.set, Decl(own.d.mts, 10, 28))
+>index : Symbol(index, Decl(own.d.mts, 12, 8))
+>value : Symbol(value, Decl(own.d.mts, 12, 22))
+>T : Symbol(T, Decl(own.d.mts, 9, 27))
+
+    /** The value in slot `index`. */
+    get(index: number): shared T;
+>get : Symbol(SlotsCell.get, Decl(own.d.mts, 12, 39))
+>index : Symbol(index, Decl(own.d.mts, 14, 8))
+>T : Symbol(T, Decl(own.d.mts, 9, 27))
+
+    /** The arrays in all slots, concatenated in slot order. */
+    flat(): shared (T extends readonly (infer E)[] ? E : T)[];
+>flat : Symbol(SlotsCell.flat, Decl(own.d.mts, 14, 33))
+>T : Symbol(T, Decl(own.d.mts, 9, 27))
+>E : Symbol(E, Decl(own.d.mts, 16, 45))
+>E : Symbol(E, Decl(own.d.mts, 16, 45))
+>T : Symbol(T, Decl(own.d.mts, 9, 27))
+}
+export declare const Slots: new <T>(count: number) => shared SlotsCell<T>;
+>Slots : Symbol(Slots, Decl(own.d.mts, 18, 20))
+>T : Symbol(T, Decl(own.d.mts, 18, 33))
+>count : Symbol(count, Decl(own.d.mts, 18, 36))
+>SlotsCell : Symbol(SlotsCell, Decl(own.d.mts, 0, 0))
+>T : Symbol(T, Decl(own.d.mts, 18, 33))
+
+/** A reusable barrier for a fixed number of threads. */
+export interface BarrierCell {
+>BarrierCell : Symbol(BarrierCell, Decl(own.d.mts, 18, 74))
+
+    /** Blocks until all threads have called `wait`. */
+    wait(): void;
+>wait : Symbol(BarrierCell.wait, Decl(own.d.mts, 21, 30))
+}
+export declare const Barrier: new (threads: number) => shared BarrierCell;
+>Barrier : Symbol(Barrier, Decl(own.d.mts, 25, 20))
+>threads : Symbol(threads, Decl(own.d.mts, 25, 35))
+>BarrierCell : Symbol(BarrierCell, Decl(own.d.mts, 18, 74))
+
+/** Freezes a value the caller owns into a deeply immutable value every thread can read. */
+export declare function share<T>(value: sending T): shared T;
+>share : Symbol(share, Decl(own.d.mts, 25, 74))
+>T : Symbol(T, Decl(own.d.mts, 28, 30))
+>value : Symbol(value, Decl(own.d.mts, 28, 33))
+>T : Symbol(T, Decl(own.d.mts, 28, 30))
+>T : Symbol(T, Decl(own.d.mts, 28, 30))
+
+/** A thread started inside a `scope`; joining it moves the thread's result back. */
+export interface Thread<R> {
+>Thread : Symbol(Thread, Decl(own.d.mts, 28, 61))
+>R : Symbol(R, Decl(own.d.mts, 31, 24))
+
+    join(): sending R;
+>join : Symbol(Thread.join, Decl(own.d.mts, 31, 28))
+>R : Symbol(R, Decl(own.d.mts, 31, 24))
+}
+
+/** Spawns threads that cannot outlive the scope. Every argument is sent to the new thread. */
+export interface Scope {
+>Scope : Symbol(Scope, Decl(own.d.mts, 33, 1))
+
+    spawn<A extends unknown[], R>(f: (...args: A) => sending R, ...args: sending A): shared Thread<R>;
+>spawn : Symbol(Scope.spawn, Decl(own.d.mts, 36, 24))
+>A : Symbol(A, Decl(own.d.mts, 37, 10))
+>R : Symbol(R, Decl(own.d.mts, 37, 30))
+>f : Symbol(f, Decl(own.d.mts, 37, 34))
+>args : Symbol(args, Decl(own.d.mts, 37, 38))
+>A : Symbol(A, Decl(own.d.mts, 37, 10))
+>R : Symbol(R, Decl(own.d.mts, 37, 30))
+>args : Symbol(args, Decl(own.d.mts, 37, 63))
+>A : Symbol(A, Decl(own.d.mts, 37, 10))
+>Thread : Symbol(Thread, Decl(own.d.mts, 28, 61))
+>R : Symbol(R, Decl(own.d.mts, 37, 30))
+}
+
+/** Runs `body` and joins every thread it spawned before returning. */
+export declare function scope<R>(body: (s: shared Scope) => R): R;
+>scope : Symbol(scope, Decl(own.d.mts, 38, 1))
+>R : Symbol(R, Decl(own.d.mts, 41, 30))
+>body : Symbol(body, Decl(own.d.mts, 41, 33))
+>s : Symbol(s, Decl(own.d.mts, 41, 40))
+>Scope : Symbol(Scope, Decl(own.d.mts, 33, 1))
+>R : Symbol(R, Decl(own.d.mts, 41, 30))
+>R : Symbol(R, Decl(own.d.mts, 41, 30))
+
+/** Splits an owned array into `parts` owned, disjoint chunks of nearly equal size. Trusted. */
+export declare function partition<T>(items: sending T[], parts: number): (sending T[])[];
+>partition : Symbol(partition, Decl(own.d.mts, 41, 66))
+>T : Symbol(T, Decl(own.d.mts, 44, 34))
+>items : Symbol(items, Decl(own.d.mts, 44, 37))
+>T : Symbol(T, Decl(own.d.mts, 44, 34))
+>parts : Symbol(parts, Decl(own.d.mts, 44, 56))
+>T : Symbol(T, Decl(own.d.mts, 44, 34))
+
+/** Takes element `index` out of an array of owned values, so the caller owns it. Trusted. */
+export declare function take<T>(items: (sending T)[], index: number): sending T;
+>take : Symbol(take, Decl(own.d.mts, 44, 89))
+>T : Symbol(T, Decl(own.d.mts, 47, 29))
+>items : Symbol(items, Decl(own.d.mts, 47, 32))
+>T : Symbol(T, Decl(own.d.mts, 47, 29))
+>index : Symbol(index, Decl(own.d.mts, 47, 53))
+>T : Symbol(T, Decl(own.d.mts, 47, 29))
+
+/** Prints a line, synchronously, from any thread. */
+export declare function log(...args: unknown[]): void;
+>log : Symbol(log, Decl(own.d.mts, 47, 80))
+>args : Symbol(args, Decl(own.d.mts, 50, 28))
+
+/** A shared struct's value as a type: what `new SharedArray(Struct, n)` takes. */
+export interface SharedStructType<T> {
+>SharedStructType : Symbol(SharedStructType, Decl(own.d.mts, 50, 54))
+>T : Symbol(T, Decl(own.d.mts, 53, 34))
+
+    new (): T;
+>T : Symbol(T, Decl(own.d.mts, 53, 34))
+}
+
+/**
+ * A fixed-length array in the shared heap, of numbers or of shared structs stored inline. Threads
+ * share it with no copying. With `ownRuntime` the compiler lays it out in the shared heap and turns
+ * `a[i]` and `a.length` into typed-array accesses.
+ */
+export interface SharedArray<T> {
+>SharedArray : Symbol(SharedArray, Decl(own.d.mts, 55, 1), Decl(own.d.mts, 66, 20))
+>T : Symbol(T, Decl(own.d.mts, 62, 29))
+
+    readonly length: number;
+>length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+
+    [index: number]: T;
+>index : Symbol(index, Decl(own.d.mts, 64, 5))
+>T : Symbol(T, Decl(own.d.mts, 62, 29))
+}
+export declare const SharedArray: {
+>SharedArray : Symbol(SharedArray, Decl(own.d.mts, 55, 1), Decl(own.d.mts, 66, 20))
+
+    new (type: NumberConstructor, length: number): SharedArray<number>;
+>type : Symbol(type, Decl(own.d.mts, 67, 9))
+>NumberConstructor : Symbol(NumberConstructor, Decl(lib.es5.d.ts, --, --), Decl(lib.es2015.core.d.ts, --, --))
+>length : Symbol(length, Decl(own.d.mts, 67, 33))
+>SharedArray : Symbol(SharedArray, Decl(own.d.mts, 55, 1), Decl(own.d.mts, 66, 20))
+
+    new <T>(type: SharedStructType<T>, length: number): SharedArray<T>;
+>T : Symbol(T, Decl(own.d.mts, 68, 9))
+>type : Symbol(type, Decl(own.d.mts, 68, 12))
+>SharedStructType : Symbol(SharedStructType, Decl(own.d.mts, 50, 54))
+>T : Symbol(T, Decl(own.d.mts, 68, 9))
+>length : Symbol(length, Decl(own.d.mts, 68, 38))
+>SharedArray : Symbol(SharedArray, Decl(own.d.mts, 55, 1), Decl(own.d.mts, 66, 20))
+>T : Symbol(T, Decl(own.d.mts, 68, 9))
+
+};
+
+=== boxing.mts ===
+import { log, SharedArray } from "./own.mjs";
+>log : Symbol(log, Decl(boxing.mts, 0, 8))
+>SharedArray : Symbol(SharedArray, Decl(boxing.mts, 0, 13))
+
+export shared struct Vec { x: number; y: number }
+>Vec : Symbol(Vec, Decl(boxing.mts, 0, 45))
+>x : Symbol(Vec.x, Decl(boxing.mts, 2, 26))
+>y : Symbol(Vec.y, Decl(boxing.mts, 2, 37))
+
+declare function takeVec(v: Vec): void;
+>takeVec : Symbol(takeVec, Decl(boxing.mts, 2, 49))
+>v : Symbol(v, Decl(boxing.mts, 4, 25))
+>Vec : Symbol(Vec, Decl(boxing.mts, 0, 45))
+
+declare function takeUnknown(u: unknown): void;
+>takeUnknown : Symbol(takeUnknown, Decl(boxing.mts, 4, 39))
+>u : Symbol(u, Decl(boxing.mts, 5, 29))
+
+declare function identity<T>(x: T): T;
+>identity : Symbol(identity, Decl(boxing.mts, 5, 47))
+>T : Symbol(T, Decl(boxing.mts, 6, 26))
+>x : Symbol(x, Decl(boxing.mts, 6, 29))
+>T : Symbol(T, Decl(boxing.mts, 6, 26))
+>T : Symbol(T, Decl(boxing.mts, 6, 26))
+
+declare const anything: any;
+>anything : Symbol(anything, Decl(boxing.mts, 7, 13))
+
+export function roundTrip(v: Vec) {
+>roundTrip : Symbol(roundTrip, Decl(boxing.mts, 7, 28))
+>v : Symbol(v, Decl(boxing.mts, 9, 26))
+>Vec : Symbol(Vec, Decl(boxing.mts, 0, 45))
+
+    const u: unknown = v;                    // box
+>u : Symbol(u, Decl(boxing.mts, 10, 9))
+>v : Symbol(v, Decl(boxing.mts, 9, 26))
+
+    const v2 = u as Vec;                     // unbox
+>v2 : Symbol(v2, Decl(boxing.mts, 11, 9))
+>u : Symbol(u, Decl(boxing.mts, 10, 9))
+>Vec : Symbol(Vec, Decl(boxing.mts, 0, 45))
+
+    return v2.x;
+>v2.x : Symbol(Vec.x, Decl(boxing.mts, 2, 26))
+>v2 : Symbol(v2, Decl(boxing.mts, 11, 9))
+>x : Symbol(Vec.x, Decl(boxing.mts, 2, 26))
+}
+
+export function boxed(v: Vec, other: unknown, a: SharedArray<number>) {
+>boxed : Symbol(boxed, Decl(boxing.mts, 13, 1))
+>v : Symbol(v, Decl(boxing.mts, 15, 22))
+>Vec : Symbol(Vec, Decl(boxing.mts, 0, 45))
+>other : Symbol(other, Decl(boxing.mts, 15, 29))
+>a : Symbol(a, Decl(boxing.mts, 15, 45))
+>SharedArray : Symbol(SharedArray, Decl(boxing.mts, 0, 13))
+
+    log(v, a);                               // host function arguments
+>log : Symbol(log, Decl(boxing.mts, 0, 8))
+>v : Symbol(v, Decl(boxing.mts, 15, 22))
+>a : Symbol(a, Decl(boxing.mts, 15, 45))
+
+    takeUnknown(v);
+>takeUnknown : Symbol(takeUnknown, Decl(boxing.mts, 4, 39))
+>v : Symbol(v, Decl(boxing.mts, 15, 22))
+
+    const text = `${v} and ` + v;            // strings
+>text : Symbol(text, Decl(boxing.mts, 18, 9))
+>v : Symbol(v, Decl(boxing.mts, 15, 22))
+>v : Symbol(v, Decl(boxing.mts, 15, 22))
+
+    const kind = typeof v;
+>kind : Symbol(kind, Decl(boxing.mts, 19, 9))
+>v : Symbol(v, Decl(boxing.mts, 15, 22))
+
+    const same = v === other;                // equality with a non-struct value
+>same : Symbol(same, Decl(boxing.mts, 20, 9))
+>v : Symbol(v, Decl(boxing.mts, 15, 22))
+>other : Symbol(other, Decl(boxing.mts, 15, 29))
+
+    const isNull = v === null;               // stays raw
+>isNull : Symbol(isNull, Decl(boxing.mts, 21, 9))
+>v : Symbol(v, Decl(boxing.mts, 15, 22))
+
+    const union: Vec | number = v;
+>union : Symbol(union, Decl(boxing.mts, 22, 9))
+>Vec : Symbol(Vec, Decl(boxing.mts, 0, 45))
+>v : Symbol(v, Decl(boxing.mts, 15, 22))
+
+    const object: object = v;
+>object : Symbol(object, Decl(boxing.mts, 23, 9))
+>v : Symbol(v, Decl(boxing.mts, 15, 22))
+
+    const list: unknown[] = [v, a];
+>list : Symbol(list, Decl(boxing.mts, 24, 9))
+>v : Symbol(v, Decl(boxing.mts, 15, 22))
+>a : Symbol(a, Decl(boxing.mts, 15, 45))
+
+    const record: { v: unknown } = { v };
+>record : Symbol(record, Decl(boxing.mts, 25, 9))
+>v : Symbol(v, Decl(boxing.mts, 25, 19))
+>v : Symbol(v, Decl(boxing.mts, 25, 36))
+
+    const copy = { ...v };
+>copy : Symbol(copy, Decl(boxing.mts, 26, 9))
+>v : Symbol(v, Decl(boxing.mts, 15, 22))
+
+    const s = v.toString();                  // not a field
+>s : Symbol(s, Decl(boxing.mts, 27, 9))
+>v.toString : Symbol(Object.toString, Decl(lib.es5.d.ts, --, --))
+>v : Symbol(v, Decl(boxing.mts, 15, 22))
+>toString : Symbol(Object.toString, Decl(lib.es5.d.ts, --, --))
+
+    const { x } = v;                         // destructured through the handle
+>x : Symbol(x, Decl(boxing.mts, 28, 11))
+>v : Symbol(v, Decl(boxing.mts, 15, 22))
+
+    const has = "x" in v;
+>has : Symbol(has, Decl(boxing.mts, 29, 9))
+>v : Symbol(v, Decl(boxing.mts, 15, 22))
+
+    const same2 = identity(v);               // generic: decided by the instantiation, stays raw
+>same2 : Symbol(same2, Decl(boxing.mts, 30, 9))
+>identity : Symbol(identity, Decl(boxing.mts, 5, 47))
+>v : Symbol(v, Decl(boxing.mts, 15, 22))
+
+    return [text, kind, same, isNull, union, object, list, record, copy, s, x, has, same2.y];
+>text : Symbol(text, Decl(boxing.mts, 18, 9))
+>kind : Symbol(kind, Decl(boxing.mts, 19, 9))
+>same : Symbol(same, Decl(boxing.mts, 20, 9))
+>isNull : Symbol(isNull, Decl(boxing.mts, 21, 9))
+>union : Symbol(union, Decl(boxing.mts, 22, 9))
+>object : Symbol(object, Decl(boxing.mts, 23, 9))
+>list : Symbol(list, Decl(boxing.mts, 24, 9))
+>record : Symbol(record, Decl(boxing.mts, 25, 9))
+>copy : Symbol(copy, Decl(boxing.mts, 26, 9))
+>s : Symbol(s, Decl(boxing.mts, 27, 9))
+>x : Symbol(x, Decl(boxing.mts, 28, 11))
+>has : Symbol(has, Decl(boxing.mts, 29, 9))
+>same2.y : Symbol(Vec.y, Decl(boxing.mts, 2, 37))
+>same2 : Symbol(same2, Decl(boxing.mts, 30, 9))
+>y : Symbol(Vec.y, Decl(boxing.mts, 2, 37))
+}
+
+export function unboxed(u: unknown, a: any) {
+>unboxed : Symbol(unboxed, Decl(boxing.mts, 32, 1))
+>u : Symbol(u, Decl(boxing.mts, 34, 24))
+>a : Symbol(a, Decl(boxing.mts, 34, 35))
+
+    takeVec(anything);                       // any into a struct parameter
+>takeVec : Symbol(takeVec, Decl(boxing.mts, 2, 49))
+>anything : Symbol(anything, Decl(boxing.mts, 7, 13))
+
+    const v = u as Vec;
+>v : Symbol(v, Decl(boxing.mts, 36, 9))
+>u : Symbol(u, Decl(boxing.mts, 34, 24))
+>Vec : Symbol(Vec, Decl(boxing.mts, 0, 45))
+
+    const w: Vec = a;
+>w : Symbol(w, Decl(boxing.mts, 37, 9))
+>Vec : Symbol(Vec, Decl(boxing.mts, 0, 45))
+>a : Symbol(a, Decl(boxing.mts, 34, 35))
+
+    if (isVec(u)) {
+>isVec : Symbol(isVec, Decl(boxing.mts, 43, 1))
+>u : Symbol(u, Decl(boxing.mts, 34, 24))
+
+        u.x = 1;                             // narrowed: unboxed where the layout is used
+>u.x : Symbol(Vec.x, Decl(boxing.mts, 2, 26))
+>u : Symbol(u, Decl(boxing.mts, 34, 24))
+>x : Symbol(Vec.x, Decl(boxing.mts, 2, 26))
+
+        takeVec(u);
+>takeVec : Symbol(takeVec, Decl(boxing.mts, 2, 49))
+>u : Symbol(u, Decl(boxing.mts, 34, 24))
+    }
+    return v.y + w.y;
+>v.y : Symbol(Vec.y, Decl(boxing.mts, 2, 37))
+>v : Symbol(v, Decl(boxing.mts, 36, 9))
+>y : Symbol(Vec.y, Decl(boxing.mts, 2, 37))
+>w.y : Symbol(Vec.y, Decl(boxing.mts, 2, 37))
+>w : Symbol(w, Decl(boxing.mts, 37, 9))
+>y : Symbol(Vec.y, Decl(boxing.mts, 2, 37))
+}
+
+function isVec(u: unknown): u is Vec {
+>isVec : Symbol(isVec, Decl(boxing.mts, 43, 1))
+>u : Symbol(u, Decl(boxing.mts, 45, 15))
+>u : Symbol(u, Decl(boxing.mts, 45, 15))
+>Vec : Symbol(Vec, Decl(boxing.mts, 0, 45))
+
+    return u !== null && typeof u === "object" && "x" in u;
+>u : Symbol(u, Decl(boxing.mts, 45, 15))
+>u : Symbol(u, Decl(boxing.mts, 45, 15))
+>u : Symbol(u, Decl(boxing.mts, 45, 15))
+}
+
+export function returns(v: Vec): unknown {
+>returns : Symbol(returns, Decl(boxing.mts, 47, 1))
+>v : Symbol(v, Decl(boxing.mts, 49, 24))
+>Vec : Symbol(Vec, Decl(boxing.mts, 0, 45))
+
+    return v;                                // box
+>v : Symbol(v, Decl(boxing.mts, 49, 24))
+}
+
+export function returnsVec(u: unknown): Vec {
+>returnsVec : Symbol(returnsVec, Decl(boxing.mts, 51, 1))
+>u : Symbol(u, Decl(boxing.mts, 53, 27))
+>Vec : Symbol(Vec, Decl(boxing.mts, 0, 45))
+
+    return u as Vec;                         // unbox (the assertion)
+>u : Symbol(u, Decl(boxing.mts, 53, 27))
+>Vec : Symbol(Vec, Decl(boxing.mts, 0, 45))
+}
+
+=== assertion.ts ===
+import type { Vec } from "./boxing.mjs";
+>Vec : Symbol(Vec, Decl(assertion.ts, 0, 13))
+
+export function angleBracket(u: unknown) {
+>angleBracket : Symbol(angleBracket, Decl(assertion.ts, 0, 40))
+>u : Symbol(u, Decl(assertion.ts, 1, 29))
+
+    return (<Vec>u).x;                       // unbox (angle-bracket assertion)
+>(<Vec>u).x : Symbol(Vec.x, Decl(boxing.mts, 2, 26))
+>Vec : Symbol(Vec, Decl(assertion.ts, 0, 13))
+>u : Symbol(u, Decl(assertion.ts, 1, 29))
+>x : Symbol(Vec.x, Decl(boxing.mts, 2, 26))
+}
+

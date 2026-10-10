@@ -48,14 +48,14 @@ function scriptFunction() { send([1]); }
 
 
 //// [main.mjs]
-import { __register, __sharedStruct } from "./own.mjs";
+import { __newStruct, __register, __sharedStruct } from "./own.mjs";
 import { share } from "./own.mjs";
 export const Point = __sharedStruct("Point", ["x", "y"]);
 const Local = __sharedStruct("Local", ["n"]);
 export function exported(p) { return p; }
 function notExported() { return share([1]); }
 function overloaded(x) { return x; }
-export default function main() { notExported(); return new Local(); }
+export default function main() { notExported(); return __newStruct(Local); }
 const arrow = () => 1;
 var NS;
 (function (NS) {

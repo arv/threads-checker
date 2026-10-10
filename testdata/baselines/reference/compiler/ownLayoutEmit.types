@@ -1,0 +1,351 @@
+//// [tests/cases/compiler/ownLayoutEmit.ts] ////
+
+=== own.d.mts ===
+// Types for the own/shared threads runtime own.mjs (the runtime itself lives in porffor). Programs
+// import their API from "./own.mjs"; the compiler adds the imports of the helpers it emits
+// (`__sharedStruct`, `__register`) when `ownRuntime` is set.
+//
+// `sending T` marks a value whose ownership moves to the receiver: the sender must not use it
+// afterwards. `shared T` marks a value any number of threads may read at once: deeply immutable, or
+// a cell that synchronizes internally (Slots, Barrier, a shared struct).
+
+/** One slot per thread: a thread publishes into its own slot, and everyone reads every slot. */
+export interface SlotsCell<T> {
+    readonly length: number;
+>length : number
+
+    /** Publishes `value` in slot `index`, replacing what was there. */
+    set(index: number, value: T): void;
+>set : (index: number, value: T) => void
+>index : number
+>value : T
+
+    /** The value in slot `index`. */
+    get(index: number): shared T;
+>get : (index: number) => shared T
+>index : number
+
+    /** The arrays in all slots, concatenated in slot order. */
+    flat(): shared (T extends readonly (infer E)[] ? E : T)[];
+>flat : () => shared (T extends readonly (infer E)[] ? E : T)[]
+}
+export declare const Slots: new <T>(count: number) => shared SlotsCell<T>;
+>Slots : new <T>(count: number) => shared SlotsCell<T>
+>count : number
+
+/** A reusable barrier for a fixed number of threads. */
+export interface BarrierCell {
+    /** Blocks until all threads have called `wait`. */
+    wait(): void;
+>wait : () => void
+}
+export declare const Barrier: new (threads: number) => shared BarrierCell;
+>Barrier : new (threads: number) => shared BarrierCell
+>threads : number
+
+/** Freezes a value the caller owns into a deeply immutable value every thread can read. */
+export declare function share<T>(value: sending T): shared T;
+>share : <T>(value: sending T) => shared T
+>value : T
+
+/** A thread started inside a `scope`; joining it moves the thread's result back. */
+export interface Thread<R> {
+    join(): sending R;
+>join : () => sending R
+}
+
+/** Spawns threads that cannot outlive the scope. Every argument is sent to the new thread. */
+export interface Scope {
+    spawn<A extends unknown[], R>(f: (...args: A) => sending R, ...args: sending A): shared Thread<R>;
+>spawn : <A extends unknown[], R>(f: (...args: A) => sending R, ...args: sending A) => shared Thread<R>
+>f : (...args: A) => sending R
+>args : A
+>args : A
+}
+
+/** Runs `body` and joins every thread it spawned before returning. */
+export declare function scope<R>(body: (s: shared Scope) => R): R;
+>scope : <R>(body: (s: shared Scope) => R) => R
+>body : (s: shared Scope) => R
+>s : Scope
+
+/** Splits an owned array into `parts` owned, disjoint chunks of nearly equal size. Trusted. */
+export declare function partition<T>(items: sending T[], parts: number): (sending T[])[];
+>partition : <T>(items: sending T[], parts: number) => (sending T[])[]
+>items : T[]
+>parts : number
+
+/** Takes element `index` out of an array of owned values, so the caller owns it. Trusted. */
+export declare function take<T>(items: (sending T)[], index: number): sending T;
+>take : <T>(items: (sending T)[], index: number) => sending T
+>items : T[]
+>index : number
+
+/** Prints a line, synchronously, from any thread. */
+export declare function log(...args: unknown[]): void;
+>log : (...args: unknown[]) => void
+>args : unknown[]
+
+/** A shared struct's value as a type: what `new SharedArray(Struct, n)` takes. */
+export interface SharedStructType<T> {
+    new (): T;
+}
+
+/**
+ * A fixed-length array in the shared heap, of numbers or of shared structs stored inline. Threads
+ * share it with no copying. With `ownRuntime` the compiler lays it out in the shared heap and turns
+ * `a[i]` and `a.length` into typed-array accesses.
+ */
+export interface SharedArray<T> {
+    readonly length: number;
+>length : number
+
+    [index: number]: T;
+>index : number
+}
+export declare const SharedArray: {
+>SharedArray : { new (type: NumberConstructor, length: number): SharedArray<number>; new <T>(type: SharedStructType<T>, length: number): SharedArray<T>; }
+
+    new (type: NumberConstructor, length: number): SharedArray<number>;
+>type : NumberConstructor
+>length : number
+
+    new <T>(type: SharedStructType<T>, length: number): SharedArray<T>;
+>type : SharedStructType<T>
+>length : number
+
+};
+
+=== layout.mts ===
+import { SharedArray } from "./own.mjs";
+>SharedArray : { new (type: NumberConstructor, length: number): SharedArray<number>; new <T>(type: import("./own.mjs").SharedStructType<T>, length: number): SharedArray<T>; }
+
+export shared struct Vec { x: number; y: number; z: number }
+>Vec : Vec
+>x : number
+>y : number
+>z : number
+
+export shared struct Particle { pos: Vec; mass: number; trail: SharedArray<number> }
+>Particle : Particle
+>pos : Vec
+>mass : number
+>trail : SharedArray<number>
+
+declare function make(): Vec;
+>make : () => Vec
+
+declare function pick(): number;
+>pick : () => number
+
+declare function arrays(): SharedArray<Vec>;
+>arrays : () => SharedArray<Vec>
+
+export function fields(v: Vec, p: Particle) {
+>fields : (v: Vec, p: Particle) => boolean
+>v : Vec
+>p : Particle
+
+    const x = v.x;                          // read: slot 1
+>x : number
+>v.x : number
+>v : Vec
+>x : number
+
+    v.z = x + v.y;                          // write
+>v.z = x + v.y : number
+>v.z : number
+>v : Vec
+>z : number
+>x + v.y : number
+>x : number
+>v.y : number
+>v : Vec
+>y : number
+
+    v.x += 1;                               // compound assignment
+>v.x += 1 : number
+>v.x : number
+>v : Vec
+>x : number
+>1 : 1
+
+    v.y++;                                  // postfix
+>v.y++ : number
+>v.y : number
+>v : Vec
+>y : number
+
+    --v.z;                                  // prefix
+>--v.z : number
+>v.z : number
+>v : Vec
+>z : number
+
+    const m = make().y;                     // object with side effects: no temporary needed
+>m : number
+>make().y : number
+>make() : Vec
+>make : () => Vec
+>y : number
+
+    p.pos.x = p.mass;                       // chain through a struct-typed field
+>p.pos.x = p.mass : number
+>p.pos.x : number
+>p.pos : Vec
+>p : Particle
+>pos : Vec
+>x : number
+>p.mass : number
+>p : Particle
+>mass : number
+
+    return v === p.pos;                     // addresses compare as numbers
+>v === p.pos : boolean
+>v : Vec
+>p.pos : Vec
+>p : Particle
+>pos : Vec
+}
+
+export function elements(vs: SharedArray<Vec>, i: number) {
+>elements : (vs: SharedArray<Vec>, i: number) => number
+>vs : SharedArray<Vec>
+>i : number
+
+    const v = vs[i];                        // element address, bounds-checked
+>v : Vec
+>vs[i] : Vec
+>vs : SharedArray<Vec>
+>i : number
+
+    vs[i].x = vs[i + 1].y;                  // chains; index not simple: temporary
+>vs[i].x = vs[i + 1].y : number
+>vs[i].x : number
+>vs[i] : Vec
+>vs : SharedArray<Vec>
+>i : number
+>x : number
+>vs[i + 1].y : number
+>vs[i + 1] : Vec
+>vs : SharedArray<Vec>
+>i + 1 : number
+>i : number
+>1 : 1
+>y : number
+
+    const n = vs.length;                    // header word
+>n : number
+>vs.length : number
+>vs : SharedArray<Vec>
+>length : number
+
+    const w = arrays()[pick()];             // array and index not simple: temporaries
+>w : Vec
+>arrays()[pick()] : Vec
+>arrays() : SharedArray<Vec>
+>arrays : () => SharedArray<Vec>
+>pick() : number
+>pick : () => number
+
+    return n + w.z + v.x;
+>n + w.z + v.x : number
+>n + w.z : number
+>n : number
+>w.z : number
+>w : Vec
+>z : number
+>v.x : number
+>v : Vec
+>x : number
+}
+
+export function numbers(a: SharedArray<number>, p: Particle, i: number) {
+>numbers : (a: SharedArray<number>, p: Particle, i: number) => number
+>a : SharedArray<number>
+>p : Particle
+>i : number
+
+    const first = a[0];                     // read
+>first : number
+>a[0] : number
+>a : SharedArray<number>
+>0 : 0
+
+    a[i] = first * 2;                       // write
+>a[i] = first * 2 : number
+>a[i] : number
+>a : SharedArray<number>
+>i : number
+>first * 2 : number
+>first : number
+>2 : 2
+
+    a[i + 1] += 3;                          // compound assignment, index not simple
+>a[i + 1] += 3 : number
+>a[i + 1] : number
+>a : SharedArray<number>
+>i + 1 : number
+>i : number
+>1 : 1
+>3 : 3
+
+    a[i]++;
+>a[i]++ : number
+>a[i] : number
+>a : SharedArray<number>
+>i : number
+
+    p.trail[i] = a.length;                  // array from a field: temporary
+>p.trail[i] = a.length : number
+>p.trail[i] : number
+>p.trail : SharedArray<number>
+>p : Particle
+>trail : SharedArray<number>
+>i : number
+>a.length : number
+>a : SharedArray<number>
+>length : number
+
+    return a[i];
+>a[i] : number
+>a : SharedArray<number>
+>i : number
+}
+
+export function allocate(n: number) {
+>allocate : (n: number) => SharedArray<Vec>
+>n : number
+
+    const v = new Vec();
+>v : Vec
+>new Vec() : Vec
+>Vec : new () => Vec
+
+    const vs = new SharedArray(Vec, n);
+>vs : SharedArray<Vec>
+>new SharedArray(Vec, n) : SharedArray<Vec>
+>SharedArray : { new (type: NumberConstructor, length: number): SharedArray<number>; new <T>(type: import("./own.mjs").SharedStructType<T>, length: number): SharedArray<T>; }
+>Vec : new () => Vec
+>n : number
+
+    const ns = new SharedArray(Number, n);
+>ns : SharedArray<number>
+>new SharedArray(Number, n) : SharedArray<number>
+>SharedArray : { new (type: NumberConstructor, length: number): SharedArray<number>; new <T>(type: import("./own.mjs").SharedStructType<T>, length: number): SharedArray<T>; }
+>Number : NumberConstructor
+>n : number
+
+    ns[0] = v.x;
+>ns[0] = v.x : number
+>ns[0] : number
+>ns : SharedArray<number>
+>0 : 0
+>v.x : number
+>v : Vec
+>x : number
+
+    return vs;
+>vs : SharedArray<Vec>
+}
+

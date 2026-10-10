@@ -135,6 +135,11 @@ func getScriptTransformers(emitContext *printer.EmitContext, host printer.EmitHo
 		// erase types
 		tx = append(tx, tstransforms.NewTypeEraserTransformer(&opts))
 
+		// own/shared threads: typed layouts of shared structs and SharedArrays, boxing
+		if options.OwnRuntime != "" {
+			tx = append(tx, tstransforms.NewOwnLayoutTransformer(&opts))
+		}
+
 		// elide imports
 		if importElisionEnabled {
 			tx = append(tx, tstransforms.NewImportElisionTransformer(&opts))

@@ -1,0 +1,376 @@
+//// [tests/cases/compiler/ownLayoutEmit.ts] ////
+
+=== own.d.mts ===
+// Types for the own/shared threads runtime own.mjs (the runtime itself lives in porffor). Programs
+// import their API from "./own.mjs"; the compiler adds the imports of the helpers it emits
+// (`__sharedStruct`, `__register`) when `ownRuntime` is set.
+//
+// `sending T` marks a value whose ownership moves to the receiver: the sender must not use it
+// afterwards. `shared T` marks a value any number of threads may read at once: deeply immutable, or
+// a cell that synchronizes internally (Slots, Barrier, a shared struct).
+
+/** One slot per thread: a thread publishes into its own slot, and everyone reads every slot. */
+export interface SlotsCell<T> {
+>SlotsCell : Symbol(SlotsCell, Decl(own.d.mts, 0, 0))
+>T : Symbol(T, Decl(own.d.mts, 9, 27))
+
+    readonly length: number;
+>length : Symbol(SlotsCell.length, Decl(own.d.mts, 9, 31))
+
+    /** Publishes `value` in slot `index`, replacing what was there. */
+    set(index: number, value: T): void;
+>set : Symbol(SlotsCell.set, Decl(own.d.mts, 10, 28))
+>index : Symbol(index, Decl(own.d.mts, 12, 8))
+>value : Symbol(value, Decl(own.d.mts, 12, 22))
+>T : Symbol(T, Decl(own.d.mts, 9, 27))
+
+    /** The value in slot `index`. */
+    get(index: number): shared T;
+>get : Symbol(SlotsCell.get, Decl(own.d.mts, 12, 39))
+>index : Symbol(index, Decl(own.d.mts, 14, 8))
+>T : Symbol(T, Decl(own.d.mts, 9, 27))
+
+    /** The arrays in all slots, concatenated in slot order. */
+    flat(): shared (T extends readonly (infer E)[] ? E : T)[];
+>flat : Symbol(SlotsCell.flat, Decl(own.d.mts, 14, 33))
+>T : Symbol(T, Decl(own.d.mts, 9, 27))
+>E : Symbol(E, Decl(own.d.mts, 16, 45))
+>E : Symbol(E, Decl(own.d.mts, 16, 45))
+>T : Symbol(T, Decl(own.d.mts, 9, 27))
+}
+export declare const Slots: new <T>(count: number) => shared SlotsCell<T>;
+>Slots : Symbol(Slots, Decl(own.d.mts, 18, 20))
+>T : Symbol(T, Decl(own.d.mts, 18, 33))
+>count : Symbol(count, Decl(own.d.mts, 18, 36))
+>SlotsCell : Symbol(SlotsCell, Decl(own.d.mts, 0, 0))
+>T : Symbol(T, Decl(own.d.mts, 18, 33))
+
+/** A reusable barrier for a fixed number of threads. */
+export interface BarrierCell {
+>BarrierCell : Symbol(BarrierCell, Decl(own.d.mts, 18, 74))
+
+    /** Blocks until all threads have called `wait`. */
+    wait(): void;
+>wait : Symbol(BarrierCell.wait, Decl(own.d.mts, 21, 30))
+}
+export declare const Barrier: new (threads: number) => shared BarrierCell;
+>Barrier : Symbol(Barrier, Decl(own.d.mts, 25, 20))
+>threads : Symbol(threads, Decl(own.d.mts, 25, 35))
+>BarrierCell : Symbol(BarrierCell, Decl(own.d.mts, 18, 74))
+
+/** Freezes a value the caller owns into a deeply immutable value every thread can read. */
+export declare function share<T>(value: sending T): shared T;
+>share : Symbol(share, Decl(own.d.mts, 25, 74))
+>T : Symbol(T, Decl(own.d.mts, 28, 30))
+>value : Symbol(value, Decl(own.d.mts, 28, 33))
+>T : Symbol(T, Decl(own.d.mts, 28, 30))
+>T : Symbol(T, Decl(own.d.mts, 28, 30))
+
+/** A thread started inside a `scope`; joining it moves the thread's result back. */
+export interface Thread<R> {
+>Thread : Symbol(Thread, Decl(own.d.mts, 28, 61))
+>R : Symbol(R, Decl(own.d.mts, 31, 24))
+
+    join(): sending R;
+>join : Symbol(Thread.join, Decl(own.d.mts, 31, 28))
+>R : Symbol(R, Decl(own.d.mts, 31, 24))
+}
+
+/** Spawns threads that cannot outlive the scope. Every argument is sent to the new thread. */
+export interface Scope {
+>Scope : Symbol(Scope, Decl(own.d.mts, 33, 1))
+
+    spawn<A extends unknown[], R>(f: (...args: A) => sending R, ...args: sending A): shared Thread<R>;
+>spawn : Symbol(Scope.spawn, Decl(own.d.mts, 36, 24))
+>A : Symbol(A, Decl(own.d.mts, 37, 10))
+>R : Symbol(R, Decl(own.d.mts, 37, 30))
+>f : Symbol(f, Decl(own.d.mts, 37, 34))
+>args : Symbol(args, Decl(own.d.mts, 37, 38))
+>A : Symbol(A, Decl(own.d.mts, 37, 10))
+>R : Symbol(R, Decl(own.d.mts, 37, 30))
+>args : Symbol(args, Decl(own.d.mts, 37, 63))
+>A : Symbol(A, Decl(own.d.mts, 37, 10))
+>Thread : Symbol(Thread, Decl(own.d.mts, 28, 61))
+>R : Symbol(R, Decl(own.d.mts, 37, 30))
+}
+
+/** Runs `body` and joins every thread it spawned before returning. */
+export declare function scope<R>(body: (s: shared Scope) => R): R;
+>scope : Symbol(scope, Decl(own.d.mts, 38, 1))
+>R : Symbol(R, Decl(own.d.mts, 41, 30))
+>body : Symbol(body, Decl(own.d.mts, 41, 33))
+>s : Symbol(s, Decl(own.d.mts, 41, 40))
+>Scope : Symbol(Scope, Decl(own.d.mts, 33, 1))
+>R : Symbol(R, Decl(own.d.mts, 41, 30))
+>R : Symbol(R, Decl(own.d.mts, 41, 30))
+
+/** Splits an owned array into `parts` owned, disjoint chunks of nearly equal size. Trusted. */
+export declare function partition<T>(items: sending T[], parts: number): (sending T[])[];
+>partition : Symbol(partition, Decl(own.d.mts, 41, 66))
+>T : Symbol(T, Decl(own.d.mts, 44, 34))
+>items : Symbol(items, Decl(own.d.mts, 44, 37))
+>T : Symbol(T, Decl(own.d.mts, 44, 34))
+>parts : Symbol(parts, Decl(own.d.mts, 44, 56))
+>T : Symbol(T, Decl(own.d.mts, 44, 34))
+
+/** Takes element `index` out of an array of owned values, so the caller owns it. Trusted. */
+export declare function take<T>(items: (sending T)[], index: number): sending T;
+>take : Symbol(take, Decl(own.d.mts, 44, 89))
+>T : Symbol(T, Decl(own.d.mts, 47, 29))
+>items : Symbol(items, Decl(own.d.mts, 47, 32))
+>T : Symbol(T, Decl(own.d.mts, 47, 29))
+>index : Symbol(index, Decl(own.d.mts, 47, 53))
+>T : Symbol(T, Decl(own.d.mts, 47, 29))
+
+/** Prints a line, synchronously, from any thread. */
+export declare function log(...args: unknown[]): void;
+>log : Symbol(log, Decl(own.d.mts, 47, 80))
+>args : Symbol(args, Decl(own.d.mts, 50, 28))
+
+/** A shared struct's value as a type: what `new SharedArray(Struct, n)` takes. */
+export interface SharedStructType<T> {
+>SharedStructType : Symbol(SharedStructType, Decl(own.d.mts, 50, 54))
+>T : Symbol(T, Decl(own.d.mts, 53, 34))
+
+    new (): T;
+>T : Symbol(T, Decl(own.d.mts, 53, 34))
+}
+
+/**
+ * A fixed-length array in the shared heap, of numbers or of shared structs stored inline. Threads
+ * share it with no copying. With `ownRuntime` the compiler lays it out in the shared heap and turns
+ * `a[i]` and `a.length` into typed-array accesses.
+ */
+export interface SharedArray<T> {
+>SharedArray : Symbol(SharedArray, Decl(own.d.mts, 55, 1), Decl(own.d.mts, 66, 20))
+>T : Symbol(T, Decl(own.d.mts, 62, 29))
+
+    readonly length: number;
+>length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+
+    [index: number]: T;
+>index : Symbol(index, Decl(own.d.mts, 64, 5))
+>T : Symbol(T, Decl(own.d.mts, 62, 29))
+}
+export declare const SharedArray: {
+>SharedArray : Symbol(SharedArray, Decl(own.d.mts, 55, 1), Decl(own.d.mts, 66, 20))
+
+    new (type: NumberConstructor, length: number): SharedArray<number>;
+>type : Symbol(type, Decl(own.d.mts, 67, 9))
+>NumberConstructor : Symbol(NumberConstructor, Decl(lib.es5.d.ts, --, --), Decl(lib.es2015.core.d.ts, --, --))
+>length : Symbol(length, Decl(own.d.mts, 67, 33))
+>SharedArray : Symbol(SharedArray, Decl(own.d.mts, 55, 1), Decl(own.d.mts, 66, 20))
+
+    new <T>(type: SharedStructType<T>, length: number): SharedArray<T>;
+>T : Symbol(T, Decl(own.d.mts, 68, 9))
+>type : Symbol(type, Decl(own.d.mts, 68, 12))
+>SharedStructType : Symbol(SharedStructType, Decl(own.d.mts, 50, 54))
+>T : Symbol(T, Decl(own.d.mts, 68, 9))
+>length : Symbol(length, Decl(own.d.mts, 68, 38))
+>SharedArray : Symbol(SharedArray, Decl(own.d.mts, 55, 1), Decl(own.d.mts, 66, 20))
+>T : Symbol(T, Decl(own.d.mts, 68, 9))
+
+};
+
+=== layout.mts ===
+import { SharedArray } from "./own.mjs";
+>SharedArray : Symbol(SharedArray, Decl(layout.mts, 0, 8))
+
+export shared struct Vec { x: number; y: number; z: number }
+>Vec : Symbol(Vec, Decl(layout.mts, 0, 40))
+>x : Symbol(Vec.x, Decl(layout.mts, 2, 26))
+>y : Symbol(Vec.y, Decl(layout.mts, 2, 37))
+>z : Symbol(Vec.z, Decl(layout.mts, 2, 48))
+
+export shared struct Particle { pos: Vec; mass: number; trail: SharedArray<number> }
+>Particle : Symbol(Particle, Decl(layout.mts, 2, 60))
+>pos : Symbol(Particle.pos, Decl(layout.mts, 3, 31))
+>Vec : Symbol(Vec, Decl(layout.mts, 0, 40))
+>mass : Symbol(Particle.mass, Decl(layout.mts, 3, 41))
+>trail : Symbol(Particle.trail, Decl(layout.mts, 3, 55))
+>SharedArray : Symbol(SharedArray, Decl(layout.mts, 0, 8))
+
+declare function make(): Vec;
+>make : Symbol(make, Decl(layout.mts, 3, 84))
+>Vec : Symbol(Vec, Decl(layout.mts, 0, 40))
+
+declare function pick(): number;
+>pick : Symbol(pick, Decl(layout.mts, 5, 29))
+
+declare function arrays(): SharedArray<Vec>;
+>arrays : Symbol(arrays, Decl(layout.mts, 6, 32))
+>SharedArray : Symbol(SharedArray, Decl(layout.mts, 0, 8))
+>Vec : Symbol(Vec, Decl(layout.mts, 0, 40))
+
+export function fields(v: Vec, p: Particle) {
+>fields : Symbol(fields, Decl(layout.mts, 7, 44))
+>v : Symbol(v, Decl(layout.mts, 9, 23))
+>Vec : Symbol(Vec, Decl(layout.mts, 0, 40))
+>p : Symbol(p, Decl(layout.mts, 9, 30))
+>Particle : Symbol(Particle, Decl(layout.mts, 2, 60))
+
+    const x = v.x;                          // read: slot 1
+>x : Symbol(x, Decl(layout.mts, 10, 9))
+>v.x : Symbol(Vec.x, Decl(layout.mts, 2, 26))
+>v : Symbol(v, Decl(layout.mts, 9, 23))
+>x : Symbol(Vec.x, Decl(layout.mts, 2, 26))
+
+    v.z = x + v.y;                          // write
+>v.z : Symbol(Vec.z, Decl(layout.mts, 2, 48))
+>v : Symbol(v, Decl(layout.mts, 9, 23))
+>z : Symbol(Vec.z, Decl(layout.mts, 2, 48))
+>x : Symbol(x, Decl(layout.mts, 10, 9))
+>v.y : Symbol(Vec.y, Decl(layout.mts, 2, 37))
+>v : Symbol(v, Decl(layout.mts, 9, 23))
+>y : Symbol(Vec.y, Decl(layout.mts, 2, 37))
+
+    v.x += 1;                               // compound assignment
+>v.x : Symbol(Vec.x, Decl(layout.mts, 2, 26))
+>v : Symbol(v, Decl(layout.mts, 9, 23))
+>x : Symbol(Vec.x, Decl(layout.mts, 2, 26))
+
+    v.y++;                                  // postfix
+>v.y : Symbol(Vec.y, Decl(layout.mts, 2, 37))
+>v : Symbol(v, Decl(layout.mts, 9, 23))
+>y : Symbol(Vec.y, Decl(layout.mts, 2, 37))
+
+    --v.z;                                  // prefix
+>v.z : Symbol(Vec.z, Decl(layout.mts, 2, 48))
+>v : Symbol(v, Decl(layout.mts, 9, 23))
+>z : Symbol(Vec.z, Decl(layout.mts, 2, 48))
+
+    const m = make().y;                     // object with side effects: no temporary needed
+>m : Symbol(m, Decl(layout.mts, 15, 9))
+>make().y : Symbol(Vec.y, Decl(layout.mts, 2, 37))
+>make : Symbol(make, Decl(layout.mts, 3, 84))
+>y : Symbol(Vec.y, Decl(layout.mts, 2, 37))
+
+    p.pos.x = p.mass;                       // chain through a struct-typed field
+>p.pos.x : Symbol(Vec.x, Decl(layout.mts, 2, 26))
+>p.pos : Symbol(Particle.pos, Decl(layout.mts, 3, 31))
+>p : Symbol(p, Decl(layout.mts, 9, 30))
+>pos : Symbol(Particle.pos, Decl(layout.mts, 3, 31))
+>x : Symbol(Vec.x, Decl(layout.mts, 2, 26))
+>p.mass : Symbol(Particle.mass, Decl(layout.mts, 3, 41))
+>p : Symbol(p, Decl(layout.mts, 9, 30))
+>mass : Symbol(Particle.mass, Decl(layout.mts, 3, 41))
+
+    return v === p.pos;                     // addresses compare as numbers
+>v : Symbol(v, Decl(layout.mts, 9, 23))
+>p.pos : Symbol(Particle.pos, Decl(layout.mts, 3, 31))
+>p : Symbol(p, Decl(layout.mts, 9, 30))
+>pos : Symbol(Particle.pos, Decl(layout.mts, 3, 31))
+}
+
+export function elements(vs: SharedArray<Vec>, i: number) {
+>elements : Symbol(elements, Decl(layout.mts, 18, 1))
+>vs : Symbol(vs, Decl(layout.mts, 20, 25))
+>SharedArray : Symbol(SharedArray, Decl(layout.mts, 0, 8))
+>Vec : Symbol(Vec, Decl(layout.mts, 0, 40))
+>i : Symbol(i, Decl(layout.mts, 20, 46))
+
+    const v = vs[i];                        // element address, bounds-checked
+>v : Symbol(v, Decl(layout.mts, 21, 9))
+>vs : Symbol(vs, Decl(layout.mts, 20, 25))
+>i : Symbol(i, Decl(layout.mts, 20, 46))
+
+    vs[i].x = vs[i + 1].y;                  // chains; index not simple: temporary
+>vs[i].x : Symbol(Vec.x, Decl(layout.mts, 2, 26))
+>vs : Symbol(vs, Decl(layout.mts, 20, 25))
+>i : Symbol(i, Decl(layout.mts, 20, 46))
+>x : Symbol(Vec.x, Decl(layout.mts, 2, 26))
+>vs[i + 1].y : Symbol(Vec.y, Decl(layout.mts, 2, 37))
+>vs : Symbol(vs, Decl(layout.mts, 20, 25))
+>i : Symbol(i, Decl(layout.mts, 20, 46))
+>y : Symbol(Vec.y, Decl(layout.mts, 2, 37))
+
+    const n = vs.length;                    // header word
+>n : Symbol(n, Decl(layout.mts, 23, 9))
+>vs.length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+>vs : Symbol(vs, Decl(layout.mts, 20, 25))
+>length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+
+    const w = arrays()[pick()];             // array and index not simple: temporaries
+>w : Symbol(w, Decl(layout.mts, 24, 9))
+>arrays : Symbol(arrays, Decl(layout.mts, 6, 32))
+>pick : Symbol(pick, Decl(layout.mts, 5, 29))
+
+    return n + w.z + v.x;
+>n : Symbol(n, Decl(layout.mts, 23, 9))
+>w.z : Symbol(Vec.z, Decl(layout.mts, 2, 48))
+>w : Symbol(w, Decl(layout.mts, 24, 9))
+>z : Symbol(Vec.z, Decl(layout.mts, 2, 48))
+>v.x : Symbol(Vec.x, Decl(layout.mts, 2, 26))
+>v : Symbol(v, Decl(layout.mts, 21, 9))
+>x : Symbol(Vec.x, Decl(layout.mts, 2, 26))
+}
+
+export function numbers(a: SharedArray<number>, p: Particle, i: number) {
+>numbers : Symbol(numbers, Decl(layout.mts, 26, 1))
+>a : Symbol(a, Decl(layout.mts, 28, 24))
+>SharedArray : Symbol(SharedArray, Decl(layout.mts, 0, 8))
+>p : Symbol(p, Decl(layout.mts, 28, 47))
+>Particle : Symbol(Particle, Decl(layout.mts, 2, 60))
+>i : Symbol(i, Decl(layout.mts, 28, 60))
+
+    const first = a[0];                     // read
+>first : Symbol(first, Decl(layout.mts, 29, 9))
+>a : Symbol(a, Decl(layout.mts, 28, 24))
+
+    a[i] = first * 2;                       // write
+>a : Symbol(a, Decl(layout.mts, 28, 24))
+>i : Symbol(i, Decl(layout.mts, 28, 60))
+>first : Symbol(first, Decl(layout.mts, 29, 9))
+
+    a[i + 1] += 3;                          // compound assignment, index not simple
+>a : Symbol(a, Decl(layout.mts, 28, 24))
+>i : Symbol(i, Decl(layout.mts, 28, 60))
+
+    a[i]++;
+>a : Symbol(a, Decl(layout.mts, 28, 24))
+>i : Symbol(i, Decl(layout.mts, 28, 60))
+
+    p.trail[i] = a.length;                  // array from a field: temporary
+>p.trail : Symbol(Particle.trail, Decl(layout.mts, 3, 55))
+>p : Symbol(p, Decl(layout.mts, 28, 47))
+>trail : Symbol(Particle.trail, Decl(layout.mts, 3, 55))
+>i : Symbol(i, Decl(layout.mts, 28, 60))
+>a.length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+>a : Symbol(a, Decl(layout.mts, 28, 24))
+>length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+
+    return a[i];
+>a : Symbol(a, Decl(layout.mts, 28, 24))
+>i : Symbol(i, Decl(layout.mts, 28, 60))
+}
+
+export function allocate(n: number) {
+>allocate : Symbol(allocate, Decl(layout.mts, 35, 1))
+>n : Symbol(n, Decl(layout.mts, 37, 25))
+
+    const v = new Vec();
+>v : Symbol(v, Decl(layout.mts, 38, 9))
+>Vec : Symbol(Vec, Decl(layout.mts, 0, 40))
+
+    const vs = new SharedArray(Vec, n);
+>vs : Symbol(vs, Decl(layout.mts, 39, 9))
+>SharedArray : Symbol(SharedArray, Decl(layout.mts, 0, 8))
+>Vec : Symbol(Vec, Decl(layout.mts, 0, 40))
+>n : Symbol(n, Decl(layout.mts, 37, 25))
+
+    const ns = new SharedArray(Number, n);
+>ns : Symbol(ns, Decl(layout.mts, 40, 9))
+>SharedArray : Symbol(SharedArray, Decl(layout.mts, 0, 8))
+>Number : Symbol(Number, Decl(lib.es5.d.ts, --, --), Decl(lib.es5.d.ts, --, --), Decl(lib.es5.d.ts, --, --), Decl(lib.es2020.number.d.ts, --, --))
+>n : Symbol(n, Decl(layout.mts, 37, 25))
+
+    ns[0] = v.x;
+>ns : Symbol(ns, Decl(layout.mts, 40, 9))
+>v.x : Symbol(Vec.x, Decl(layout.mts, 2, 26))
+>v : Symbol(v, Decl(layout.mts, 38, 9))
+>x : Symbol(Vec.x, Decl(layout.mts, 2, 26))
+
+    return vs;
+>vs : Symbol(vs, Decl(layout.mts, 39, 9))
+}
+

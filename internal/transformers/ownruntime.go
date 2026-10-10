@@ -1,6 +1,9 @@
 package transformers
 
 import (
+	"slices"
+	"strings"
+
 	"github.com/microsoft/typescript-go/internal/ast"
 	"github.com/microsoft/typescript-go/internal/core"
 	"github.com/microsoft/typescript-go/internal/printer"
@@ -19,23 +22,46 @@ import (
 //
 //	__register(import.meta.url, { worker, simulate, main });
 //
+// The typed layouts of shared structs and SharedArrays use more helpers (`__F64`, `__I32`,
+// `__newStruct`, `__newSharedArray`, `__oob`, `__box`, `__unbox`; see tstransforms/ownlayout.go). The
+// import lists exactly the helpers the emitted module references.
+//
 // The helpers are referenced through helper names, so a file that declares its own `__register`
 // gets `import { __register as __register_1 }` instead of a conflict.
 
 const (
-	OwnRuntimeSharedStructHelper = "__sharedStruct"
-	OwnRuntimeRegisterHelper     = "__register"
+	OwnRuntimeSharedStructHelper   = "__sharedStruct"
+	OwnRuntimeRegisterHelper       = "__register"
+	OwnRuntimeF64Helper            = "__F64"
+	OwnRuntimeI32Helper            = "__I32"
+	OwnRuntimeNewStructHelper      = "__newStruct"
+	OwnRuntimeNewSharedArrayHelper = "__newSharedArray"
+	OwnRuntimeOutOfBoundsHelper    = "__oob"
+	OwnRuntimeBoxHelper            = "__box"
+	OwnRuntimeUnboxHelper          = "__unbox"
 )
 
-// Reports whether the emit of a file uses the `ownRuntime` helpers: the option is set, the file
-// uses the extension's syntax, it is an ES module, and it is emitted as one.
+var ownRuntimeHelpers = []string{
+	OwnRuntimeF64Helper,
+	OwnRuntimeI32Helper,
+	OwnRuntimeBoxHelper,
+	OwnRuntimeNewSharedArrayHelper,
+	OwnRuntimeNewStructHelper,
+	OwnRuntimeOutOfBoundsHelper,
+	OwnRuntimeRegisterHelper,
+	OwnRuntimeSharedStructHelper,
+	OwnRuntimeUnboxHelper,
+}
+
+// Reports whether the emit of a file may use the `ownRuntime` helpers: the option is set and the
+// file is an ES module that is emitted as one.
 func UsesOwnRuntime(emitContext *printer.EmitContext, options *core.CompilerOptions, file *ast.SourceFile, getEmitModuleFormatOfFile func(ast.HasFileName) core.ModuleKind) bool {
 	if options.OwnRuntime == "" || file == nil || options.GetEmitModuleKind() < core.ModuleKindES2015 {
 		// Without ES module output the option is reported as an error and ignored.
 		return false
 	}
 	original := emitContext.MostOriginal(file.AsNode()).AsSourceFile()
-	if original.IsDeclarationFile || original.Flags&ast.NodeFlagsPossiblyContainsOwnershipSyntax == 0 || !ast.IsExternalModule(original) {
+	if original.IsDeclarationFile || !ast.IsExternalModule(original) {
 		return false
 	}
 	format := options.GetEmitModuleKind()
@@ -58,36 +84,37 @@ func OwnRuntimeRegisteredFunctions(file *ast.SourceFile) []string {
 	return names
 }
 
-// Reports whether a file has a (non-ambient) shared struct declaration anywhere.
-func OwnRuntimeNeedsSharedStruct(file *ast.SourceFile) bool {
-	found := false
+// The runtime helpers that a transformed file references, sorted.
+func ownRuntimeHelpersUsedBy(emitContext *printer.EmitContext, file *ast.SourceFile) []string {
+	used := map[string]bool{}
 	var visit ast.Visitor
 	visit = func(node *ast.Node) bool {
-		switch {
-		case ast.IsTypeNode(node) || node.Flags&ast.NodeFlagsAmbient != 0:
+		if ast.IsIdentifier(node) {
+			if emitContext.EmitFlags(node)&printer.EFHelperName != 0 {
+				used[node.Text()] = true
+			}
 			return false
-		case ast.IsSharedStructDeclaration(node):
-			found = true
-			return true
 		}
 		return node.ForEachChild(visit)
 	}
 	file.AsNode().ForEachChild(visit)
-	return found
+	return core.Filter(ownRuntimeHelpers, func(name string) bool { return used[name] })
 }
 
 // Creates the `import { ... } from "<ownRuntime>"` declaration and the `__register(...)` statement
-// for a file whose emit uses the `ownRuntime` helpers. Either may be nil if it is not needed.
+// for a (transformed) file whose emit may use the `ownRuntime` helpers. Either may be nil if it is
+// not needed. Files that use the extension's syntax register their top-level functions.
 func CreateOwnRuntimeStatements(emitContext *printer.EmitContext, options *core.CompilerOptions, file *ast.SourceFile) (importDeclaration *ast.Statement, registration *ast.Statement) {
 	original := emitContext.MostOriginal(file.AsNode()).AsSourceFile()
 	f := emitContext.Factory
-	functions := OwnRuntimeRegisteredFunctions(original)
-	var helpers []string // in sorted order
-	if len(functions) > 0 {
-		helpers = append(helpers, OwnRuntimeRegisterHelper)
+	var functions []string
+	if original.Flags&ast.NodeFlagsPossiblyContainsOwnershipSyntax != 0 {
+		functions = OwnRuntimeRegisteredFunctions(original)
 	}
-	if OwnRuntimeNeedsSharedStruct(original) {
-		helpers = append(helpers, OwnRuntimeSharedStructHelper)
+	helpers := ownRuntimeHelpersUsedBy(emitContext, file)
+	if len(functions) > 0 && !slices.Contains(helpers, OwnRuntimeRegisterHelper) {
+		helpers = append(helpers, OwnRuntimeRegisterHelper)
+		slices.SortFunc(helpers, strings.Compare)
 	}
 	if len(helpers) == 0 {
 		return nil, nil
