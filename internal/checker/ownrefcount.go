@@ -133,6 +133,10 @@ func (c *Checker) computeOwnRawCount(expr *ast.Node) printer.OwnCount {
 			return inner
 		}
 		return printer.OwnCountUnstable
+	case ast.KindAwaitExpression:
+		if c.isOwnCountedAwait(expr) {
+			return printer.OwnCountOwned
+		}
 	case ast.KindConditionalExpression:
 		n := expr.AsConditionalExpression()
 		return ownJoinCounts(c.getOwnCount(n.WhenTrue), c.getOwnCount(n.WhenFalse))
@@ -199,6 +203,38 @@ func (c *Checker) isOwnCountedCall(call *ast.Node) bool {
 		signature = signature.target
 	}
 	return c.isOwnCellType(c.getReturnTypeOfSignature(signature))
+}
+
+// Reports whether `await E` is +1: E calls a runtime function whose result is `Promise<Sending<T>>`
+// (`Thread.joinAsync()`, `run(...)`), or a function compiled here whose promise resolves to a counted
+// value (an async function returns +1, like any other).
+func (c *Checker) isOwnCountedAwait(await *ast.Node) bool {
+	call := ast.SkipParentheses(await.Expression())
+	if !ast.IsCallExpression(call) {
+		return false
+	}
+	signature := c.getResolvedSignature(call, nil, CheckModeNormal)
+	if signature == nil || signature == c.unknownSignature || signature == c.anySignature || signature == c.resolvingSignature ||
+		signature.declaration == nil || signature.declaration.FunctionLikeData() == nil {
+		return false
+	}
+	decl := signature.declaration
+	if isOwnAmbientDeclaration(decl) {
+		a := &ownAnalyzer{c: c}
+		t := a.resolveTypeNode(decl.Type())
+		if t == nil || !ast.IsTypeReferenceNode(t) || len(t.TypeArguments()) != 1 {
+			return false
+		}
+		if name := t.AsTypeReferenceNode().TypeName; !ast.IsIdentifier(name) || name.Text() != "Promise" {
+			return false
+		}
+		promised := a.resolveTypeNode(t.TypeArguments()[0])
+		return a.isSendingTypeNode(promised) || ast.IsUnionTypeNode(promised) && core.Some(promised.AsUnionTypeNode().Types.Nodes, a.isSendingTypeNode)
+	}
+	for signature.target != nil {
+		signature = signature.target
+	}
+	return c.isOwnCellType(c.getAwaitedType(c.getReturnTypeOfSignature(signature)))
 }
 
 // Reports whether a declaration is ambient: declared in a declaration file or with `declare`, so
