@@ -445,29 +445,39 @@ export function structs(c: Counter) {
     send(c);                                  // fine: shared structs are shared
 >send : Symbol(send, Decl(ownSharedFlow.ts, 3, 37))
 >c : Symbol(c, Decl(ownSharedFlow.ts, 115, 24))
+
+    const d = new Counter();
+>d : Symbol(d, Decl(ownSharedFlow.ts, 118, 9))
+>Counter : Symbol(Counter, Decl(ownSharedFlow.ts, 112, 1))
+
+    [1].forEach(() => send(d));               // fine: new instances of shared structs are shared
+>[1].forEach : Symbol(Array.forEach, Decl(lib.es5.d.ts, --, --))
+>forEach : Symbol(Array.forEach, Decl(lib.es5.d.ts, --, --))
+>send : Symbol(send, Decl(ownSharedFlow.ts, 3, 37))
+>d : Symbol(d, Decl(ownSharedFlow.ts, 118, 9))
 }
 
 export const giveBack = (x: Box): sending Box => x; // error: x is the caller's
->giveBack : Symbol(giveBack, Decl(ownSharedFlow.ts, 120, 12))
->x : Symbol(x, Decl(ownSharedFlow.ts, 120, 25))
+>giveBack : Symbol(giveBack, Decl(ownSharedFlow.ts, 122, 12))
+>x : Symbol(x, Decl(ownSharedFlow.ts, 122, 25))
 >Box : Symbol(Box, Decl(ownSharedFlow.ts, 0, 0))
 >Box : Symbol(Box, Decl(ownSharedFlow.ts, 0, 0))
->x : Symbol(x, Decl(ownSharedFlow.ts, 120, 25))
+>x : Symbol(x, Decl(ownSharedFlow.ts, 122, 25))
 
 export const fresh = (): sending Box => ({ v: 1 });
->fresh : Symbol(fresh, Decl(ownSharedFlow.ts, 121, 12))
+>fresh : Symbol(fresh, Decl(ownSharedFlow.ts, 123, 12))
 >Box : Symbol(Box, Decl(ownSharedFlow.ts, 0, 0))
->v : Symbol(v, Decl(ownSharedFlow.ts, 121, 42))
+>v : Symbol(v, Decl(ownSharedFlow.ts, 123, 42))
 
 const top = make();
->top : Symbol(top, Decl(ownSharedFlow.ts, 123, 5))
+>top : Symbol(top, Decl(ownSharedFlow.ts, 125, 5))
 >make : Symbol(make, Decl(ownSharedFlow.ts, 5, 50))
 
 send(top);
 >send : Symbol(send, Decl(ownSharedFlow.ts, 3, 37))
->top : Symbol(top, Decl(ownSharedFlow.ts, 123, 5))
+>top : Symbol(top, Decl(ownSharedFlow.ts, 125, 5))
 
 use(top);                                     // error: top-level code is analyzed too
 >use : Symbol(use, Decl(ownSharedFlow.ts, 6, 37))
->top : Symbol(top, Decl(ownSharedFlow.ts, 123, 5))
+>top : Symbol(top, Decl(ownSharedFlow.ts, 125, 5))
 

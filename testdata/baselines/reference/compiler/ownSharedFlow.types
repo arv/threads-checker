@@ -542,6 +542,22 @@ export function structs(c: Counter) {
 >send(c) : void
 >send : <T>(x: sending T) => void
 >c : Counter
+
+    const d = new Counter();
+>d : any
+>new Counter() : any
+>Counter : any
+
+    [1].forEach(() => send(d));               // fine: new instances of shared structs are shared
+>[1].forEach(() => send(d)) : void
+>[1].forEach : (callbackfn: (value: number, index: number, array: number[]) => void, thisArg?: any) => void
+>[1] : number[]
+>1 : 1
+>forEach : (callbackfn: (value: number, index: number, array: number[]) => void, thisArg?: any) => void
+>() => send(d) : () => void
+>send(d) : void
+>send : <T>(x: sending T) => void
+>d : any
 }
 
 export const giveBack = (x: Box): sending Box => x; // error: x is the caller's

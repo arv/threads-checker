@@ -1277,6 +1277,16 @@ func (f *ownFunction) evalCall(node *ast.Node, s *ownState) ownValue {
 func (f *ownFunction) evalNew(node *ast.Node, s *ownState) ownValue {
 	a := f.a
 	n := node.AsNewExpression()
+	if a.isSharedStructReference(n.Expression) {
+		// `new S(...)` of a shared struct: the instance is shared. (The struct's value is typed `any`
+		// for now, so this cannot be read from the type of the expression.)
+		if n.Arguments != nil {
+			for _, arg := range n.Arguments.Nodes {
+				f.eval(arg, s)
+			}
+		}
+		return ownSharedValue
+	}
 	var regions []ownRegion
 	if v := f.eval(n.Expression, s); v.kind == ownInRegion {
 		regions = append(regions, v.region)
@@ -1556,10 +1566,29 @@ func (a *ownAnalyzer) isStaticallyShared(expr *ast.Node) bool {
 		prop := a.c.getSymbolAtLocation(expr.Name(), true /*ignoreErrors*/)
 		return prop != nil && a.isDeclaredShared(prop)
 	case ast.KindCallExpression, ast.KindNewExpression:
+		if ast.IsNewExpression(expr) && a.isSharedStructReference(expr.Expression()) {
+			return true
+		}
 		sig := a.c.getResolvedSignature(expr, nil, CheckModeNormal)
 		return sig != nil && a.returnKind(sig.declaration) == ownReturnsShared
 	}
 	return false
+}
+
+// Reports whether an expression names a shared struct (whose value constructs shared instances).
+func (a *ownAnalyzer) isSharedStructReference(expr *ast.Node) bool {
+	expr = ast.SkipOuterExpressions(expr, ast.OEKAll)
+	var sym *ast.Symbol
+	switch {
+	case ast.IsIdentifier(expr):
+		sym = a.symbolOfIdentifier(expr)
+	case ast.IsPropertyAccessExpression(expr):
+		sym = a.c.getSymbolAtLocation(expr.Name(), true /*ignoreErrors*/)
+	}
+	if sym != nil && sym.Flags&ast.SymbolFlagsAlias != 0 {
+		sym = a.c.resolveAlias(sym)
+	}
+	return sym != nil && core.Some(sym.Declarations, ast.IsSharedStructDeclaration)
 }
 
 // Reports whether the elements of an array-typed expression are declared shared, as in

@@ -22,8 +22,8 @@ ownSharedFlow.ts(105,5): error TS96010: Cannot change 'p[0]': it is a shared val
 ownSharedFlow.ts(106,12): error TS96010: Cannot change 'p[0]': it is a shared value, which is immutable.
 ownSharedFlow.ts(107,5): error TS96010: Cannot change 'p': it is a shared value, which is immutable.
 ownSharedFlow.ts(110,5): error TS96010: Cannot change 's': it is a shared value, which is immutable.
-ownSharedFlow.ts(121,50): error TS96009: 'x' cannot be returned as 'sending': it may be referenced by the caller.
-ownSharedFlow.ts(126,5): error TS96001: 'top' cannot be used here: it was sent to 'send' on line 125.
+ownSharedFlow.ts(123,50): error TS96009: 'x' cannot be returned as 'sending': it may be referenced by the caller.
+ownSharedFlow.ts(128,5): error TS96001: 'top' cannot be used here: it was sent to 'send' on line 127.
 
 
 ==== ownSharedFlow.ts (26 errors) ====
@@ -206,6 +206,8 @@ ownSharedFlow.ts(126,5): error TS96001: 'top' cannot be used here: it was sent t
     export function structs(c: Counter) {
         c.n++;                                    // fine: struct fields are cells
         send(c);                                  // fine: shared structs are shared
+        const d = new Counter();
+        [1].forEach(() => send(d));               // fine: new instances of shared structs are shared
     }
     
     export const giveBack = (x: Box): sending Box => x; // error: x is the caller's
@@ -217,6 +219,6 @@ ownSharedFlow.ts(126,5): error TS96001: 'top' cannot be used here: it was sent t
     send(top);
     use(top);                                     // error: top-level code is analyzed too
         ~~~
-!!! error TS96001: 'top' cannot be used here: it was sent to 'send' on line 125.
-!!! related TS96011 ownSharedFlow.ts:125:6: 'top' is sent here.
+!!! error TS96001: 'top' cannot be used here: it was sent to 'send' on line 127.
+!!! related TS96011 ownSharedFlow.ts:127:6: 'top' is sent here.
     

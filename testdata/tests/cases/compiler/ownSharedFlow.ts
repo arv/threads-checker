@@ -122,6 +122,8 @@ export shared struct Counter { n: number }
 export function structs(c: Counter) {
     c.n++;                                    // fine: struct fields are cells
     send(c);                                  // fine: shared structs are shared
+    const d = new Counter();
+    [1].forEach(() => send(d));               // fine: new instances of shared structs are shared
 }
 
 export const giveBack = (x: Box): sending Box => x; // error: x is the caller's
