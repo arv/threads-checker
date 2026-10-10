@@ -1,0 +1,551 @@
+//// [tests/cases/compiler/ownRuntimeModule.ts] ////
+
+=== own.d.mts ===
+// Types for the own/shared threads runtime own.mjs (the runtime itself lives in porffor). Programs
+// import their API from "./own.mjs"; the compiler adds the imports of the helpers it emits
+// (`__sharedStruct`, `__register`) when `ownRuntime` is set.
+//
+// `sending T` marks a value whose ownership moves to the receiver: the sender must not use it
+// afterwards. `shared T` marks a value any number of threads may read at once: deeply immutable, or
+// a cell that synchronizes internally (Slots, Barrier, a shared struct).
+
+/** One slot per thread: a thread publishes into its own slot, and everyone reads every slot. */
+export interface SlotsCell<T> {
+>SlotsCell : Symbol(SlotsCell, Decl(own.d.mts, 0, 0))
+>T : Symbol(T, Decl(own.d.mts, 9, 27))
+
+    readonly length: number;
+>length : Symbol(SlotsCell.length, Decl(own.d.mts, 9, 31))
+
+    /** Publishes `value` in slot `index`, replacing what was there. */
+    set(index: number, value: T): void;
+>set : Symbol(SlotsCell.set, Decl(own.d.mts, 10, 28))
+>index : Symbol(index, Decl(own.d.mts, 12, 8))
+>value : Symbol(value, Decl(own.d.mts, 12, 22))
+>T : Symbol(T, Decl(own.d.mts, 9, 27))
+
+    /** The value in slot `index`. */
+    get(index: number): shared T;
+>get : Symbol(SlotsCell.get, Decl(own.d.mts, 12, 39))
+>index : Symbol(index, Decl(own.d.mts, 14, 8))
+>T : Symbol(T, Decl(own.d.mts, 9, 27))
+
+    /** The arrays in all slots, concatenated in slot order. */
+    flat(): shared (T extends readonly (infer E)[] ? E : T)[];
+>flat : Symbol(SlotsCell.flat, Decl(own.d.mts, 14, 33))
+>T : Symbol(T, Decl(own.d.mts, 9, 27))
+>E : Symbol(E, Decl(own.d.mts, 16, 45))
+>E : Symbol(E, Decl(own.d.mts, 16, 45))
+>T : Symbol(T, Decl(own.d.mts, 9, 27))
+}
+export declare const Slots: new <T>(count: number) => shared SlotsCell<T>;
+>Slots : Symbol(Slots, Decl(own.d.mts, 18, 20))
+>T : Symbol(T, Decl(own.d.mts, 18, 33))
+>count : Symbol(count, Decl(own.d.mts, 18, 36))
+>SlotsCell : Symbol(SlotsCell, Decl(own.d.mts, 0, 0))
+>T : Symbol(T, Decl(own.d.mts, 18, 33))
+
+/** A reusable barrier for a fixed number of threads. */
+export interface BarrierCell {
+>BarrierCell : Symbol(BarrierCell, Decl(own.d.mts, 18, 74))
+
+    /** Blocks until all threads have called `wait`. */
+    wait(): void;
+>wait : Symbol(BarrierCell.wait, Decl(own.d.mts, 21, 30))
+}
+export declare const Barrier: new (threads: number) => shared BarrierCell;
+>Barrier : Symbol(Barrier, Decl(own.d.mts, 25, 20))
+>threads : Symbol(threads, Decl(own.d.mts, 25, 35))
+>BarrierCell : Symbol(BarrierCell, Decl(own.d.mts, 18, 74))
+
+/** Freezes a value the caller owns into a deeply immutable value every thread can read. */
+export declare function share<T>(value: sending T): shared T;
+>share : Symbol(share, Decl(own.d.mts, 25, 74))
+>T : Symbol(T, Decl(own.d.mts, 28, 30))
+>value : Symbol(value, Decl(own.d.mts, 28, 33))
+>T : Symbol(T, Decl(own.d.mts, 28, 30))
+>T : Symbol(T, Decl(own.d.mts, 28, 30))
+
+/** A thread started inside a `scope`; joining it moves the thread's result back. */
+export interface Thread<R> {
+>Thread : Symbol(Thread, Decl(own.d.mts, 28, 61))
+>R : Symbol(R, Decl(own.d.mts, 31, 24))
+
+    join(): sending R;
+>join : Symbol(Thread.join, Decl(own.d.mts, 31, 28))
+>R : Symbol(R, Decl(own.d.mts, 31, 24))
+}
+
+/** Spawns threads that cannot outlive the scope. Every argument is sent to the new thread. */
+export interface Scope {
+>Scope : Symbol(Scope, Decl(own.d.mts, 33, 1))
+
+    spawn<A extends unknown[], R>(f: (...args: A) => sending R, ...args: sending A): shared Thread<R>;
+>spawn : Symbol(Scope.spawn, Decl(own.d.mts, 36, 24))
+>A : Symbol(A, Decl(own.d.mts, 37, 10))
+>R : Symbol(R, Decl(own.d.mts, 37, 30))
+>f : Symbol(f, Decl(own.d.mts, 37, 34))
+>args : Symbol(args, Decl(own.d.mts, 37, 38))
+>A : Symbol(A, Decl(own.d.mts, 37, 10))
+>R : Symbol(R, Decl(own.d.mts, 37, 30))
+>args : Symbol(args, Decl(own.d.mts, 37, 63))
+>A : Symbol(A, Decl(own.d.mts, 37, 10))
+>Thread : Symbol(Thread, Decl(own.d.mts, 28, 61))
+>R : Symbol(R, Decl(own.d.mts, 37, 30))
+}
+
+/** Runs `body` and joins every thread it spawned before returning. */
+export declare function scope<R>(body: (s: shared Scope) => R): R;
+>scope : Symbol(scope, Decl(own.d.mts, 38, 1))
+>R : Symbol(R, Decl(own.d.mts, 41, 30))
+>body : Symbol(body, Decl(own.d.mts, 41, 33))
+>s : Symbol(s, Decl(own.d.mts, 41, 40))
+>Scope : Symbol(Scope, Decl(own.d.mts, 33, 1))
+>R : Symbol(R, Decl(own.d.mts, 41, 30))
+>R : Symbol(R, Decl(own.d.mts, 41, 30))
+
+/** Splits an owned array into `parts` owned, disjoint chunks of nearly equal size. Trusted. */
+export declare function partition<T>(items: sending T[], parts: number): (sending T[])[];
+>partition : Symbol(partition, Decl(own.d.mts, 41, 66))
+>T : Symbol(T, Decl(own.d.mts, 44, 34))
+>items : Symbol(items, Decl(own.d.mts, 44, 37))
+>T : Symbol(T, Decl(own.d.mts, 44, 34))
+>parts : Symbol(parts, Decl(own.d.mts, 44, 56))
+>T : Symbol(T, Decl(own.d.mts, 44, 34))
+
+/** Takes element `index` out of an array of owned values, so the caller owns it. Trusted. */
+export declare function take<T>(items: (sending T)[], index: number): sending T;
+>take : Symbol(take, Decl(own.d.mts, 44, 89))
+>T : Symbol(T, Decl(own.d.mts, 47, 29))
+>items : Symbol(items, Decl(own.d.mts, 47, 32))
+>T : Symbol(T, Decl(own.d.mts, 47, 29))
+>index : Symbol(index, Decl(own.d.mts, 47, 53))
+>T : Symbol(T, Decl(own.d.mts, 47, 29))
+
+/** Prints a line, synchronously, from any thread. */
+export declare function log(...args: unknown[]): void;
+>log : Symbol(log, Decl(own.d.mts, 47, 80))
+>args : Symbol(args, Decl(own.d.mts, 50, 28))
+
+=== nbody.mts ===
+// The n-body example as an ES module for the own.mjs runtime. With `ownRuntime` set, the compiler
+// imports the runtime helpers this module needs and registers its top-level functions, so that
+// spawned threads can find `worker` by name.
+import { Barrier, type BarrierCell, log, partition, scope, share, Slots, type SlotsCell, take, type Thread } from "./own.mjs";
+>Barrier : Symbol(Barrier, Decl(nbody.mts, 3, 8))
+>BarrierCell : Symbol(BarrierCell, Decl(nbody.mts, 3, 17))
+>log : Symbol(log, Decl(nbody.mts, 3, 35))
+>partition : Symbol(partition, Decl(nbody.mts, 3, 40))
+>scope : Symbol(scope, Decl(nbody.mts, 3, 51))
+>share : Symbol(share, Decl(nbody.mts, 3, 58))
+>Slots : Symbol(Slots, Decl(nbody.mts, 3, 65))
+>SlotsCell : Symbol(SlotsCell, Decl(nbody.mts, 3, 72))
+>take : Symbol(take, Decl(nbody.mts, 3, 88))
+>Thread : Symbol(Thread, Decl(nbody.mts, 3, 94))
+
+type Body = { x: number; y: number; z: number; vx: number; vy: number; vz: number; m: number };
+>Body : Symbol(Body, Decl(nbody.mts, 3, 126))
+>x : Symbol(x, Decl(nbody.mts, 5, 13))
+>y : Symbol(y, Decl(nbody.mts, 5, 24))
+>z : Symbol(z, Decl(nbody.mts, 5, 35))
+>vx : Symbol(vx, Decl(nbody.mts, 5, 46))
+>vy : Symbol(vy, Decl(nbody.mts, 5, 58))
+>vz : Symbol(vz, Decl(nbody.mts, 5, 70))
+>m : Symbol(m, Decl(nbody.mts, 5, 82))
+
+type Pos = { x: number; y: number; z: number; m: number };
+>Pos : Symbol(Pos, Decl(nbody.mts, 5, 95))
+>x : Symbol(x, Decl(nbody.mts, 6, 12))
+>y : Symbol(y, Decl(nbody.mts, 6, 23))
+>z : Symbol(z, Decl(nbody.mts, 6, 34))
+>m : Symbol(m, Decl(nbody.mts, 6, 45))
+
+const BODIES = 800, STEPS = 30, DT = 0.001, SOFTEN = 0.01;
+>BODIES : Symbol(BODIES, Decl(nbody.mts, 8, 5))
+>STEPS : Symbol(STEPS, Decl(nbody.mts, 8, 19))
+>DT : Symbol(DT, Decl(nbody.mts, 8, 31))
+>SOFTEN : Symbol(SOFTEN, Decl(nbody.mts, 8, 43))
+
+/** Counts steps across threads. */
+shared struct Progress { steps: number }
+>Progress : Symbol(Progress, Decl(nbody.mts, 8, 58))
+>steps : Symbol(Progress.steps, Decl(nbody.mts, 11, 24))
+
+function makeBodies(): sending Body[] {
+>makeBodies : Symbol(makeBodies, Decl(nbody.mts, 11, 40))
+>Body : Symbol(Body, Decl(nbody.mts, 3, 126))
+
+    let seed = 1;
+>seed : Symbol(seed, Decl(nbody.mts, 14, 7))
+
+    const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+>random : Symbol(random, Decl(nbody.mts, 15, 9))
+>seed : Symbol(seed, Decl(nbody.mts, 14, 7))
+>seed : Symbol(seed, Decl(nbody.mts, 14, 7))
+
+    const bodies: Body[] = [];
+>bodies : Symbol(bodies, Decl(nbody.mts, 16, 9))
+>Body : Symbol(Body, Decl(nbody.mts, 3, 126))
+
+    for (let i = 0; i < BODIES; i++) {
+>i : Symbol(i, Decl(nbody.mts, 17, 12))
+>i : Symbol(i, Decl(nbody.mts, 17, 12))
+>BODIES : Symbol(BODIES, Decl(nbody.mts, 8, 5))
+>i : Symbol(i, Decl(nbody.mts, 17, 12))
+
+        bodies.push({ x: random() * 2 - 1, y: random() * 2 - 1, z: random() * 2 - 1, vx: 0, vy: 0, vz: 0, m: 0.5 + random() });
+>bodies.push : Symbol(Array.push, Decl(lib.es5.d.ts, --, --))
+>bodies : Symbol(bodies, Decl(nbody.mts, 16, 9))
+>push : Symbol(Array.push, Decl(lib.es5.d.ts, --, --))
+>x : Symbol(x, Decl(nbody.mts, 18, 21))
+>random : Symbol(random, Decl(nbody.mts, 15, 9))
+>y : Symbol(y, Decl(nbody.mts, 18, 42))
+>random : Symbol(random, Decl(nbody.mts, 15, 9))
+>z : Symbol(z, Decl(nbody.mts, 18, 63))
+>random : Symbol(random, Decl(nbody.mts, 15, 9))
+>vx : Symbol(vx, Decl(nbody.mts, 18, 84))
+>vy : Symbol(vy, Decl(nbody.mts, 18, 91))
+>vz : Symbol(vz, Decl(nbody.mts, 18, 98))
+>m : Symbol(m, Decl(nbody.mts, 18, 105))
+>random : Symbol(random, Decl(nbody.mts, 15, 9))
+    }
+    return bodies;
+>bodies : Symbol(bodies, Decl(nbody.mts, 16, 9))
+}
+
+function accelerate(mine: Body[], all: readonly shared Pos[]) {
+>accelerate : Symbol(accelerate, Decl(nbody.mts, 21, 1))
+>mine : Symbol(mine, Decl(nbody.mts, 23, 20))
+>Body : Symbol(Body, Decl(nbody.mts, 3, 126))
+>all : Symbol(all, Decl(nbody.mts, 23, 33))
+>Pos : Symbol(Pos, Decl(nbody.mts, 5, 95))
+
+    for (const b of mine) {
+>b : Symbol(b, Decl(nbody.mts, 24, 14))
+>mine : Symbol(mine, Decl(nbody.mts, 23, 20))
+
+        let ax = 0, ay = 0, az = 0;
+>ax : Symbol(ax, Decl(nbody.mts, 25, 11))
+>ay : Symbol(ay, Decl(nbody.mts, 25, 19))
+>az : Symbol(az, Decl(nbody.mts, 25, 27))
+
+        for (const o of all) {
+>o : Symbol(o, Decl(nbody.mts, 26, 18))
+>all : Symbol(all, Decl(nbody.mts, 23, 33))
+
+            const dx = o.x - b.x, dy = o.y - b.y, dz = o.z - b.z;
+>dx : Symbol(dx, Decl(nbody.mts, 27, 17))
+>o.x : Symbol(x, Decl(nbody.mts, 6, 12))
+>o : Symbol(o, Decl(nbody.mts, 26, 18))
+>x : Symbol(x, Decl(nbody.mts, 6, 12))
+>b.x : Symbol(x, Decl(nbody.mts, 5, 13))
+>b : Symbol(b, Decl(nbody.mts, 24, 14))
+>x : Symbol(x, Decl(nbody.mts, 5, 13))
+>dy : Symbol(dy, Decl(nbody.mts, 27, 33))
+>o.y : Symbol(y, Decl(nbody.mts, 6, 23))
+>o : Symbol(o, Decl(nbody.mts, 26, 18))
+>y : Symbol(y, Decl(nbody.mts, 6, 23))
+>b.y : Symbol(y, Decl(nbody.mts, 5, 24))
+>b : Symbol(b, Decl(nbody.mts, 24, 14))
+>y : Symbol(y, Decl(nbody.mts, 5, 24))
+>dz : Symbol(dz, Decl(nbody.mts, 27, 49))
+>o.z : Symbol(z, Decl(nbody.mts, 6, 34))
+>o : Symbol(o, Decl(nbody.mts, 26, 18))
+>z : Symbol(z, Decl(nbody.mts, 6, 34))
+>b.z : Symbol(z, Decl(nbody.mts, 5, 35))
+>b : Symbol(b, Decl(nbody.mts, 24, 14))
+>z : Symbol(z, Decl(nbody.mts, 5, 35))
+
+            const d2 = dx * dx + dy * dy + dz * dz + SOFTEN;
+>d2 : Symbol(d2, Decl(nbody.mts, 28, 17))
+>dx : Symbol(dx, Decl(nbody.mts, 27, 17))
+>dx : Symbol(dx, Decl(nbody.mts, 27, 17))
+>dy : Symbol(dy, Decl(nbody.mts, 27, 33))
+>dy : Symbol(dy, Decl(nbody.mts, 27, 33))
+>dz : Symbol(dz, Decl(nbody.mts, 27, 49))
+>dz : Symbol(dz, Decl(nbody.mts, 27, 49))
+>SOFTEN : Symbol(SOFTEN, Decl(nbody.mts, 8, 43))
+
+            const f = o.m / (d2 * Math.sqrt(d2));
+>f : Symbol(f, Decl(nbody.mts, 29, 17))
+>o.m : Symbol(m, Decl(nbody.mts, 6, 45))
+>o : Symbol(o, Decl(nbody.mts, 26, 18))
+>m : Symbol(m, Decl(nbody.mts, 6, 45))
+>d2 : Symbol(d2, Decl(nbody.mts, 28, 17))
+>Math.sqrt : Symbol(Math.sqrt, Decl(lib.es5.d.ts, --, --))
+>Math : Symbol(Math, Decl(lib.es5.d.ts, --, --), Decl(lib.es5.d.ts, --, --), Decl(lib.es2015.core.d.ts, --, --), Decl(lib.es2015.symbol.wellknown.d.ts, --, --))
+>sqrt : Symbol(Math.sqrt, Decl(lib.es5.d.ts, --, --))
+>d2 : Symbol(d2, Decl(nbody.mts, 28, 17))
+
+            ax += dx * f;
+>ax : Symbol(ax, Decl(nbody.mts, 25, 11))
+>dx : Symbol(dx, Decl(nbody.mts, 27, 17))
+>f : Symbol(f, Decl(nbody.mts, 29, 17))
+
+            ay += dy * f;
+>ay : Symbol(ay, Decl(nbody.mts, 25, 19))
+>dy : Symbol(dy, Decl(nbody.mts, 27, 33))
+>f : Symbol(f, Decl(nbody.mts, 29, 17))
+
+            az += dz * f;
+>az : Symbol(az, Decl(nbody.mts, 25, 27))
+>dz : Symbol(dz, Decl(nbody.mts, 27, 49))
+>f : Symbol(f, Decl(nbody.mts, 29, 17))
+        }
+        b.vx += ax * DT;
+>b.vx : Symbol(vx, Decl(nbody.mts, 5, 46))
+>b : Symbol(b, Decl(nbody.mts, 24, 14))
+>vx : Symbol(vx, Decl(nbody.mts, 5, 46))
+>ax : Symbol(ax, Decl(nbody.mts, 25, 11))
+>DT : Symbol(DT, Decl(nbody.mts, 8, 31))
+
+        b.vy += ay * DT;
+>b.vy : Symbol(vy, Decl(nbody.mts, 5, 58))
+>b : Symbol(b, Decl(nbody.mts, 24, 14))
+>vy : Symbol(vy, Decl(nbody.mts, 5, 58))
+>ay : Symbol(ay, Decl(nbody.mts, 25, 19))
+>DT : Symbol(DT, Decl(nbody.mts, 8, 31))
+
+        b.vz += az * DT;
+>b.vz : Symbol(vz, Decl(nbody.mts, 5, 70))
+>b : Symbol(b, Decl(nbody.mts, 24, 14))
+>vz : Symbol(vz, Decl(nbody.mts, 5, 70))
+>az : Symbol(az, Decl(nbody.mts, 25, 27))
+>DT : Symbol(DT, Decl(nbody.mts, 8, 31))
+    }
+}
+
+function move(mine: Body[]) {
+>move : Symbol(move, Decl(nbody.mts, 38, 1))
+>mine : Symbol(mine, Decl(nbody.mts, 40, 14))
+>Body : Symbol(Body, Decl(nbody.mts, 3, 126))
+
+    for (const b of mine) {
+>b : Symbol(b, Decl(nbody.mts, 41, 14))
+>mine : Symbol(mine, Decl(nbody.mts, 40, 14))
+
+        b.x += b.vx * DT;
+>b.x : Symbol(x, Decl(nbody.mts, 5, 13))
+>b : Symbol(b, Decl(nbody.mts, 41, 14))
+>x : Symbol(x, Decl(nbody.mts, 5, 13))
+>b.vx : Symbol(vx, Decl(nbody.mts, 5, 46))
+>b : Symbol(b, Decl(nbody.mts, 41, 14))
+>vx : Symbol(vx, Decl(nbody.mts, 5, 46))
+>DT : Symbol(DT, Decl(nbody.mts, 8, 31))
+
+        b.y += b.vy * DT;
+>b.y : Symbol(y, Decl(nbody.mts, 5, 24))
+>b : Symbol(b, Decl(nbody.mts, 41, 14))
+>y : Symbol(y, Decl(nbody.mts, 5, 24))
+>b.vy : Symbol(vy, Decl(nbody.mts, 5, 58))
+>b : Symbol(b, Decl(nbody.mts, 41, 14))
+>vy : Symbol(vy, Decl(nbody.mts, 5, 58))
+>DT : Symbol(DT, Decl(nbody.mts, 8, 31))
+
+        b.z += b.vz * DT;
+>b.z : Symbol(z, Decl(nbody.mts, 5, 35))
+>b : Symbol(b, Decl(nbody.mts, 41, 14))
+>z : Symbol(z, Decl(nbody.mts, 5, 35))
+>b.vz : Symbol(vz, Decl(nbody.mts, 5, 70))
+>b : Symbol(b, Decl(nbody.mts, 41, 14))
+>vz : Symbol(vz, Decl(nbody.mts, 5, 70))
+>DT : Symbol(DT, Decl(nbody.mts, 8, 31))
+    }
+}
+
+function energy(bodies: Body[]): number {
+>energy : Symbol(energy, Decl(nbody.mts, 46, 1))
+>bodies : Symbol(bodies, Decl(nbody.mts, 48, 16))
+>Body : Symbol(Body, Decl(nbody.mts, 3, 126))
+
+    let e = 0;
+>e : Symbol(e, Decl(nbody.mts, 49, 7))
+
+    for (const b of bodies) e += 0.5 * b.m * (b.vx * b.vx + b.vy * b.vy + b.vz * b.vz);
+>b : Symbol(b, Decl(nbody.mts, 50, 14))
+>bodies : Symbol(bodies, Decl(nbody.mts, 48, 16))
+>e : Symbol(e, Decl(nbody.mts, 49, 7))
+>b.m : Symbol(m, Decl(nbody.mts, 5, 82))
+>b : Symbol(b, Decl(nbody.mts, 50, 14))
+>m : Symbol(m, Decl(nbody.mts, 5, 82))
+>b.vx : Symbol(vx, Decl(nbody.mts, 5, 46))
+>b : Symbol(b, Decl(nbody.mts, 50, 14))
+>vx : Symbol(vx, Decl(nbody.mts, 5, 46))
+>b.vx : Symbol(vx, Decl(nbody.mts, 5, 46))
+>b : Symbol(b, Decl(nbody.mts, 50, 14))
+>vx : Symbol(vx, Decl(nbody.mts, 5, 46))
+>b.vy : Symbol(vy, Decl(nbody.mts, 5, 58))
+>b : Symbol(b, Decl(nbody.mts, 50, 14))
+>vy : Symbol(vy, Decl(nbody.mts, 5, 58))
+>b.vy : Symbol(vy, Decl(nbody.mts, 5, 58))
+>b : Symbol(b, Decl(nbody.mts, 50, 14))
+>vy : Symbol(vy, Decl(nbody.mts, 5, 58))
+>b.vz : Symbol(vz, Decl(nbody.mts, 5, 70))
+>b : Symbol(b, Decl(nbody.mts, 50, 14))
+>vz : Symbol(vz, Decl(nbody.mts, 5, 70))
+>b.vz : Symbol(vz, Decl(nbody.mts, 5, 70))
+>b : Symbol(b, Decl(nbody.mts, 50, 14))
+>vz : Symbol(vz, Decl(nbody.mts, 5, 70))
+
+    return e;
+>e : Symbol(e, Decl(nbody.mts, 49, 7))
+}
+
+function worker(t: number, mine: sending Body[], board: shared SlotsCell<Pos[]>, barrier: shared BarrierCell, progress: Progress): sending Body[] {
+>worker : Symbol(worker, Decl(nbody.mts, 52, 1))
+>t : Symbol(t, Decl(nbody.mts, 54, 16))
+>mine : Symbol(mine, Decl(nbody.mts, 54, 26))
+>Body : Symbol(Body, Decl(nbody.mts, 3, 126))
+>board : Symbol(board, Decl(nbody.mts, 54, 48))
+>SlotsCell : Symbol(SlotsCell, Decl(nbody.mts, 3, 72))
+>Pos : Symbol(Pos, Decl(nbody.mts, 5, 95))
+>barrier : Symbol(barrier, Decl(nbody.mts, 54, 80))
+>BarrierCell : Symbol(BarrierCell, Decl(nbody.mts, 3, 17))
+>progress : Symbol(progress, Decl(nbody.mts, 54, 109))
+>Progress : Symbol(Progress, Decl(nbody.mts, 8, 58))
+>Body : Symbol(Body, Decl(nbody.mts, 3, 126))
+
+    for (let s = 0; s < STEPS; s++) {
+>s : Symbol(s, Decl(nbody.mts, 55, 12))
+>s : Symbol(s, Decl(nbody.mts, 55, 12))
+>STEPS : Symbol(STEPS, Decl(nbody.mts, 8, 19))
+>s : Symbol(s, Decl(nbody.mts, 55, 12))
+
+        board.set(t, share(mine.map(b => ({ x: b.x, y: b.y, z: b.z, m: b.m }))));
+>board.set : Symbol(SlotsCell.set, Decl(own.d.mts, 10, 28))
+>board : Symbol(board, Decl(nbody.mts, 54, 48))
+>set : Symbol(SlotsCell.set, Decl(own.d.mts, 10, 28))
+>t : Symbol(t, Decl(nbody.mts, 54, 16))
+>share : Symbol(share, Decl(nbody.mts, 3, 58))
+>mine.map : Symbol(Array.map, Decl(lib.es5.d.ts, --, --))
+>mine : Symbol(mine, Decl(nbody.mts, 54, 26))
+>map : Symbol(Array.map, Decl(lib.es5.d.ts, --, --))
+>b : Symbol(b, Decl(nbody.mts, 56, 36))
+>x : Symbol(x, Decl(nbody.mts, 56, 43))
+>b.x : Symbol(x, Decl(nbody.mts, 5, 13))
+>b : Symbol(b, Decl(nbody.mts, 56, 36))
+>x : Symbol(x, Decl(nbody.mts, 5, 13))
+>y : Symbol(y, Decl(nbody.mts, 56, 51))
+>b.y : Symbol(y, Decl(nbody.mts, 5, 24))
+>b : Symbol(b, Decl(nbody.mts, 56, 36))
+>y : Symbol(y, Decl(nbody.mts, 5, 24))
+>z : Symbol(z, Decl(nbody.mts, 56, 59))
+>b.z : Symbol(z, Decl(nbody.mts, 5, 35))
+>b : Symbol(b, Decl(nbody.mts, 56, 36))
+>z : Symbol(z, Decl(nbody.mts, 5, 35))
+>m : Symbol(m, Decl(nbody.mts, 56, 67))
+>b.m : Symbol(m, Decl(nbody.mts, 5, 82))
+>b : Symbol(b, Decl(nbody.mts, 56, 36))
+>m : Symbol(m, Decl(nbody.mts, 5, 82))
+
+        barrier.wait();
+>barrier.wait : Symbol(BarrierCell.wait, Decl(own.d.mts, 21, 30))
+>barrier : Symbol(barrier, Decl(nbody.mts, 54, 80))
+>wait : Symbol(BarrierCell.wait, Decl(own.d.mts, 21, 30))
+
+        accelerate(mine, board.flat());
+>accelerate : Symbol(accelerate, Decl(nbody.mts, 21, 1))
+>mine : Symbol(mine, Decl(nbody.mts, 54, 26))
+>board.flat : Symbol(SlotsCell.flat, Decl(own.d.mts, 14, 33))
+>board : Symbol(board, Decl(nbody.mts, 54, 48))
+>flat : Symbol(SlotsCell.flat, Decl(own.d.mts, 14, 33))
+
+        barrier.wait();
+>barrier.wait : Symbol(BarrierCell.wait, Decl(own.d.mts, 21, 30))
+>barrier : Symbol(barrier, Decl(nbody.mts, 54, 80))
+>wait : Symbol(BarrierCell.wait, Decl(own.d.mts, 21, 30))
+
+        move(mine);
+>move : Symbol(move, Decl(nbody.mts, 38, 1))
+>mine : Symbol(mine, Decl(nbody.mts, 54, 26))
+
+        progress.steps++;
+>progress.steps : Symbol(Progress.steps, Decl(nbody.mts, 11, 24))
+>progress : Symbol(progress, Decl(nbody.mts, 54, 109))
+>steps : Symbol(Progress.steps, Decl(nbody.mts, 11, 24))
+    }
+    return mine;
+>mine : Symbol(mine, Decl(nbody.mts, 54, 26))
+}
+
+function simulate(threads: number): number {
+>simulate : Symbol(simulate, Decl(nbody.mts, 64, 1))
+>threads : Symbol(threads, Decl(nbody.mts, 66, 18))
+
+    const board = new Slots<Pos[]>(threads), barrier = new Barrier(threads), progress = new Progress();
+>board : Symbol(board, Decl(nbody.mts, 67, 9))
+>Slots : Symbol(Slots, Decl(nbody.mts, 3, 65))
+>Pos : Symbol(Pos, Decl(nbody.mts, 5, 95))
+>threads : Symbol(threads, Decl(nbody.mts, 66, 18))
+>barrier : Symbol(barrier, Decl(nbody.mts, 67, 44))
+>Barrier : Symbol(Barrier, Decl(nbody.mts, 3, 8))
+>threads : Symbol(threads, Decl(nbody.mts, 66, 18))
+>progress : Symbol(progress, Decl(nbody.mts, 67, 76))
+>Progress : Symbol(Progress, Decl(nbody.mts, 8, 58))
+
+    return scope(s => {
+>scope : Symbol(scope, Decl(nbody.mts, 3, 51))
+>s : Symbol(s, Decl(nbody.mts, 68, 17))
+
+        const parts = partition(makeBodies(), threads);
+>parts : Symbol(parts, Decl(nbody.mts, 69, 13))
+>partition : Symbol(partition, Decl(nbody.mts, 3, 40))
+>makeBodies : Symbol(makeBodies, Decl(nbody.mts, 11, 40))
+>threads : Symbol(threads, Decl(nbody.mts, 66, 18))
+
+        const ts: (shared Thread<Body[]>)[] = [];
+>ts : Symbol(ts, Decl(nbody.mts, 70, 13))
+>Thread : Symbol(Thread, Decl(nbody.mts, 3, 94))
+>Body : Symbol(Body, Decl(nbody.mts, 3, 126))
+
+        for (let t = 0; t < threads; t++) ts.push(s.spawn(worker, t, take(parts, t), board, barrier, progress));
+>t : Symbol(t, Decl(nbody.mts, 71, 16))
+>t : Symbol(t, Decl(nbody.mts, 71, 16))
+>threads : Symbol(threads, Decl(nbody.mts, 66, 18))
+>t : Symbol(t, Decl(nbody.mts, 71, 16))
+>ts.push : Symbol(Array.push, Decl(lib.es5.d.ts, --, --))
+>ts : Symbol(ts, Decl(nbody.mts, 70, 13))
+>push : Symbol(Array.push, Decl(lib.es5.d.ts, --, --))
+>s.spawn : Symbol(Scope.spawn, Decl(own.d.mts, 36, 24))
+>s : Symbol(s, Decl(nbody.mts, 68, 17))
+>spawn : Symbol(Scope.spawn, Decl(own.d.mts, 36, 24))
+>worker : Symbol(worker, Decl(nbody.mts, 52, 1))
+>t : Symbol(t, Decl(nbody.mts, 71, 16))
+>take : Symbol(take, Decl(nbody.mts, 3, 88))
+>parts : Symbol(parts, Decl(nbody.mts, 69, 13))
+>t : Symbol(t, Decl(nbody.mts, 71, 16))
+>board : Symbol(board, Decl(nbody.mts, 67, 9))
+>barrier : Symbol(barrier, Decl(nbody.mts, 67, 44))
+>progress : Symbol(progress, Decl(nbody.mts, 67, 76))
+
+        return energy(ts.flatMap(th => th.join()));
+>energy : Symbol(energy, Decl(nbody.mts, 46, 1))
+>ts.flatMap : Symbol(Array.flatMap, Decl(lib.es2019.array.d.ts, --, --))
+>ts : Symbol(ts, Decl(nbody.mts, 70, 13))
+>flatMap : Symbol(Array.flatMap, Decl(lib.es2019.array.d.ts, --, --))
+>th : Symbol(th, Decl(nbody.mts, 72, 33))
+>th.join : Symbol(Thread.join, Decl(own.d.mts, 31, 28))
+>th : Symbol(th, Decl(nbody.mts, 72, 33))
+>join : Symbol(Thread.join, Decl(own.d.mts, 31, 28))
+
+    });
+}
+
+export function main(threadCounts: readonly number[]) {
+>main : Symbol(main, Decl(nbody.mts, 74, 1))
+>threadCounts : Symbol(threadCounts, Decl(nbody.mts, 76, 21))
+
+    for (const threads of threadCounts) {
+>threads : Symbol(threads, Decl(nbody.mts, 77, 14))
+>threadCounts : Symbol(threadCounts, Decl(nbody.mts, 76, 21))
+
+        log(`threads ${threads}  kinetic energy ${simulate(threads).toFixed(6)}`);
+>log : Symbol(log, Decl(nbody.mts, 3, 35))
+>threads : Symbol(threads, Decl(nbody.mts, 77, 14))
+>simulate(threads).toFixed : Symbol(Number.toFixed, Decl(lib.es5.d.ts, --, --))
+>simulate : Symbol(simulate, Decl(nbody.mts, 64, 1))
+>threads : Symbol(threads, Decl(nbody.mts, 77, 14))
+>toFixed : Symbol(Number.toFixed, Decl(lib.es5.d.ts, --, --))
+    }
+}
+

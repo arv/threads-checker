@@ -1,0 +1,620 @@
+//// [tests/cases/compiler/ownRuntimeModule.ts] ////
+
+=== own.d.mts ===
+// Types for the own/shared threads runtime own.mjs (the runtime itself lives in porffor). Programs
+// import their API from "./own.mjs"; the compiler adds the imports of the helpers it emits
+// (`__sharedStruct`, `__register`) when `ownRuntime` is set.
+//
+// `sending T` marks a value whose ownership moves to the receiver: the sender must not use it
+// afterwards. `shared T` marks a value any number of threads may read at once: deeply immutable, or
+// a cell that synchronizes internally (Slots, Barrier, a shared struct).
+
+/** One slot per thread: a thread publishes into its own slot, and everyone reads every slot. */
+export interface SlotsCell<T> {
+    readonly length: number;
+>length : number
+
+    /** Publishes `value` in slot `index`, replacing what was there. */
+    set(index: number, value: T): void;
+>set : (index: number, value: T) => void
+>index : number
+>value : T
+
+    /** The value in slot `index`. */
+    get(index: number): shared T;
+>get : (index: number) => shared T
+>index : number
+
+    /** The arrays in all slots, concatenated in slot order. */
+    flat(): shared (T extends readonly (infer E)[] ? E : T)[];
+>flat : () => shared (T extends readonly (infer E)[] ? E : T)[]
+}
+export declare const Slots: new <T>(count: number) => shared SlotsCell<T>;
+>Slots : new <T>(count: number) => shared SlotsCell<T>
+>count : number
+
+/** A reusable barrier for a fixed number of threads. */
+export interface BarrierCell {
+    /** Blocks until all threads have called `wait`. */
+    wait(): void;
+>wait : () => void
+}
+export declare const Barrier: new (threads: number) => shared BarrierCell;
+>Barrier : new (threads: number) => shared BarrierCell
+>threads : number
+
+/** Freezes a value the caller owns into a deeply immutable value every thread can read. */
+export declare function share<T>(value: sending T): shared T;
+>share : <T>(value: sending T) => shared T
+>value : T
+
+/** A thread started inside a `scope`; joining it moves the thread's result back. */
+export interface Thread<R> {
+    join(): sending R;
+>join : () => sending R
+}
+
+/** Spawns threads that cannot outlive the scope. Every argument is sent to the new thread. */
+export interface Scope {
+    spawn<A extends unknown[], R>(f: (...args: A) => sending R, ...args: sending A): shared Thread<R>;
+>spawn : <A extends unknown[], R>(f: (...args: A) => sending R, ...args: sending A) => shared Thread<R>
+>f : (...args: A) => sending R
+>args : A
+>args : A
+}
+
+/** Runs `body` and joins every thread it spawned before returning. */
+export declare function scope<R>(body: (s: shared Scope) => R): R;
+>scope : <R>(body: (s: shared Scope) => R) => R
+>body : (s: shared Scope) => R
+>s : Scope
+
+/** Splits an owned array into `parts` owned, disjoint chunks of nearly equal size. Trusted. */
+export declare function partition<T>(items: sending T[], parts: number): (sending T[])[];
+>partition : <T>(items: sending T[], parts: number) => (sending T[])[]
+>items : T[]
+>parts : number
+
+/** Takes element `index` out of an array of owned values, so the caller owns it. Trusted. */
+export declare function take<T>(items: (sending T)[], index: number): sending T;
+>take : <T>(items: (sending T)[], index: number) => sending T
+>items : T[]
+>index : number
+
+/** Prints a line, synchronously, from any thread. */
+export declare function log(...args: unknown[]): void;
+>log : (...args: unknown[]) => void
+>args : unknown[]
+
+=== nbody.mts ===
+// The n-body example as an ES module for the own.mjs runtime. With `ownRuntime` set, the compiler
+// imports the runtime helpers this module needs and registers its top-level functions, so that
+// spawned threads can find `worker` by name.
+import { Barrier, type BarrierCell, log, partition, scope, share, Slots, type SlotsCell, take, type Thread } from "./own.mjs";
+>Barrier : new (threads: number) => shared BarrierCell
+>BarrierCell : any
+>log : (...args: unknown[]) => void
+>partition : <T>(items: sending T[], parts: number) => (sending T[])[]
+>scope : <R>(body: (s: shared import("./own.mjs").Scope) => R) => R
+>share : <T>(value: sending T) => shared T
+>Slots : new <T>(count: number) => shared SlotsCell<T>
+>SlotsCell : any
+>take : <T>(items: (sending T)[], index: number) => sending T
+>Thread : any
+
+type Body = { x: number; y: number; z: number; vx: number; vy: number; vz: number; m: number };
+>Body : Body
+>x : number
+>y : number
+>z : number
+>vx : number
+>vy : number
+>vz : number
+>m : number
+
+type Pos = { x: number; y: number; z: number; m: number };
+>Pos : Pos
+>x : number
+>y : number
+>z : number
+>m : number
+
+const BODIES = 800, STEPS = 30, DT = 0.001, SOFTEN = 0.01;
+>BODIES : 800
+>800 : 800
+>STEPS : 30
+>30 : 30
+>DT : 0.001
+>0.001 : 0.001
+>SOFTEN : 0.01
+>0.01 : 0.01
+
+/** Counts steps across threads. */
+shared struct Progress { steps: number }
+>Progress : Progress
+>steps : number
+
+function makeBodies(): sending Body[] {
+>makeBodies : () => sending Body[]
+
+    let seed = 1;
+>seed : number
+>1 : 1
+
+    const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+>random : () => number
+>() => (seed = (seed * 16807) % 2147483647) / 2147483647 : () => number
+>(seed = (seed * 16807) % 2147483647) / 2147483647 : number
+>(seed = (seed * 16807) % 2147483647) : number
+>seed = (seed * 16807) % 2147483647 : number
+>seed : number
+>(seed * 16807) % 2147483647 : number
+>(seed * 16807) : number
+>seed * 16807 : number
+>seed : number
+>16807 : 16807
+>2147483647 : 2147483647
+>2147483647 : 2147483647
+
+    const bodies: Body[] = [];
+>bodies : Body[]
+>[] : never[]
+
+    for (let i = 0; i < BODIES; i++) {
+>i : number
+>0 : 0
+>i < BODIES : boolean
+>i : number
+>BODIES : 800
+>i++ : number
+>i : number
+
+        bodies.push({ x: random() * 2 - 1, y: random() * 2 - 1, z: random() * 2 - 1, vx: 0, vy: 0, vz: 0, m: 0.5 + random() });
+>bodies.push({ x: random() * 2 - 1, y: random() * 2 - 1, z: random() * 2 - 1, vx: 0, vy: 0, vz: 0, m: 0.5 + random() }) : number
+>bodies.push : (...items: Body[]) => number
+>bodies : Body[]
+>push : (...items: Body[]) => number
+>{ x: random() * 2 - 1, y: random() * 2 - 1, z: random() * 2 - 1, vx: 0, vy: 0, vz: 0, m: 0.5 + random() } : { x: number; y: number; z: number; vx: number; vy: number; vz: number; m: number; }
+>x : number
+>random() * 2 - 1 : number
+>random() * 2 : number
+>random() : number
+>random : () => number
+>2 : 2
+>1 : 1
+>y : number
+>random() * 2 - 1 : number
+>random() * 2 : number
+>random() : number
+>random : () => number
+>2 : 2
+>1 : 1
+>z : number
+>random() * 2 - 1 : number
+>random() * 2 : number
+>random() : number
+>random : () => number
+>2 : 2
+>1 : 1
+>vx : number
+>0 : 0
+>vy : number
+>0 : 0
+>vz : number
+>0 : 0
+>m : number
+>0.5 + random() : number
+>0.5 : 0.5
+>random() : number
+>random : () => number
+    }
+    return bodies;
+>bodies : Body[]
+}
+
+function accelerate(mine: Body[], all: readonly shared Pos[]) {
+>accelerate : (mine: Body[], all: readonly shared Pos[]) => void
+>mine : Body[]
+>all : readonly Pos[]
+
+    for (const b of mine) {
+>b : Body
+>mine : Body[]
+
+        let ax = 0, ay = 0, az = 0;
+>ax : number
+>0 : 0
+>ay : number
+>0 : 0
+>az : number
+>0 : 0
+
+        for (const o of all) {
+>o : Pos
+>all : readonly Pos[]
+
+            const dx = o.x - b.x, dy = o.y - b.y, dz = o.z - b.z;
+>dx : number
+>o.x - b.x : number
+>o.x : number
+>o : Pos
+>x : number
+>b.x : number
+>b : Body
+>x : number
+>dy : number
+>o.y - b.y : number
+>o.y : number
+>o : Pos
+>y : number
+>b.y : number
+>b : Body
+>y : number
+>dz : number
+>o.z - b.z : number
+>o.z : number
+>o : Pos
+>z : number
+>b.z : number
+>b : Body
+>z : number
+
+            const d2 = dx * dx + dy * dy + dz * dz + SOFTEN;
+>d2 : number
+>dx * dx + dy * dy + dz * dz + SOFTEN : number
+>dx * dx + dy * dy + dz * dz : number
+>dx * dx + dy * dy : number
+>dx * dx : number
+>dx : number
+>dx : number
+>dy * dy : number
+>dy : number
+>dy : number
+>dz * dz : number
+>dz : number
+>dz : number
+>SOFTEN : 0.01
+
+            const f = o.m / (d2 * Math.sqrt(d2));
+>f : number
+>o.m / (d2 * Math.sqrt(d2)) : number
+>o.m : number
+>o : Pos
+>m : number
+>(d2 * Math.sqrt(d2)) : number
+>d2 * Math.sqrt(d2) : number
+>d2 : number
+>Math.sqrt(d2) : number
+>Math.sqrt : (x: number) => number
+>Math : Math
+>sqrt : (x: number) => number
+>d2 : number
+
+            ax += dx * f;
+>ax += dx * f : number
+>ax : number
+>dx * f : number
+>dx : number
+>f : number
+
+            ay += dy * f;
+>ay += dy * f : number
+>ay : number
+>dy * f : number
+>dy : number
+>f : number
+
+            az += dz * f;
+>az += dz * f : number
+>az : number
+>dz * f : number
+>dz : number
+>f : number
+        }
+        b.vx += ax * DT;
+>b.vx += ax * DT : number
+>b.vx : number
+>b : Body
+>vx : number
+>ax * DT : number
+>ax : number
+>DT : 0.001
+
+        b.vy += ay * DT;
+>b.vy += ay * DT : number
+>b.vy : number
+>b : Body
+>vy : number
+>ay * DT : number
+>ay : number
+>DT : 0.001
+
+        b.vz += az * DT;
+>b.vz += az * DT : number
+>b.vz : number
+>b : Body
+>vz : number
+>az * DT : number
+>az : number
+>DT : 0.001
+    }
+}
+
+function move(mine: Body[]) {
+>move : (mine: Body[]) => void
+>mine : Body[]
+
+    for (const b of mine) {
+>b : Body
+>mine : Body[]
+
+        b.x += b.vx * DT;
+>b.x += b.vx * DT : number
+>b.x : number
+>b : Body
+>x : number
+>b.vx * DT : number
+>b.vx : number
+>b : Body
+>vx : number
+>DT : 0.001
+
+        b.y += b.vy * DT;
+>b.y += b.vy * DT : number
+>b.y : number
+>b : Body
+>y : number
+>b.vy * DT : number
+>b.vy : number
+>b : Body
+>vy : number
+>DT : 0.001
+
+        b.z += b.vz * DT;
+>b.z += b.vz * DT : number
+>b.z : number
+>b : Body
+>z : number
+>b.vz * DT : number
+>b.vz : number
+>b : Body
+>vz : number
+>DT : 0.001
+    }
+}
+
+function energy(bodies: Body[]): number {
+>energy : (bodies: Body[]) => number
+>bodies : Body[]
+
+    let e = 0;
+>e : number
+>0 : 0
+
+    for (const b of bodies) e += 0.5 * b.m * (b.vx * b.vx + b.vy * b.vy + b.vz * b.vz);
+>b : Body
+>bodies : Body[]
+>e += 0.5 * b.m * (b.vx * b.vx + b.vy * b.vy + b.vz * b.vz) : number
+>e : number
+>0.5 * b.m * (b.vx * b.vx + b.vy * b.vy + b.vz * b.vz) : number
+>0.5 * b.m : number
+>0.5 : 0.5
+>b.m : number
+>b : Body
+>m : number
+>(b.vx * b.vx + b.vy * b.vy + b.vz * b.vz) : number
+>b.vx * b.vx + b.vy * b.vy + b.vz * b.vz : number
+>b.vx * b.vx + b.vy * b.vy : number
+>b.vx * b.vx : number
+>b.vx : number
+>b : Body
+>vx : number
+>b.vx : number
+>b : Body
+>vx : number
+>b.vy * b.vy : number
+>b.vy : number
+>b : Body
+>vy : number
+>b.vy : number
+>b : Body
+>vy : number
+>b.vz * b.vz : number
+>b.vz : number
+>b : Body
+>vz : number
+>b.vz : number
+>b : Body
+>vz : number
+
+    return e;
+>e : number
+}
+
+function worker(t: number, mine: sending Body[], board: shared SlotsCell<Pos[]>, barrier: shared BarrierCell, progress: Progress): sending Body[] {
+>worker : (t: number, mine: sending Body[], board: shared SlotsCell<Pos[]>, barrier: shared BarrierCell, progress: Progress) => sending Body[]
+>t : number
+>mine : Body[]
+>board : SlotsCell<Pos[]>
+>barrier : BarrierCell
+>progress : Progress
+
+    for (let s = 0; s < STEPS; s++) {
+>s : number
+>0 : 0
+>s < STEPS : boolean
+>s : number
+>STEPS : 30
+>s++ : number
+>s : number
+
+        board.set(t, share(mine.map(b => ({ x: b.x, y: b.y, z: b.z, m: b.m }))));
+>board.set(t, share(mine.map(b => ({ x: b.x, y: b.y, z: b.z, m: b.m })))) : void
+>board.set : (index: number, value: Pos[]) => void
+>board : SlotsCell<Pos[]>
+>set : (index: number, value: Pos[]) => void
+>t : number
+>share(mine.map(b => ({ x: b.x, y: b.y, z: b.z, m: b.m }))) : { x: number; y: number; z: number; m: number; }[]
+>share : <T>(value: sending T) => shared T
+>mine.map(b => ({ x: b.x, y: b.y, z: b.z, m: b.m })) : { x: number; y: number; z: number; m: number; }[]
+>mine.map : <U>(callbackfn: (value: Body, index: number, array: Body[]) => U, thisArg?: any) => U[]
+>mine : Body[]
+>map : <U>(callbackfn: (value: Body, index: number, array: Body[]) => U, thisArg?: any) => U[]
+>b => ({ x: b.x, y: b.y, z: b.z, m: b.m }) : (b: Body) => { x: number; y: number; z: number; m: number; }
+>b : Body
+>({ x: b.x, y: b.y, z: b.z, m: b.m }) : { x: number; y: number; z: number; m: number; }
+>{ x: b.x, y: b.y, z: b.z, m: b.m } : { x: number; y: number; z: number; m: number; }
+>x : number
+>b.x : number
+>b : Body
+>x : number
+>y : number
+>b.y : number
+>b : Body
+>y : number
+>z : number
+>b.z : number
+>b : Body
+>z : number
+>m : number
+>b.m : number
+>b : Body
+>m : number
+
+        barrier.wait();
+>barrier.wait() : void
+>barrier.wait : () => void
+>barrier : BarrierCell
+>wait : () => void
+
+        accelerate(mine, board.flat());
+>accelerate(mine, board.flat()) : void
+>accelerate : (mine: Body[], all: readonly shared Pos[]) => void
+>mine : Body[]
+>board.flat() : Pos[]
+>board.flat : () => Pos[]
+>board : SlotsCell<Pos[]>
+>flat : () => Pos[]
+
+        barrier.wait();
+>barrier.wait() : void
+>barrier.wait : () => void
+>barrier : BarrierCell
+>wait : () => void
+
+        move(mine);
+>move(mine) : void
+>move : (mine: Body[]) => void
+>mine : Body[]
+
+        progress.steps++;
+>progress.steps++ : number
+>progress.steps : number
+>progress : Progress
+>steps : number
+    }
+    return mine;
+>mine : Body[]
+}
+
+function simulate(threads: number): number {
+>simulate : (threads: number) => number
+>threads : number
+
+    const board = new Slots<Pos[]>(threads), barrier = new Barrier(threads), progress = new Progress();
+>board : SlotsCell<Pos[]>
+>new Slots<Pos[]>(threads) : SlotsCell<Pos[]>
+>Slots : new <T>(count: number) => shared SlotsCell<T>
+>threads : number
+>barrier : BarrierCell
+>new Barrier(threads) : BarrierCell
+>Barrier : new (threads: number) => shared BarrierCell
+>threads : number
+>progress : any
+>new Progress() : any
+>Progress : any
+
+    return scope(s => {
+>scope(s => {        const parts = partition(makeBodies(), threads);        const ts: (shared Thread<Body[]>)[] = [];        for (let t = 0; t < threads; t++) ts.push(s.spawn(worker, t, take(parts, t), board, barrier, progress));        return energy(ts.flatMap(th => th.join()));    }) : number
+>scope : <R>(body: (s: shared import("./own.mjs").Scope) => R) => R
+>s => {        const parts = partition(makeBodies(), threads);        const ts: (shared Thread<Body[]>)[] = [];        for (let t = 0; t < threads; t++) ts.push(s.spawn(worker, t, take(parts, t), board, barrier, progress));        return energy(ts.flatMap(th => th.join()));    } : (s: import("./own.mjs").Scope) => number
+>s : import("./own.mjs").Scope
+
+        const parts = partition(makeBodies(), threads);
+>parts : Body[][]
+>partition(makeBodies(), threads) : Body[][]
+>partition : <T>(items: sending T[], parts: number) => (sending T[])[]
+>makeBodies() : Body[]
+>makeBodies : () => sending Body[]
+>threads : number
+
+        const ts: (shared Thread<Body[]>)[] = [];
+>ts : Thread<Body[]>[]
+>[] : never[]
+
+        for (let t = 0; t < threads; t++) ts.push(s.spawn(worker, t, take(parts, t), board, barrier, progress));
+>t : number
+>0 : 0
+>t < threads : boolean
+>t : number
+>threads : number
+>t++ : number
+>t : number
+>ts.push(s.spawn(worker, t, take(parts, t), board, barrier, progress)) : number
+>ts.push : (...items: Thread<Body[]>[]) => number
+>ts : Thread<Body[]>[]
+>push : (...items: Thread<Body[]>[]) => number
+>s.spawn(worker, t, take(parts, t), board, barrier, progress) : Thread<Body[]>
+>s.spawn : <A extends unknown[], R>(f: (...args: A) => sending R, ...args: sending A) => shared Thread<R>
+>s : import("./own.mjs").Scope
+>spawn : <A extends unknown[], R>(f: (...args: A) => sending R, ...args: sending A) => shared Thread<R>
+>worker : (t: number, mine: sending Body[], board: shared SlotsCell<Pos[]>, barrier: shared BarrierCell, progress: Progress) => sending Body[]
+>t : number
+>take(parts, t) : Body[]
+>take : <T>(items: (sending T)[], index: number) => sending T
+>parts : Body[][]
+>t : number
+>board : SlotsCell<Pos[]>
+>barrier : BarrierCell
+>progress : any
+
+        return energy(ts.flatMap(th => th.join()));
+>energy(ts.flatMap(th => th.join())) : number
+>energy : (bodies: Body[]) => number
+>ts.flatMap(th => th.join()) : Body[]
+>ts.flatMap : <U, This = undefined>(callback: (this: This, value: Thread<Body[]>, index: number, array: Thread<Body[]>[]) => U | readonly U[], thisArg?: This | undefined) => U[]
+>ts : Thread<Body[]>[]
+>flatMap : <U, This = undefined>(callback: (this: This, value: Thread<Body[]>, index: number, array: Thread<Body[]>[]) => U | readonly U[], thisArg?: This | undefined) => U[]
+>th => th.join() : (this: undefined, th: Thread<Body[]>) => Body[]
+>th : Thread<Body[]>
+>th.join() : Body[]
+>th.join : () => Body[]
+>th : Thread<Body[]>
+>join : () => Body[]
+
+    });
+}
+
+export function main(threadCounts: readonly number[]) {
+>main : (threadCounts: readonly number[]) => void
+>threadCounts : readonly number[]
+
+    for (const threads of threadCounts) {
+>threads : number
+>threadCounts : readonly number[]
+
+        log(`threads ${threads}  kinetic energy ${simulate(threads).toFixed(6)}`);
+>log(`threads ${threads}  kinetic energy ${simulate(threads).toFixed(6)}`) : void
+>log : (...args: unknown[]) => void
+>`threads ${threads}  kinetic energy ${simulate(threads).toFixed(6)}` : string
+>threads : number
+>simulate(threads).toFixed(6) : string
+>simulate(threads).toFixed : (fractionDigits?: number) => string
+>simulate(threads) : number
+>simulate : (threads: number) => number
+>threads : number
+>toFixed : (fractionDigits?: number) => string
+>6 : 6
+    }
+}
+
