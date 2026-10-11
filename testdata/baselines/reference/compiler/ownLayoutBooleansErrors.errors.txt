@@ -1,9 +1,9 @@
-errors.mts(4,27): error TS96015: A shared struct field must be a number, a boolean, a shared struct or a SharedArray.
-errors.mts(4,45): error TS96015: A shared struct field must be a number, a boolean, a shared struct or a SharedArray.
-errors.mts(4,58): error TS96015: A shared struct field must be a number, a boolean, a shared struct or a SharedArray.
-errors.mts(7,31): error TS96015: A shared struct field must be a number, a boolean, a shared struct or a SharedArray.
-errors.mts(9,19): error TS96016: The elements of a SharedArray must be numbers, booleans or a shared struct.
-errors.mts(10,20): error TS96016: The elements of a SharedArray must be numbers, booleans or a shared struct.
+errors.mts(4,27): error TS96015: A shared struct field must be a number, a boolean, a string, a shared struct or a SharedArray.
+errors.mts(4,45): error TS96015: A shared struct field must be a number, a boolean, a string, a shared struct or a SharedArray.
+errors.mts(4,58): error TS96015: A shared struct field must be a number, a boolean, a string, a shared struct or a SharedArray.
+errors.mts(7,31): error TS96015: A shared struct field must be a number, a boolean, a string, a shared struct or a SharedArray.
+errors.mts(9,19): error TS96016: The elements of a SharedArray must be numbers, booleans, strings or a shared struct.
+errors.mts(10,20): error TS96016: The elements of a SharedArray must be numbers, booleans, strings or a shared struct.
 
 
 ==== threads.d.mts (0 errors) ====
@@ -174,25 +174,25 @@ errors.mts(10,20): error TS96016: The elements of a SharedArray must be numbers,
 ==== errors.mts (6 errors) ====
     import { bool, f64, SharedArray, struct } from "./threads.mjs";
     
-    interface Bad { name: string; maybe: boolean | null; either: boolean | number; ok: boolean }
+    interface Bad { name: bigint; maybe: boolean | null; either: boolean | number; ok: boolean }
     const Bad = struct<Bad>({ name: f64 as any, maybe: bool, either: bool, ok: bool }); // error: all but ok
                               ~~~~~~~~~~~~~~~~
-!!! error TS96015: A shared struct field must be a number, a boolean, a shared struct or a SharedArray.
+!!! error TS96015: A shared struct field must be a number, a boolean, a string, a shared struct or a SharedArray.
                                                 ~~~~~~~~~~~
-!!! error TS96015: A shared struct field must be a number, a boolean, a shared struct or a SharedArray.
+!!! error TS96015: A shared struct field must be a number, a boolean, a string, a shared struct or a SharedArray.
                                                              ~~~~~~~~~~~~
-!!! error TS96015: A shared struct field must be a number, a boolean, a shared struct or a SharedArray.
+!!! error TS96015: A shared struct field must be a number, a boolean, a string, a shared struct or a SharedArray.
     
     interface Loose { flag: boolean | undefined; n: number }
     const Loose = struct<Loose>({ flag: bool, n: f64 });       // error: flag may be undefined
                                   ~~~~~~~~~~
-!!! error TS96015: A shared struct field must be a number, a boolean, a shared struct or a SharedArray.
+!!! error TS96015: A shared struct field must be a number, a boolean, a string, a shared struct or a SharedArray.
     
-    export let names: SharedArray<string> | undefined;
+    export let names: SharedArray<bigint> | undefined;
                       ~~~~~~~~~~~~~~~~~~~
-!!! error TS96016: The elements of a SharedArray must be numbers, booleans or a shared struct.
+!!! error TS96016: The elements of a SharedArray must be numbers, booleans, strings or a shared struct.
     export let maybes: SharedArray<boolean | null> | undefined;
                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~
-!!! error TS96016: The elements of a SharedArray must be numbers, booleans or a shared struct.
+!!! error TS96016: The elements of a SharedArray must be numbers, booleans, strings or a shared struct.
     export const flags: SharedArray<boolean> = new SharedArray(Boolean, 4);
     

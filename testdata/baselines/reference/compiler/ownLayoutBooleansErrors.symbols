@@ -447,7 +447,7 @@ import { bool, f64, SharedArray, struct } from "./threads.mjs";
 >SharedArray : Symbol(SharedArray, Decl(errors.mts, 0, 19))
 >struct : Symbol(struct, Decl(errors.mts, 0, 32))
 
-interface Bad { name: string; maybe: boolean | null; either: boolean | number; ok: boolean }
+interface Bad { name: bigint; maybe: boolean | null; either: boolean | number; ok: boolean }
 >Bad : Symbol(Bad, Decl(errors.mts, 0, 63), Decl(errors.mts, 3, 5))
 >name : Symbol(Bad.name, Decl(errors.mts, 2, 15))
 >maybe : Symbol(Bad.maybe, Decl(errors.mts, 2, 29))
@@ -481,7 +481,7 @@ const Loose = struct<Loose>({ flag: bool, n: f64 });       // error: flag may be
 >n : Symbol(n, Decl(errors.mts, 6, 41))
 >f64 : Symbol(f64, Decl(errors.mts, 0, 14))
 
-export let names: SharedArray<string> | undefined;
+export let names: SharedArray<bigint> | undefined;
 >names : Symbol(names, Decl(errors.mts, 8, 10))
 >SharedArray : Symbol(SharedArray, Decl(errors.mts, 0, 19))
 

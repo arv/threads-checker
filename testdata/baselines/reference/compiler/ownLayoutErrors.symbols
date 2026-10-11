@@ -190,11 +190,11 @@ export shared struct Good { a: number; b: Good; c: SharedArray<number>; d: Share
 export shared struct Bad {
 >Bad : Symbol(Bad, Decl(errors.mts, 2, 94))
 
-    s: string;
+    s: string | null;
 >s : Symbol(Bad.s, Decl(errors.mts, 3, 26))
 
     f: boolean | null;
->f : Symbol(Bad.f, Decl(errors.mts, 4, 14))
+>f : Symbol(Bad.f, Decl(errors.mts, 4, 21))
 
     o?: number;
 >o : Symbol(Bad.o, Decl(errors.mts, 5, 22))
@@ -209,7 +209,7 @@ export shared struct Bad {
 >obj : Symbol(Bad.obj, Decl(errors.mts, 8, 18))
 >x : Symbol(x, Decl(errors.mts, 9, 10))
 
-    t: SharedArray<string>;
+    t: SharedArray<bigint>;
 >t : Symbol(Bad.t, Decl(errors.mts, 9, 23))
 >SharedArray : Symbol(SharedArray, Decl(errors.mts, 0, 8))
 }
@@ -236,7 +236,7 @@ export function elements(a: SharedArray<Good>, g: Good, i: number, maybe: Good |
 >maybe : Symbol(maybe, Decl(errors.mts, 13, 66))
 >a : Symbol(Good.a, Decl(errors.mts, 2, 27))
 
-    const bad = new SharedArray<string>(Good as any, 3);
+    const bad = new SharedArray<bigint>(Good as any, 3);
 >bad : Symbol(bad, Decl(errors.mts, 16, 9))
 >SharedArray : Symbol(SharedArray, Decl(errors.mts, 0, 8))
 >Good : Symbol(Good, Decl(errors.mts, 0, 40))

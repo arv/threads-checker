@@ -142,6 +142,7 @@ type ownStructInfo struct {
 	fields []string
 	refs   []bool // per field: a shared struct or a SharedArray (an address)
 	bools  []bool // per field: a boolean (a byte)
+	strs   []bool // per field: a string (an interned string's address)
 }
 
 // The `struct(...)` calls of the program's source files, by the type of their structs' values
@@ -182,7 +183,8 @@ func (c *Checker) getOwnStructTypeOfCall(call *ast.Node) *Type {
 }
 
 // The layout of the struct a `struct(...)` call declares: its fields in the order of the object
-// literal, numbers (`f64`), booleans (`bool`) and references (`ref<T>()`) by their type.
+// literal, numbers (`f64`), booleans (`bool`), strings (`str`) and references (`ref<T>()`) by their
+// type.
 func (c *Checker) getOwnStructOfCall(call *ast.Node) *ownStructInfo {
 	if info, ok := c.ownLayout.structCalls[call]; ok {
 		return info
@@ -203,14 +205,15 @@ func (c *Checker) getOwnStructOfCall(call *ast.Node) *ownStructInfo {
 				continue // reported by checkOwnStructCall
 			}
 			field := name.Text()
-			isRef, isBool := false, false
+			isRef, isBool, isStr := false, false, false
 			if symbol := c.getPropertyOfType(t, field); symbol != nil {
 				ft := c.getTypeOfSymbol(symbol)
-				isRef, isBool = c.isOwnCellType(ft), isOwnBooleanType(ft)
+				isRef, isBool, isStr = c.isOwnCellType(ft), isOwnBooleanType(ft), isOwnStringType(ft)
 			}
 			info.fields = append(info.fields, field)
 			info.refs = append(info.refs, isRef)
 			info.bools = append(info.bools, isBool)
+			info.strs = append(info.strs, isStr)
 		}
 	}
 	c.ownLayout.structCalls[call] = info
@@ -218,8 +221,8 @@ func (c *Checker) getOwnStructOfCall(call *ast.Node) *ownStructInfo {
 }
 
 // Checks a `struct(...)` call: its fields are given in an object literal, by name, and each is a
-// number, a boolean or a reference (a shared struct or a SharedArray, possibly null), as for `shared
-// struct`.
+// number, a boolean, a string or a reference (a shared struct or a SharedArray, possibly null), as for
+// `shared struct`.
 func (c *Checker) checkOwnStructCall(call *ast.Node) {
 	t := c.getOwnStructTypeOfCall(call)
 	if t == nil || len(call.Arguments()) < 1 {
@@ -227,13 +230,13 @@ func (c *Checker) checkOwnStructCall(call *ast.Node) {
 	}
 	literal := ast.SkipParentheses(call.Arguments()[0])
 	if !ast.IsObjectLiteralExpression(literal) {
-		c.error(call.Arguments()[0], diagnostics.A_shared_struct_field_must_be_a_number_a_boolean_a_shared_struct_or_a_SharedArray)
+		c.error(call.Arguments()[0], diagnostics.A_shared_struct_field_must_be_a_number_a_boolean_a_string_a_shared_struct_or_a_SharedArray)
 		return
 	}
 	for _, property := range literal.Properties() {
 		name := property.Name()
 		if name == nil || !(ast.IsPropertyAssignment(property) || ast.IsShorthandPropertyAssignment(property)) || !ast.IsPropertyNameLiteral(name) || ast.IsNumericLiteral(name) {
-			c.error(property, diagnostics.A_shared_struct_field_must_be_a_number_a_boolean_a_shared_struct_or_a_SharedArray)
+			c.error(property, diagnostics.A_shared_struct_field_must_be_a_number_a_boolean_a_string_a_shared_struct_or_a_SharedArray)
 			continue
 		}
 		symbol := c.getPropertyOfType(t, name.Text())
@@ -243,6 +246,6 @@ func (c *Checker) checkOwnStructCall(call *ast.Node) {
 		if c.isOwnFieldType(c.getTypeOfSymbol(symbol)) {
 			continue
 		}
-		c.error(property, diagnostics.A_shared_struct_field_must_be_a_number_a_boolean_a_shared_struct_or_a_SharedArray)
+		c.error(property, diagnostics.A_shared_struct_field_must_be_a_number_a_boolean_a_string_a_shared_struct_or_a_SharedArray)
 	}
 }

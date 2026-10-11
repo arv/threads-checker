@@ -85,19 +85,19 @@ import { SharedArray } from "./own.mjs";
 
 export shared struct Good { a: number; b: Good; c: SharedArray<number>; d: SharedArray<Good> }
 export shared struct Bad {
-    s: string;
+    s: string | null;
     f: boolean | null;
     o?: number;
     u: number | undefined;
     arr: number[];
     obj: { x: number };
-    t: SharedArray<string>;
+    t: SharedArray<bigint>;
 }
 
 export function elements(a: SharedArray<Good>, g: Good, i: number, maybe: Good | undefined) {
     a[i] = g;                                // elements are inline
     const n = maybe?.a;                      // optional chaining
-    const bad = new SharedArray<string>(Good as any, 3);
+    const bad = new SharedArray<bigint>(Good as any, 3);
     return n;
 }
 

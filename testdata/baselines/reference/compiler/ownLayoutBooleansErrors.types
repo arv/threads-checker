@@ -297,8 +297,8 @@ import { bool, f64, SharedArray, struct } from "./threads.mjs";
 >SharedArray : { new (type: NumberConstructor, length: number): SharedArray<number>; new (type: BooleanConstructor, length: number): SharedArray<boolean>; new <T>(type: import("./threads.mjs").StructType<T>, length: number): SharedArray<T & import("./threads.mjs").Cell>; }
 >struct : { <F extends Record<string, import("./threads.mjs").Field<any>>>(fields: F): import("./threads.mjs").StructType<{ -readonly [K in keyof F]: F[K] extends import("./threads.mjs").Field<infer V> ? V : never; }>; <T>(fields: { [K in keyof T]-?: import("./threads.mjs").Field<T[K]>; }): import("./threads.mjs").StructType<T>; }
 
-interface Bad { name: string; maybe: boolean | null; either: boolean | number; ok: boolean }
->name : string
+interface Bad { name: bigint; maybe: boolean | null; either: boolean | number; ok: boolean }
+>name : bigint
 >maybe : boolean | null
 >either : number | boolean
 >ok : boolean
@@ -332,8 +332,8 @@ const Loose = struct<Loose>({ flag: bool, n: f64 });       // error: flag may be
 >n : import("./threads.mjs").Field<number>
 >f64 : import("./threads.mjs").Field<number>
 
-export let names: SharedArray<string> | undefined;
->names : SharedArray<string> | undefined
+export let names: SharedArray<bigint> | undefined;
+>names : SharedArray<bigint> | undefined
 
 export let maybes: SharedArray<boolean | null> | undefined;
 >maybes : SharedArray<boolean | null> | undefined

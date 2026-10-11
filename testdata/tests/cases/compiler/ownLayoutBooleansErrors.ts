@@ -177,12 +177,12 @@ export declare function heapStats(): { heapBytes: number; allocated: number; fre
 // @filename: errors.mts
 import { bool, f64, SharedArray, struct } from "./threads.mjs";
 
-interface Bad { name: string; maybe: boolean | null; either: boolean | number; ok: boolean }
+interface Bad { name: bigint; maybe: boolean | null; either: boolean | number; ok: boolean }
 const Bad = struct<Bad>({ name: f64 as any, maybe: bool, either: bool, ok: bool }); // error: all but ok
 
 interface Loose { flag: boolean | undefined; n: number }
 const Loose = struct<Loose>({ flag: bool, n: f64 });       // error: flag may be undefined
 
-export let names: SharedArray<string> | undefined;
+export let names: SharedArray<bigint> | undefined;
 export let maybes: SharedArray<boolean | null> | undefined;
 export const flags: SharedArray<boolean> = new SharedArray(Boolean, 4);

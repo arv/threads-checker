@@ -713,9 +713,11 @@ func (c *Checker) checkOwnRefCounts(file *ast.SourceFile) {
 	var checkPattern func(pattern *ast.Node)
 	checkPattern = func(pattern *ast.Node) {
 		// An assignment pattern: its targets must not be counted.
-		elements := pattern.Elements()
+		var elements []*ast.Node
 		if ast.IsObjectLiteralExpression(pattern) {
 			elements = pattern.Properties()
+		} else {
+			elements = pattern.Elements()
 		}
 		for _, element := range elements {
 			target := element

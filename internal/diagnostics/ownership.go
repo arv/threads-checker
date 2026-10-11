@@ -35,9 +35,9 @@ var Specify_the_module_that_files_using_the_own_Slashshared_threads_syntax_impor
 
 var Option_0_can_only_be_used_when_module_is_set_to_es2015_or_later = &Message{code: 96014, category: CategoryError, key: "Option_0_can_only_be_used_when_module_is_set_to_es2015_or_later_96014", text: "Option '{0}' can only be used when 'module' is set to 'es2015' or later."}
 
-var A_shared_struct_field_must_be_a_number_a_boolean_a_shared_struct_or_a_SharedArray = &Message{code: 96015, category: CategoryError, key: "A_shared_struct_field_must_be_a_number_a_boolean_a_shared_struct_or_a_SharedArray_96015", text: "A shared struct field must be a number, a boolean, a shared struct or a SharedArray."}
+var A_shared_struct_field_must_be_a_number_a_boolean_a_string_a_shared_struct_or_a_SharedArray = &Message{code: 96015, category: CategoryError, key: "A_shared_struct_field_must_be_a_number_a_boolean_a_string_a_shared_struct_or_a_SharedArray_96015", text: "A shared struct field must be a number, a boolean, a string, a shared struct or a SharedArray."}
 
-var The_elements_of_a_SharedArray_must_be_numbers_booleans_or_a_shared_struct = &Message{code: 96016, category: CategoryError, key: "The_elements_of_a_SharedArray_must_be_numbers_booleans_or_a_shared_struct_96016", text: "The elements of a SharedArray must be numbers, booleans or a shared struct."}
+var The_elements_of_a_SharedArray_must_be_numbers_booleans_strings_or_a_shared_struct = &Message{code: 96016, category: CategoryError, key: "The_elements_of_a_SharedArray_must_be_numbers_booleans_strings_or_a_shared_struct_96016", text: "The elements of a SharedArray must be numbers, booleans, strings or a shared struct."}
 
 var The_elements_of_a_SharedArray_of_shared_structs_are_stored_inline_Colon_assign_their_fields_instead = &Message{code: 96017, category: CategoryError, key: "The_elements_of_a_SharedArray_of_shared_structs_are_stored_inline_Colon_assign_their_fields_instead_96017", text: "The elements of a SharedArray of shared structs are stored inline: assign their fields instead."}
 
@@ -59,6 +59,8 @@ var A_generator_s_parameter_cannot_have_type_0_Colon_the_generator_runs_after_it
 
 var Field_0_is_at_different_places_in_the_shared_structs_of_this_union = &Message{code: 96026, category: CategoryError, key: "Field_0_is_at_different_places_in_the_shared_structs_of_this_union_96026", text: "Field '{0}' is at different places in the shared structs of this union."}
 
+var A_string_in_a_shared_struct_or_SharedArray_cannot_be_assigned_by_destructuring_or_as_a_loop_variable = &Message{code: 96027, category: CategoryError, key: "A_string_in_a_shared_struct_or_SharedArray_cannot_be_assigned_by_destructuring_or_as_a_loop_variable_96027", text: "A string in a shared struct or SharedArray cannot be assigned by destructuring or as a loop variable."}
+
 // Looks up an extension diagnostic by key, for diagnostics that are re-localized from their key
 // (keyToMessage only knows the generated messages).
 func ownershipKeyToMessage(key Key) *Message {
@@ -77,8 +79,8 @@ func ownershipKeyToMessage(key Key) *Message {
 		X_0_is_consumed_here,
 		Specify_the_module_that_files_using_the_own_Slashshared_threads_syntax_import_their_runtime_helpers_from_e_g_Dot_Slashown_mjs,
 		Option_0_can_only_be_used_when_module_is_set_to_es2015_or_later,
-		A_shared_struct_field_must_be_a_number_a_boolean_a_shared_struct_or_a_SharedArray,
-		The_elements_of_a_SharedArray_must_be_numbers_booleans_or_a_shared_struct,
+		A_shared_struct_field_must_be_a_number_a_boolean_a_string_a_shared_struct_or_a_SharedArray,
+		The_elements_of_a_SharedArray_must_be_numbers_booleans_strings_or_a_shared_struct,
 		The_elements_of_a_SharedArray_of_shared_structs_are_stored_inline_Colon_assign_their_fields_instead,
 		Optional_chaining_is_not_supported_on_0_Colon_its_value_is_an_address_in_the_shared_heap,
 		X_0_cannot_be_destructured_here_Colon_its_value_is_an_address_in_the_shared_heap,
@@ -89,6 +91,7 @@ func ownershipKeyToMessage(key Key) *Message {
 		X_0_cannot_be_bound_by_destructuring_Colon_its_value_is_an_address_in_the_shared_heap,
 		A_generator_s_parameter_cannot_have_type_0_Colon_the_generator_runs_after_its_caller_s_borrow_ends,
 		Field_0_is_at_different_places_in_the_shared_structs_of_this_union,
+		A_string_in_a_shared_struct_or_SharedArray_cannot_be_assigned_by_destructuring_or_as_a_loop_variable,
 	} {
 		if m.key == key {
 			return m

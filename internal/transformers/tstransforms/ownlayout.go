@@ -23,9 +23,12 @@ import (
 //	new SharedArray(S, n)      __newSharedArray(S, n)
 //	new SharedArray(Number, n)  __newSharedArray(8, n)
 //	new SharedArray(Boolean, n) __newSharedArray(1, n)
+//	new SharedArray(String, n)  __newSharedArray(4, n)
 //	e.fk (number field)         __F64[(E >> 3) + 1 + k]                  (1 + k folded)
 //	e.fk (boolean field, read)  __U8[E + 8 + 8 * k] !== 0                (8 + 8 * k folded)
 //	e.fk (boolean field, write) __U8[E + 8 + 8 * k]
+//	e.fk (string field, read)   __str(__I32[(E >> 2) + 2 + 2 * k])
+//	e.fk = V (string field)     __I32[(E >> 2) + 2 + 2 * k] = __intern(V)
 //	e.fk (reference field)      __I32[(E >> 2) + 2 + 2 * k]              (2 + 2 * k folded; 0 for null)
 //	e.fk = V (reference field)  __store((E >> 2) + 2 + 2 * k, V)
 //	a.length                    __I32[(A + 4) >> 2]
@@ -34,12 +37,20 @@ import (
 //	a[i]  (number, write)       __F64[((A + 16) >> 3) + (CHECK ? I : __OOB[I])]
 //	a[i]  (boolean, read)       CHECK ? __U8[A + 16 + I] !== 0 : __OOB[I]
 //	a[i]  (boolean, write)      __U8[A + 16 + (CHECK ? I : __OOB[I])]
+//	a[i]  (string, read)        CHECK ? __str(__I32[((A + 16) >> 2) + I]) : __OOB[I]
+//	a[i] = V (string)           __I32[((A + 16) >> 2) + (CHECK ? I : __OOB[I])] = __intern(V)
 //	CHECK                       (I >>> 0) === I && I < __I32[(A + 4) >> 2]
 //
 // A boolean is stored as a byte, 0 or 1: a write stores the boolean itself (a typed array converts
 // true to 1), and a read compares with 0. `e.fk ||= V` is `__U8[I] !== 0 || (__U8[I] = V)`, so that
 // its value is a boolean too, and an assignment target that is not an assignment's left side (a
 // destructuring pattern, a for-of's head) is the plain byte.
+//
+// A string is interned (`__intern`, 0 for ""), and its address stored as an i32; a read looks it up
+// (`__str`). An assignment whose value is used keeps the string: `(__I32[I] = __intern(_v = V), _v)`.
+// `e.fk += V` is `__I32[_i] = __intern(__str(__I32[_i]) + V)`, `e.fk ||= V` is `__str(__I32[_i]) ||
+// (__I32[_i] = __intern(V))`, and `e.fk ??= V` only reads (a string is never null). The checker
+// reports a string field or element assigned by destructuring or as a loop variable.
 //
 // A and I are copied to temporaries when they are not simple. The failure path reads `__OOB[I]`, a
 // Proxy that throws, rather than calling a function: a call, even one that is never taken, keeps
@@ -929,14 +940,14 @@ func (tx *OwnLayoutTransformer) lower(node *ast.Node, ctx ownContext) *ast.Node 
 	return tx.Visitor().VisitEachChild(node)
 }
 
-// `struct({ a: f64, next: ref<T>(), done: bool })` as `__sharedStruct("S", ["a", "next", "done"], [1],
-// [2])` (the reference fields, and the boolean fields if there are any), as a `shared struct`
-// declaration is emitted.
+// `struct({ a: f64, next: ref<T>(), done: bool, name: str })` as `__sharedStruct("S", ["a", "next",
+// "done", "name"], [1], [2], [3])` (the reference fields, and the boolean and the string fields if
+// there are any), as a `shared struct` declaration is emitted.
 func (tx *OwnLayoutTransformer) sharedStruct(structCall *printer.OwnStructCall) *ast.Node {
 	fields := core.Map(structCall.Layout.Fields, func(name string) *ast.Node {
 		return tx.Factory().NewStringLiteral(name, ast.TokenFlagsNone)
 	})
-	var refs, bools []*ast.Node
+	var refs, bools, strs []*ast.Node
 	for k, isRef := range structCall.Layout.Refs {
 		if isRef {
 			refs = append(refs, tx.number(k))
@@ -947,13 +958,21 @@ func (tx *OwnLayoutTransformer) sharedStruct(structCall *printer.OwnStructCall) 
 			bools = append(bools, tx.number(k))
 		}
 	}
+	for k, isStr := range structCall.Layout.Strs {
+		if isStr {
+			strs = append(strs, tx.number(k))
+		}
+	}
 	args := []*ast.Node{
 		tx.Factory().NewStringLiteral(structCall.Name, ast.TokenFlagsNone),
 		tx.Factory().NewArrayLiteralExpression(tx.Factory().NewNodeList(fields), false /*multiLine*/),
 		tx.Factory().NewArrayLiteralExpression(tx.Factory().NewNodeList(refs), false /*multiLine*/),
 	}
-	if len(bools) > 0 {
+	if len(bools) > 0 || len(strs) > 0 {
 		args = append(args, tx.Factory().NewArrayLiteralExpression(tx.Factory().NewNodeList(bools), false /*multiLine*/))
+	}
+	if len(strs) > 0 {
+		args = append(args, tx.Factory().NewArrayLiteralExpression(tx.Factory().NewNodeList(strs), false /*multiLine*/))
 	}
 	return tx.call(transformers.OwnRuntimeSharedStructHelper, args...)
 }
@@ -1021,6 +1040,9 @@ func (tx *OwnLayoutTransformer) lowerAssignment(node *ast.Node, ctx ownContext) 
 			return tx.finish(tx.sequence(temps, tx.binary(read, logical, tx.call(transformers.OwnRuntimeStoreHelper, tx.dup(i), value))), node)
 		}
 		return nil
+	}
+	if originalLeft != nil && tx.isStringTarget(originalLeft) {
+		return tx.lowerStringAssignment(node, left, ctx)
 	}
 	if originalLeft != nil && tx.isBooleanTarget(originalLeft) {
 		switch operator {
@@ -1100,6 +1122,53 @@ func (tx *OwnLayoutTransformer) lowerLocalAssignment(node *ast.Node, x *ast.Node
 	return nil
 }
 
+// An assignment to a string field or element (see "A string is interned" above); nil if the target
+// is not one after all.
+func (tx *OwnLayoutTransformer) lowerStringAssignment(node *ast.Node, left *ast.Node, ctx ownContext) *ast.Node {
+	n := node.AsBinaryExpression()
+	operator := n.OperatorToken.Kind
+	access := tx.lowerAccess(left, true /*isWrite*/, n.Right)
+	if access == nil {
+		return nil
+	}
+	index := access.AsElementAccessExpression().ArgumentExpression
+	var temps []*ast.Node
+	if operator != ast.KindEqualsToken {
+		index = tx.copiable(index, &temps) // read and written
+	}
+	read := func() *ast.Node {
+		return tx.call(transformers.OwnRuntimeStrHelper, tx.i32(tx.dup(index)))
+	}
+	// __I32[I] = __intern(V), or (__I32[I] = __intern(_v = V), _v) where its value is used
+	store := func(value *ast.Node) *ast.Node {
+		if ctx == ownDiscard {
+			return tx.Factory().NewAssignmentExpression(tx.i32(tx.dup(index)), tx.call(transformers.OwnRuntimeInternHelper, value))
+		}
+		v := tx.Factory().NewTempVariable()
+		tx.EmitContext().AddVariableDeclaration(v)
+		interned := tx.call(transformers.OwnRuntimeInternHelper, tx.Factory().NewAssignmentExpression(v, value))
+		return tx.paren(tx.Factory().InlineExpressions([]*ast.Node{tx.Factory().NewAssignmentExpression(tx.i32(tx.dup(index)), interned), v}))
+	}
+	switch operator {
+	case ast.KindEqualsToken:
+		return tx.finish(store(tx.Visitor().VisitNode(n.Right)), node)
+	case ast.KindPlusEqualsToken:
+		return tx.finish(tx.sequence(temps, store(tx.add(read(), tx.Visitor().VisitNode(n.Right)))), node)
+	case ast.KindQuestionQuestionEqualsToken:
+		return tx.finish(tx.sequence(temps, read()), node) // a string is never null
+	case ast.KindBarBarEqualsToken, ast.KindAmpersandAmpersandEqualsToken:
+		logical := ast.KindBarBarToken
+		if operator == ast.KindAmpersandAmpersandEqualsToken {
+			logical = ast.KindAmpersandAmpersandToken
+		}
+		tx.conditional++
+		value := tx.Visitor().VisitNode(n.Right)
+		tx.conditional--
+		return tx.finish(tx.sequence(temps, tx.binary(read(), logical, tx.paren(store(value)))), node)
+	}
+	return nil
+}
+
 func (tx *OwnLayoutTransformer) finish(lowered *ast.Node, node *ast.Node) *ast.Node {
 	tx.EmitContext().SetOriginal(lowered, node)
 	tx.EmitContext().AssignCommentAndSourceMapRanges(lowered, node)
@@ -1116,7 +1185,7 @@ func (tx *OwnLayoutTransformer) lowerNew(node *ast.Node) *ast.Node {
 	switch cell := tx.emitResolver.GetOwnCellType(original); cell.Kind {
 	case printer.OwnCellStruct:
 		return tx.call(transformers.OwnRuntimeNewStructHelper, tx.Visitor().VisitNode(n.Expression))
-	case printer.OwnCellArrayOfStruct, printer.OwnCellArrayOfNumber, printer.OwnCellArrayOfBoolean:
+	case printer.OwnCellArrayOfStruct, printer.OwnCellArrayOfNumber, printer.OwnCellArrayOfBoolean, printer.OwnCellArrayOfString:
 		if n.Arguments == nil || len(n.Arguments.Nodes) != 2 {
 			return nil
 		}
@@ -1126,6 +1195,8 @@ func (tx *OwnLayoutTransformer) lowerNew(node *ast.Node) *ast.Node {
 			elementType = tx.Visitor().VisitNode(n.Arguments.Nodes[0])
 		case printer.OwnCellArrayOfBoolean:
 			elementType = tx.number(1)
+		case printer.OwnCellArrayOfString:
+			elementType = tx.number(4)
 		}
 		return tx.call(transformers.OwnRuntimeNewSharedArrayHelper, elementType, tx.Visitor().VisitNode(n.Arguments.Nodes[1]))
 	}
@@ -1140,6 +1211,23 @@ func (tx *OwnLayoutTransformer) isReferenceField(access *ast.Node) bool {
 	}
 	k := slices.Index(cell.Fields, access.Name().Text())
 	return k >= 0 && cell.Refs[k]
+}
+
+// Reports whether an access of the original tree is a string field of a shared struct or an element of
+// a SharedArray<string>.
+func (tx *OwnLayoutTransformer) isStringTarget(access *ast.Node) bool {
+	switch {
+	case ast.IsPropertyAccessExpression(access):
+		cell := tx.emitResolver.GetOwnCellType(access.Expression())
+		if cell.Kind != printer.OwnCellStruct {
+			return false
+		}
+		k := slices.Index(cell.Fields, access.Name().Text())
+		return k >= 0 && cell.Strs[k]
+	case ast.IsElementAccessExpression(access):
+		return tx.emitResolver.GetOwnCellType(access.Expression()).Kind == printer.OwnCellArrayOfString
+	}
+	return false
 }
 
 // Reports whether an access of the original tree is a boolean field of a shared struct or an element
@@ -1200,8 +1288,11 @@ func (tx *OwnLayoutTransformer) lowerAccess(node *ast.Node, isWrite bool, value 
 			if cell.Bools[k] {
 				return tx.readBoolean(tx.u8(tx.add(object, tx.number(8+8*k))), isRead)
 			}
+			if cell.Strs[k] {
+				return tx.readString(tx.i32(tx.add(tx.paren(tx.binary(object, ast.KindGreaterThanGreaterThanToken, tx.number(2))), tx.number(2+2*k))), isRead)
+			}
 			return tx.f64(tx.add(tx.paren(tx.binary(object, ast.KindGreaterThanGreaterThanToken, tx.number(3))), tx.number(1+k)))
-		case printer.OwnCellArrayOfNumber, printer.OwnCellArrayOfStruct, printer.OwnCellArrayOfBoolean:
+		case printer.OwnCellArrayOfNumber, printer.OwnCellArrayOfStruct, printer.OwnCellArrayOfBoolean, printer.OwnCellArrayOfString:
 			if name != "length" || isWrite {
 				return nil
 			}
@@ -1221,6 +1312,8 @@ func (tx *OwnLayoutTransformer) lowerAccess(node *ast.Node, isWrite bool, value 
 			return tx.add(tx.add(a, tx.number(16)), tx.binary(i, ast.KindAsteriskToken, tx.number(8+8*len(cell.Fields))))
 		case printer.OwnCellArrayOfBoolean:
 			return tx.readBoolean(tx.u8(tx.add(tx.add(a, tx.number(16)), i)), isRead)
+		case printer.OwnCellArrayOfString:
+			return tx.readString(tx.i32(tx.add(tx.paren(tx.binary(tx.paren(tx.add(a, tx.number(16))), ast.KindGreaterThanGreaterThanToken, tx.number(2))), i)), isRead)
 		}
 		return tx.f64(tx.add(tx.paren(tx.binary(tx.paren(tx.add(a, tx.number(16))), ast.KindGreaterThanGreaterThanToken, tx.number(3))), i))
 	}
@@ -1256,8 +1349,27 @@ func (tx *OwnLayoutTransformer) lowerAccess(node *ast.Node, isWrite bool, value 
 		}
 		read := tx.cond(tx.inBounds(a, i), tx.isTrue(tx.u8(tx.add(tx.add(tx.dup(a), tx.number(16)), tx.dup(i)))), tx.oob(i))
 		return tx.sequence(temps, read)
+	case printer.OwnCellArrayOfString:
+		var temps []*ast.Node
+		a := tx.copiable(tx.objectOf(node, objectContext), &temps)
+		i := tx.copiable(tx.Visitor().VisitNode(node.AsElementAccessExpression().ArgumentExpression), &temps)
+		base := tx.paren(tx.binary(tx.paren(tx.add(tx.dup(a), tx.number(16))), ast.KindGreaterThanGreaterThanToken, tx.number(2)))
+		if !isRead {
+			index := tx.paren(tx.cond(tx.inBounds(a, i), tx.dup(i), tx.oob(i)))
+			return tx.i32(tx.sequence(temps, tx.add(base, index)))
+		}
+		read := tx.cond(tx.inBounds(a, i), tx.readString(tx.i32(tx.add(base, tx.dup(i))), true /*isRead*/), tx.oob(i))
+		return tx.sequence(temps, read)
 	}
 	return nil
+}
+
+// A string's address, looked up where it is read: __str(W).
+func (tx *OwnLayoutTransformer) readString(word *ast.Node, isRead bool) *ast.Node {
+	if isRead {
+		return tx.call(transformers.OwnRuntimeStrHelper, word)
+	}
+	return word
 }
 
 // A boolean's byte, compared with 0 where it is read.

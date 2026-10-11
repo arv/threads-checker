@@ -84,11 +84,12 @@ const (
 	OwnCellArrayOfNumber              // a SharedArray<number>: f64 elements after a 16-byte header
 	OwnCellArrayOfStruct              // a SharedArray<S> for a shared struct S: S's slots inline after the header
 	OwnCellArrayOfBoolean             // a SharedArray<boolean>: one byte per element (0 or 1) after a 16-byte header
+	OwnCellArrayOfString              // a SharedArray<string>: an i32 per element (an interned string's address, 0 for "") after a 16-byte header
 )
 
 // Reports whether a layout is a SharedArray's.
 func (k OwnCellKind) IsArray() bool {
-	return k == OwnCellArrayOfNumber || k == OwnCellArrayOfStruct || k == OwnCellArrayOfBoolean
+	return k == OwnCellArrayOfNumber || k == OwnCellArrayOfStruct || k == OwnCellArrayOfBoolean || k == OwnCellArrayOfString
 }
 
 type OwnCellType struct {
@@ -96,6 +97,7 @@ type OwnCellType struct {
 	Fields []string // the struct's fields in slot order (for OwnCellArrayOfStruct, the element struct's; for a union of structs, "" where they differ)
 	Refs   []bool   // per field: a reference field (an i32 address, 0 for null) rather than an f64
 	Bools  []bool   // per field: a boolean field (a byte, 0 or 1, at the start of its slot) rather than an f64
+	Strs   []bool   // per field: a string field (an interned string's address in an i32, 0 for "") rather than an f64
 }
 
 // How the emit converts an expression between the raw address of a struct or SharedArray and the

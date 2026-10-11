@@ -130,8 +130,8 @@ export shared struct Good { a: number; b: Good; c: SharedArray<number>; d: Share
 export shared struct Bad {
 >Bad : Bad
 
-    s: string;
->s : string
+    s: string | null;
+>s : string | null
 
     f: boolean | null;
 >f : boolean | null
@@ -149,8 +149,8 @@ export shared struct Bad {
 >obj : { x: number; }
 >x : number
 
-    t: SharedArray<string>;
->t : SharedArray<string>
+    t: SharedArray<bigint>;
+>t : SharedArray<bigint>
 }
 
 export function elements(a: SharedArray<Good>, g: Good, i: number, maybe: Good | undefined) {
@@ -173,9 +173,9 @@ export function elements(a: SharedArray<Good>, g: Good, i: number, maybe: Good |
 >maybe : Good | undefined
 >a : number | undefined
 
-    const bad = new SharedArray<string>(Good as any, 3);
->bad : SharedArray<string>
->new SharedArray<string>(Good as any, 3) : SharedArray<string>
+    const bad = new SharedArray<bigint>(Good as any, 3);
+>bad : SharedArray<bigint>
+>new SharedArray<bigint>(Good as any, 3) : SharedArray<bigint>
 >SharedArray : { new (type: NumberConstructor, length: number): SharedArray<number>; new <T>(type: import("./own.mjs").SharedStructType<T>, length: number): SharedArray<T>; }
 >Good as any : any
 >Good : new () => Good

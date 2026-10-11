@@ -1,13 +1,13 @@
-errors.mts(5,8): error TS96015: A shared struct field must be a number, a boolean, a shared struct or a SharedArray.
-errors.mts(6,8): error TS96015: A shared struct field must be a number, a boolean, a shared struct or a SharedArray.
-errors.mts(7,9): error TS96015: A shared struct field must be a number, a boolean, a shared struct or a SharedArray.
-errors.mts(8,8): error TS96015: A shared struct field must be a number, a boolean, a shared struct or a SharedArray.
-errors.mts(9,10): error TS96015: A shared struct field must be a number, a boolean, a shared struct or a SharedArray.
-errors.mts(10,10): error TS96015: A shared struct field must be a number, a boolean, a shared struct or a SharedArray.
-errors.mts(11,8): error TS96016: The elements of a SharedArray must be numbers, booleans or a shared struct.
+errors.mts(5,8): error TS96015: A shared struct field must be a number, a boolean, a string, a shared struct or a SharedArray.
+errors.mts(6,8): error TS96015: A shared struct field must be a number, a boolean, a string, a shared struct or a SharedArray.
+errors.mts(7,9): error TS96015: A shared struct field must be a number, a boolean, a string, a shared struct or a SharedArray.
+errors.mts(8,8): error TS96015: A shared struct field must be a number, a boolean, a string, a shared struct or a SharedArray.
+errors.mts(9,10): error TS96015: A shared struct field must be a number, a boolean, a string, a shared struct or a SharedArray.
+errors.mts(10,10): error TS96015: A shared struct field must be a number, a boolean, a string, a shared struct or a SharedArray.
+errors.mts(11,8): error TS96016: The elements of a SharedArray must be numbers, booleans, strings or a shared struct.
 errors.mts(15,5): error TS96017: The elements of a SharedArray of shared structs are stored inline: assign their fields instead.
 errors.mts(16,15): error TS96018: Optional chaining is not supported on 'Good | undefined': its value is an address in the shared heap.
-errors.mts(17,17): error TS96016: The elements of a SharedArray must be numbers, booleans or a shared struct.
+errors.mts(17,17): error TS96016: The elements of a SharedArray must be numbers, booleans, strings or a shared struct.
 errors.mts(21,29): error TS96019: 'Good' cannot be destructured here: its value is an address in the shared heap.
 errors.mts(22,16): error TS96019: 'Good' cannot be destructured here: its value is an address in the shared heap.
 errors.mts(22,18): error TS96024: 'b' cannot be bound by destructuring: its value is an address in the shared heap.
@@ -90,27 +90,27 @@ errors.mts(22,18): error TS96024: 'b' cannot be bound by destructuring: its valu
     
     export shared struct Good { a: number; b: Good; c: SharedArray<number>; d: SharedArray<Good> }
     export shared struct Bad {
-        s: string;
-           ~~~~~~
-!!! error TS96015: A shared struct field must be a number, a boolean, a shared struct or a SharedArray.
+        s: string | null;
+           ~~~~~~~~~~~~~
+!!! error TS96015: A shared struct field must be a number, a boolean, a string, a shared struct or a SharedArray.
         f: boolean | null;
            ~~~~~~~~~~~~~~
-!!! error TS96015: A shared struct field must be a number, a boolean, a shared struct or a SharedArray.
+!!! error TS96015: A shared struct field must be a number, a boolean, a string, a shared struct or a SharedArray.
         o?: number;
             ~~~~~~
-!!! error TS96015: A shared struct field must be a number, a boolean, a shared struct or a SharedArray.
+!!! error TS96015: A shared struct field must be a number, a boolean, a string, a shared struct or a SharedArray.
         u: number | undefined;
            ~~~~~~~~~~~~~~~~~~
-!!! error TS96015: A shared struct field must be a number, a boolean, a shared struct or a SharedArray.
+!!! error TS96015: A shared struct field must be a number, a boolean, a string, a shared struct or a SharedArray.
         arr: number[];
              ~~~~~~~~
-!!! error TS96015: A shared struct field must be a number, a boolean, a shared struct or a SharedArray.
+!!! error TS96015: A shared struct field must be a number, a boolean, a string, a shared struct or a SharedArray.
         obj: { x: number };
              ~~~~~~~~~~~~~
-!!! error TS96015: A shared struct field must be a number, a boolean, a shared struct or a SharedArray.
-        t: SharedArray<string>;
+!!! error TS96015: A shared struct field must be a number, a boolean, a string, a shared struct or a SharedArray.
+        t: SharedArray<bigint>;
            ~~~~~~~~~~~~~~~~~~~
-!!! error TS96016: The elements of a SharedArray must be numbers, booleans or a shared struct.
+!!! error TS96016: The elements of a SharedArray must be numbers, booleans, strings or a shared struct.
     }
     
     export function elements(a: SharedArray<Good>, g: Good, i: number, maybe: Good | undefined) {
@@ -120,9 +120,9 @@ errors.mts(22,18): error TS96024: 'b' cannot be bound by destructuring: its valu
         const n = maybe?.a;                      // optional chaining
                   ~~~~~~~~
 !!! error TS96018: Optional chaining is not supported on 'Good | undefined': its value is an address in the shared heap.
-        const bad = new SharedArray<string>(Good as any, 3);
+        const bad = new SharedArray<bigint>(Good as any, 3);
                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-!!! error TS96016: The elements of a SharedArray must be numbers, booleans or a shared struct.
+!!! error TS96016: The elements of a SharedArray must be numbers, booleans, strings or a shared struct.
         return n;
     }
     
