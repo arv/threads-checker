@@ -57,6 +57,8 @@ var X_0_cannot_be_bound_by_destructuring_Colon_its_value_is_an_address_in_the_sh
 
 var A_generator_s_parameter_cannot_have_type_0_Colon_the_generator_runs_after_its_caller_s_borrow_ends = &Message{code: 96025, category: CategoryError, key: "A_generator_s_parameter_cannot_have_type_0_Colon_the_generator_runs_after_its_caller_s_borrow_ends_96025", text: "A generator's parameter cannot have type '{0}': the generator runs after its caller's borrow ends."}
 
+var Field_0_is_at_different_places_in_the_shared_structs_of_this_union = &Message{code: 96026, category: CategoryError, key: "Field_0_is_at_different_places_in_the_shared_structs_of_this_union_96026", text: "Field '{0}' is at different places in the shared structs of this union."}
+
 // Looks up an extension diagnostic by key, for diagnostics that are re-localized from their key
 // (keyToMessage only knows the generated messages).
 func ownershipKeyToMessage(key Key) *Message {
@@ -86,6 +88,7 @@ func ownershipKeyToMessage(key Key) *Message {
 		X_0_cannot_be_captured_by_a_method_or_a_class_Colon_its_value_is_a_counted_address_in_the_shared_heap_which_only_functions_and_arrow_functions_can_hold,
 		X_0_cannot_be_bound_by_destructuring_Colon_its_value_is_an_address_in_the_shared_heap,
 		A_generator_s_parameter_cannot_have_type_0_Colon_the_generator_runs_after_its_caller_s_borrow_ends,
+		Field_0_is_at_different_places_in_the_shared_structs_of_this_union,
 	} {
 		if m.key == key {
 			return m

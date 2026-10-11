@@ -87,7 +87,7 @@ const (
 
 type OwnCellType struct {
 	Kind   OwnCellKind
-	Fields []string // the struct's fields in slot order (for OwnCellArrayOfStruct, the element struct's)
+	Fields []string // the struct's fields in slot order (for OwnCellArrayOfStruct, the element struct's; for a union of structs, "" where they differ)
 	Refs   []bool   // per field: a reference field (an i32 address, 0 for null) rather than an f64
 }
 

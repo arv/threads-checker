@@ -1,0 +1,227 @@
+//// [tests/cases/compiler/ownLayoutStructUnionsErrors.ts] ////
+
+=== threads.d.mts ===
+// The shared struct part of threads.d.mts (porffor's threads/escape-proto).
+declare const cellBrand: unique symbol;
+>cellBrand : unique symbol
+
+declare const fieldBrand: unique symbol;
+>fieldBrand : unique symbol
+
+/** A cell: shared and mutable. Any number of threads may hold the same one. */
+export interface Cell {
+  readonly [cellBrand]: true;
+>[cellBrand] : true
+>cellBrand : unique symbol
+>true : true
+}
+
+/** A field of a shared struct, declared with `f64` or `ref<T>()`. */
+export interface Field<T> {
+  readonly [fieldBrand]: T;
+>[fieldBrand] : T
+>fieldBrand : unique symbol
+}
+/** A number field: an f64 in shared memory. */
+export declare const f64: Field<number>;
+>f64 : Field<number>
+
+/** A reference field: a shared struct or a SharedArray, or null. */
+export declare function ref<T>(): Field<T | null>;
+>ref : <T>() => Field<T | null>
+
+/** What `struct(...)` returns: `new S()` makes a zeroed struct in shared memory. */
+export interface StructType<T> {
+  new (): T & Cell;
+  readonly fields: readonly string[];
+>fields : readonly string[]
+}
+/** The value type of a struct type: `type Body = Struct<typeof Body>`. */
+export type Struct<S> = S extends StructType<infer T> ? T & Cell : never;
+>Struct : Struct<S>
+
+export declare function struct<F extends Record<string, Field<any>>>(
+>struct : { <F extends Record<string, Field<any>>>(fields: F): StructType<{ -readonly [K in keyof F]: F[K] extends Field<infer V> ? V : never; }>; <T>(fields: { [K in keyof T]-?: Field<T[K]>; }): StructType<T>; }
+
+  fields: F,
+>fields : F
+
+): StructType<{ -readonly [K in keyof F]: F[K] extends Field<infer V> ? V : never }>;
+export declare function struct<T>(fields: { [K in keyof T]-?: Field<T[K]> }): StructType<T>;
+>struct : { <F extends Record<string, Field<any>>>(fields: F): StructType<{ -readonly [K in keyof F]: F[K] extends Field<infer V> ? V : never; }>; <T>(fields: { [K in keyof T]-?: Field<T[K]>; }): StructType<T>; }
+>fields : { [K in keyof T]-?: Field<T[K]>; }
+
+/** Prints a line, synchronously, from any thread. */
+export declare function log(...args: unknown[]): void;
+>log : (...args: unknown[]) => void
+>args : unknown[]
+
+=== different.mts ===
+import { f64, log, struct, type Struct } from "./threads.mjs";
+>f64 : import("./threads.mjs").Field<number>
+>log : (...args: unknown[]) => void
+>struct : { <F extends Record<string, import("./threads.mjs").Field<any>>>(fields: F): import("./threads.mjs").StructType<{ -readonly [K in keyof F]: F[K] extends import("./threads.mjs").Field<infer V> ? V : never; }>; <T>(fields: { [K in keyof T]-?: import("./threads.mjs").Field<T[K]>; }): import("./threads.mjs").StructType<T>; }
+>Struct : any
+
+const A = struct({ u: f64 });
+>A : import("./threads.mjs").StructType<{ u: number; }>
+>struct({ u: f64 }) : import("./threads.mjs").StructType<{ u: number; }>
+>struct : { <F extends Record<string, import("./threads.mjs").Field<any>>>(fields: F): import("./threads.mjs").StructType<{ -readonly [K in keyof F]: F[K] extends import("./threads.mjs").Field<infer V> ? V : never; }>; <T>(fields: { [K in keyof T]-?: import("./threads.mjs").Field<T[K]>; }): import("./threads.mjs").StructType<T>; }
+>{ u: f64 } : { u: import("./threads.mjs").Field<number>; }
+>u : import("./threads.mjs").Field<number>
+>f64 : import("./threads.mjs").Field<number>
+
+type A = Struct<typeof A>;
+>A : { u: number; } & import("./threads.mjs").Cell
+>A : import("./threads.mjs").StructType<{ u: number; }>
+
+const B = struct({ v: f64, u: f64 });
+>B : import("./threads.mjs").StructType<{ v: number; u: number; }>
+>struct({ v: f64, u: f64 }) : import("./threads.mjs").StructType<{ v: number; u: number; }>
+>struct : { <F extends Record<string, import("./threads.mjs").Field<any>>>(fields: F): import("./threads.mjs").StructType<{ -readonly [K in keyof F]: F[K] extends import("./threads.mjs").Field<infer V> ? V : never; }>; <T>(fields: { [K in keyof T]-?: import("./threads.mjs").Field<T[K]>; }): import("./threads.mjs").StructType<T>; }
+>{ v: f64, u: f64 } : { v: import("./threads.mjs").Field<number>; u: import("./threads.mjs").Field<number>; }
+>v : import("./threads.mjs").Field<number>
+>f64 : import("./threads.mjs").Field<number>
+>u : import("./threads.mjs").Field<number>
+>f64 : import("./threads.mjs").Field<number>
+
+type B = Struct<typeof B>;
+>B : { v: number; u: number; } & import("./threads.mjs").Cell
+>B : import("./threads.mjs").StructType<{ v: number; u: number; }>
+
+const flag = Math.random() > 2;
+>flag : boolean
+>Math.random() > 2 : boolean
+>Math.random() : number
+>Math.random : () => number
+>Math : Math
+>random : () => number
+>2 : 2
+
+// Through `new`: u is slot 1 of the one struct and slot 2 of the other.
+const Mixed = flag ? struct({ u: f64 }) : B;
+>Mixed : import("./threads.mjs").StructType<{ v: number; u: number; }> | import("./threads.mjs").StructType<{ u: number; }>
+>flag ? struct({ u: f64 }) : B : import("./threads.mjs").StructType<{ v: number; u: number; }> | import("./threads.mjs").StructType<{ u: number; }>
+>flag : boolean
+>struct({ u: f64 }) : import("./threads.mjs").StructType<{ u: number; }>
+>struct : { <F extends Record<string, import("./threads.mjs").Field<any>>>(fields: F): import("./threads.mjs").StructType<{ -readonly [K in keyof F]: F[K] extends import("./threads.mjs").Field<infer V> ? V : never; }>; <T>(fields: { [K in keyof T]-?: import("./threads.mjs").Field<T[K]>; }): import("./threads.mjs").StructType<T>; }
+>{ u: f64 } : { u: import("./threads.mjs").Field<number>; }
+>u : import("./threads.mjs").Field<number>
+>f64 : import("./threads.mjs").Field<number>
+>B : import("./threads.mjs").StructType<{ v: number; u: number; }>
+
+function readU(b: B) { return b.u; }
+>readU : (b: B) => number
+>b : { v: number; u: number; } & import("./threads.mjs").Cell
+>b.u : number
+>b : { v: number; u: number; } & import("./threads.mjs").Cell
+>u : number
+
+export function viaNew() {
+>viaNew : () => void
+
+    const m = new Mixed();
+>m : ({ v: number; u: number; } & import("./threads.mjs").Cell) | ({ u: number; } & import("./threads.mjs").Cell)
+>new Mixed() : ({ v: number; u: number; } & import("./threads.mjs").Cell) | ({ u: number; } & import("./threads.mjs").Cell)
+>Mixed : import("./threads.mjs").StructType<{ v: number; u: number; }> | import("./threads.mjs").StructType<{ u: number; }>
+
+    m.u = 7;                                // error
+>m.u = 7 : 7
+>m.u : number
+>m : ({ v: number; u: number; } & import("./threads.mjs").Cell) | ({ u: number; } & import("./threads.mjs").Cell)
+>u : number
+>7 : 7
+
+    log(`${m.u} ${readU(m as B)}`);         // error
+>log(`${m.u} ${readU(m as B)}`) : void
+>log : (...args: unknown[]) => void
+>`${m.u} ${readU(m as B)}` : string
+>m.u : number
+>m : ({ v: number; u: number; } & import("./threads.mjs").Cell) | ({ u: number; } & import("./threads.mjs").Cell)
+>u : number
+>readU(m as B) : number
+>readU : (b: B) => number
+>m as B : { v: number; u: number; } & import("./threads.mjs").Cell
+>m : ({ v: number; u: number; } & import("./threads.mjs").Cell) | ({ u: number; } & import("./threads.mjs").Cell)
+}
+
+export function viaNewOfUnion() {
+>viaNewOfUnion : () => number
+
+    const m = flag ? new A() : new B();     // A | B, not A
+>m : ({ u: number; } & import("./threads.mjs").Cell) | ({ v: number; u: number; } & import("./threads.mjs").Cell)
+>flag ? new A() : new B() : ({ u: number; } & import("./threads.mjs").Cell) | ({ v: number; u: number; } & import("./threads.mjs").Cell)
+>flag : boolean
+>new A() : { u: number; } & import("./threads.mjs").Cell
+>A : import("./threads.mjs").StructType<{ u: number; }>
+>new B() : { v: number; u: number; } & import("./threads.mjs").Cell
+>B : import("./threads.mjs").StructType<{ v: number; u: number; }>
+
+    return m.u;                             // error
+>m.u : number
+>m : ({ u: number; } & import("./threads.mjs").Cell) | ({ v: number; u: number; } & import("./threads.mjs").Cell)
+>u : number
+}
+
+// Through a parameter: a union of structs, or of struct types.
+export function viaParam(x: A | B | null) {
+>viaParam : (x: A | B | null) => number
+>x : ({ u: number; } & import("./threads.mjs").Cell) | ({ v: number; u: number; } & import("./threads.mjs").Cell) | null
+
+    return x === null ? 0 : x.u;            // error
+>x === null ? 0 : x.u : number
+>x === null : boolean
+>x : ({ u: number; } & import("./threads.mjs").Cell) | ({ v: number; u: number; } & import("./threads.mjs").Cell) | null
+>0 : 0
+>x.u : number
+>x : ({ u: number; } & import("./threads.mjs").Cell) | ({ v: number; u: number; } & import("./threads.mjs").Cell)
+>u : number
+}
+
+export function viaStructTypeParam(S: typeof A | typeof B) {
+>viaStructTypeParam : (S: typeof A | typeof B) => void
+>S : import("./threads.mjs").StructType<{ u: number; }> | import("./threads.mjs").StructType<{ v: number; u: number; }>
+>A : import("./threads.mjs").StructType<{ u: number; }>
+>B : import("./threads.mjs").StructType<{ v: number; u: number; }>
+
+    const m = new S();
+>m : ({ u: number; } & import("./threads.mjs").Cell) | ({ v: number; u: number; } & import("./threads.mjs").Cell)
+>new S() : ({ u: number; } & import("./threads.mjs").Cell) | ({ v: number; u: number; } & import("./threads.mjs").Cell)
+>S : import("./threads.mjs").StructType<{ u: number; }> | import("./threads.mjs").StructType<{ v: number; u: number; }>
+
+    m.u = 2;                                // error
+>m.u = 2 : 2
+>m.u : number
+>m : ({ u: number; } & import("./threads.mjs").Cell) | ({ v: number; u: number; } & import("./threads.mjs").Cell)
+>u : number
+>2 : 2
+}
+
+// Through `shared struct` declarations.
+shared struct SA { u: number }
+>SA : SA
+>u : number
+
+shared struct SB { v: number; u: number }
+>SB : SB
+>v : number
+>u : number
+
+export function viaSharedStruct() {
+>viaSharedStruct : () => number
+
+    const m = new (flag ? SA : SB)();
+>m : SA | SB
+>new (flag ? SA : SB)() : SA | SB
+>(flag ? SA : SB) : (new () => SA) | (new () => SB)
+>flag ? SA : SB : (new () => SA) | (new () => SB)
+>flag : boolean
+>SA : new () => SA
+>SB : new () => SB
+
+    return m.u;                             // error
+>m.u : number
+>m : SA | SB
+>u : number
+}
+

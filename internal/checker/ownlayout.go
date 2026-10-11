@@ -2,6 +2,7 @@ package checker
 
 import (
 	"math"
+	"slices"
 
 	"github.com/microsoft/typescript-go/internal/ast"
 	"github.com/microsoft/typescript-go/internal/core"
@@ -23,6 +24,8 @@ import (
 //   - A SharedArray<E> (the `SharedArray` interface declared in the module that `ownRuntime` names) is
 //     a 16-byte header followed by its elements; E must be a number or a shared struct (stored inline,
 //     header included).
+//   - A union of shared structs has the fields that are at the same place in every member, and
+//     accessing any other field is an error (see "Unions of shared structs" below).
 //   - Where such a value flows to or from a place typed otherwise, the emit boxes or unboxes it (see
 //     "Boxing" below).
 
@@ -35,6 +38,7 @@ type ownLayoutState struct {
 	structs         map[*Type]*ast.Node                 // the `struct(...)` calls, by the type of their structs' values
 	structCalls     map[*ast.Node]*ownStructInfo        // the same, by call
 	structDecls     map[*ast.Symbol]*ownStructInfo      // the `shared struct` declarations
+	structUnions    map[*Type]*ownStructInfo            // the layouts of unions of shared structs (nil if not all are)
 }
 
 // The files that the `ownRuntime` specifier resolves to (from any file that imports it).
@@ -142,14 +146,20 @@ func (c *Checker) ownNonNullishMembers(t *Type) []*Type {
 	return []*Type{t}
 }
 
-// Classifies a type for the layout emit: a shared struct, a SharedArray of numbers or a SharedArray of
-// a shared struct (looking through null and undefined).
+// Classifies a type for the layout emit: a shared struct (or a union of them), a SharedArray of
+// numbers or a SharedArray of a shared struct (looking through null and undefined).
 func (c *Checker) getOwnCellType(t *Type) printer.OwnCellType {
 	if t == nil || c.compilerOptions.OwnRuntime == "" {
 		return printer.OwnCellType{}
 	}
 	members := c.ownNonNullishMembers(t)
-	if len(members) != 1 {
+	if len(members) > 1 {
+		if s := c.getOwnStructOfUnion(t, members); s != nil {
+			return printer.OwnCellType{Kind: printer.OwnCellStruct, Fields: s.fields, Refs: s.refs}
+		}
+		return printer.OwnCellType{}
+	}
+	if len(members) == 0 {
 		return printer.OwnCellType{}
 	}
 	t = members[0]
@@ -237,6 +247,92 @@ func (c *Checker) checkSharedArrayElementType(node *ast.Node, t *Type) {
 		return
 	}
 	c.error(node, diagnostics.The_elements_of_a_SharedArray_must_be_numbers_or_a_shared_struct)
+}
+
+// Unions of shared structs
+//
+// TypeScript relates shared structs structurally, but each has its own layout: the values of
+// `struct({ v: f64, u: f64 })` are a subtype of those of `struct({ u: f64 })`, yet u is in slot 2 of
+// the one and in slot 1 of the other. So that one struct is never read with another's layout:
+//
+//   - Subtype reduction does not drop a shared struct (or a struct type) from a union in favor of
+//     another: `flag ? new A() : new B()` and `new (flag ? A : B)()` are `A | B`, not `A`.
+//   - The layout of a union of shared structs has a field where it is at the same place, stored the
+//     same way, in every member, and "" in the other slots (which no property access names). A field
+//     that is not in it is at different places: accessing it is an error, and the emit goes through
+//     the handle. A union of structs with one layout has that layout.
+//
+// Subtype reduction happens while the program is checked, so it recognizes structs by their types
+// alone, without resolving `struct(...)` calls (getOwnStructRegistry).
+
+// Reports whether subtype reduction may drop source from a union in favor of target, a supertype of
+// it: not when both are shared structs or struct types.
+func (c *Checker) isOwnReducibleTo(source *Type, target *Type) bool {
+	return c.compilerOptions.OwnRuntime == "" || !c.isOwnStructLike(source) || !c.isOwnStructLike(target)
+}
+
+// Reports whether t is the type of a shared struct's values (`T & Cell`, as `new S()` and `Struct<S>`
+// give it, or a `shared struct` declaration's instances) or of a shared struct itself (StructType<T>,
+// or a `shared struct` declaration's constructor).
+func (c *Checker) isOwnStructLike(t *Type) bool {
+	if t.flags&TypeFlagsIntersection != 0 {
+		cell := c.getOwnRuntimeType("Cell")
+		return cell != nil && slices.Contains(t.Types(), cell)
+	}
+	if t.flags&TypeFlagsObject == 0 {
+		return false
+	}
+	if t.symbol != nil && core.Some(t.symbol.Declarations, ast.IsSharedStructDeclaration) {
+		return true
+	}
+	target := t.Target()
+	return target != nil && target.symbol != nil && target.symbol.Name == "StructType" && c.getOwnRuntimeExportName(target.symbol) != ""
+}
+
+// The layout of a union of shared structs, given its non-nullish members, or nil if they are not all
+// shared structs.
+func (c *Checker) getOwnStructOfUnion(t *Type, members []*Type) *ownStructInfo {
+	if info, ok := c.ownLayout.structUnions[t]; ok {
+		return info
+	}
+	if c.ownLayout.structUnions == nil {
+		c.ownLayout.structUnions = map[*Type]*ownStructInfo{}
+	}
+	structs := make([]*ownStructInfo, 0, len(members))
+	for _, m := range members {
+		s := c.getOwnStructOfType(m)
+		if s == nil {
+			c.ownLayout.structUnions[t] = nil
+			return nil
+		}
+		structs = append(structs, s)
+	}
+	n := len(structs[0].fields)
+	for _, s := range structs[1:] {
+		n = min(n, len(s.fields))
+	}
+	info := &ownStructInfo{fields: slices.Clone(structs[0].fields[:n]), refs: slices.Clone(structs[0].refs[:n])}
+	for _, s := range structs[1:] {
+		for k := range n {
+			if s.fields[k] != info.fields[k] || s.refs[k] != info.refs[k] {
+				info.fields[k], info.refs[k] = "", false
+			}
+		}
+	}
+	c.ownLayout.structUnions[t] = info
+	return info
+}
+
+// Reports an access to a field of a union of shared structs that is at different places in them.
+func (c *Checker) checkOwnStructUnionField(access *ast.Node, t *Type) {
+	members := c.ownNonNullishMembers(t)
+	name := access.Name().Text()
+	if len(members) > 1 && core.Every(members, func(m *Type) bool {
+		s := c.getOwnStructOfType(m)
+		return s != nil && slices.Contains(s.fields, name)
+	}) {
+		c.error(access.Name(), diagnostics.Field_0_is_at_different_places_in_the_shared_structs_of_this_union, name)
+	}
 }
 
 // Boxing
@@ -481,7 +577,11 @@ func (c *Checker) computeOwnConversion(node *ast.Node, report bool) {
 		switch cell.Kind {
 		case printer.OwnCellStruct:
 			// A field is read through the layout; anything else through the handle.
-			c.setOwnTarget(object, core.Some(cell.Fields, func(f string) bool { return f == name }))
+			inLayout := slices.Contains(cell.Fields, name)
+			if !inLayout && report {
+				c.checkOwnStructUnionField(node, t)
+			}
+			c.setOwnTarget(object, inLayout)
 		case printer.OwnCellArrayOfNumber, printer.OwnCellArrayOfStruct:
 			c.setOwnTarget(object, name == "length")
 		default:

@@ -1,0 +1,295 @@
+//// [tests/cases/compiler/ownLayoutStructUnions.ts] ////
+
+=== threads.d.mts ===
+// The shared struct part of threads.d.mts (porffor's threads/escape-proto).
+declare const cellBrand: unique symbol;
+>cellBrand : Symbol(cellBrand, Decl(threads.d.mts, 1, 13))
+
+declare const fieldBrand: unique symbol;
+>fieldBrand : Symbol(fieldBrand, Decl(threads.d.mts, 2, 13))
+
+/** A cell: shared and mutable. Any number of threads may hold the same one. */
+export interface Cell {
+>Cell : Symbol(Cell, Decl(threads.d.mts, 2, 40))
+
+  readonly [cellBrand]: true;
+>[cellBrand] : Symbol(Cell[cellBrand], Decl(threads.d.mts, 5, 23))
+>cellBrand : Symbol(cellBrand, Decl(threads.d.mts, 1, 13))
+}
+
+/** A field of a shared struct, declared with `f64` or `ref<T>()`. */
+export interface Field<T> {
+>Field : Symbol(Field, Decl(threads.d.mts, 7, 1))
+>T : Symbol(T, Decl(threads.d.mts, 10, 23))
+
+  readonly [fieldBrand]: T;
+>[fieldBrand] : Symbol(Field[fieldBrand], Decl(threads.d.mts, 10, 27))
+>fieldBrand : Symbol(fieldBrand, Decl(threads.d.mts, 2, 13))
+>T : Symbol(T, Decl(threads.d.mts, 10, 23))
+}
+/** A number field: an f64 in shared memory. */
+export declare const f64: Field<number>;
+>f64 : Symbol(f64, Decl(threads.d.mts, 14, 20))
+>Field : Symbol(Field, Decl(threads.d.mts, 7, 1))
+
+/** A reference field: a shared struct or a SharedArray, or null. */
+export declare function ref<T>(): Field<T | null>;
+>ref : Symbol(ref, Decl(threads.d.mts, 14, 40))
+>T : Symbol(T, Decl(threads.d.mts, 16, 28))
+>Field : Symbol(Field, Decl(threads.d.mts, 7, 1))
+>T : Symbol(T, Decl(threads.d.mts, 16, 28))
+
+/** What `struct(...)` returns: `new S()` makes a zeroed struct in shared memory. */
+export interface StructType<T> {
+>StructType : Symbol(StructType, Decl(threads.d.mts, 16, 50))
+>T : Symbol(T, Decl(threads.d.mts, 19, 28))
+
+  new (): T & Cell;
+>T : Symbol(T, Decl(threads.d.mts, 19, 28))
+>Cell : Symbol(Cell, Decl(threads.d.mts, 2, 40))
+
+  readonly fields: readonly string[];
+>fields : Symbol(StructType.fields, Decl(threads.d.mts, 20, 19))
+}
+/** The value type of a struct type: `type Body = Struct<typeof Body>`. */
+export type Struct<S> = S extends StructType<infer T> ? T & Cell : never;
+>Struct : Symbol(Struct, Decl(threads.d.mts, 22, 1))
+>S : Symbol(S, Decl(threads.d.mts, 24, 19))
+>S : Symbol(S, Decl(threads.d.mts, 24, 19))
+>StructType : Symbol(StructType, Decl(threads.d.mts, 16, 50))
+>T : Symbol(T, Decl(threads.d.mts, 24, 50))
+>T : Symbol(T, Decl(threads.d.mts, 24, 50))
+>Cell : Symbol(Cell, Decl(threads.d.mts, 2, 40))
+
+export declare function struct<F extends Record<string, Field<any>>>(
+>struct : Symbol(struct, Decl(threads.d.mts, 24, 73), Decl(threads.d.mts, 28, 85))
+>F : Symbol(F, Decl(threads.d.mts, 26, 31))
+>Record : Symbol(Record, Decl(lib.es5.d.ts, --, --))
+>Field : Symbol(Field, Decl(threads.d.mts, 7, 1))
+
+  fields: F,
+>fields : Symbol(fields, Decl(threads.d.mts, 26, 69))
+>F : Symbol(F, Decl(threads.d.mts, 26, 31))
+
+): StructType<{ -readonly [K in keyof F]: F[K] extends Field<infer V> ? V : never }>;
+>StructType : Symbol(StructType, Decl(threads.d.mts, 16, 50))
+>K : Symbol(K, Decl(threads.d.mts, 28, 27))
+>F : Symbol(F, Decl(threads.d.mts, 26, 31))
+>F : Symbol(F, Decl(threads.d.mts, 26, 31))
+>K : Symbol(K, Decl(threads.d.mts, 28, 27))
+>Field : Symbol(Field, Decl(threads.d.mts, 7, 1))
+>V : Symbol(V, Decl(threads.d.mts, 28, 66))
+>V : Symbol(V, Decl(threads.d.mts, 28, 66))
+
+export declare function struct<T>(fields: { [K in keyof T]-?: Field<T[K]> }): StructType<T>;
+>struct : Symbol(struct, Decl(threads.d.mts, 24, 73), Decl(threads.d.mts, 28, 85))
+>T : Symbol(T, Decl(threads.d.mts, 29, 31))
+>fields : Symbol(fields, Decl(threads.d.mts, 29, 34))
+>K : Symbol(K, Decl(threads.d.mts, 29, 45))
+>T : Symbol(T, Decl(threads.d.mts, 29, 31))
+>Field : Symbol(Field, Decl(threads.d.mts, 7, 1))
+>T : Symbol(T, Decl(threads.d.mts, 29, 31))
+>K : Symbol(K, Decl(threads.d.mts, 29, 45))
+>StructType : Symbol(StructType, Decl(threads.d.mts, 16, 50))
+>T : Symbol(T, Decl(threads.d.mts, 29, 31))
+
+/** Prints a line, synchronously, from any thread. */
+export declare function log(...args: unknown[]): void;
+>log : Symbol(log, Decl(threads.d.mts, 29, 92))
+>args : Symbol(args, Decl(threads.d.mts, 32, 28))
+
+=== same.mts ===
+import { f64, log, ref, struct, type Struct } from "./threads.mjs";
+>f64 : Symbol(f64, Decl(same.mts, 0, 8))
+>log : Symbol(log, Decl(same.mts, 0, 13))
+>ref : Symbol(ref, Decl(same.mts, 0, 18))
+>struct : Symbol(struct, Decl(same.mts, 0, 23))
+>Struct : Symbol(Struct, Decl(same.mts, 0, 31))
+
+const A = struct({ u: f64 });
+>A : Symbol(A, Decl(same.mts, 2, 5), Decl(same.mts, 2, 29))
+>struct : Symbol(struct, Decl(same.mts, 0, 23))
+>u : Symbol(u, Decl(same.mts, 2, 18))
+>f64 : Symbol(f64, Decl(same.mts, 0, 8))
+
+type A = Struct<typeof A>;
+>A : Symbol(A, Decl(same.mts, 2, 5), Decl(same.mts, 2, 29))
+>Struct : Symbol(Struct, Decl(same.mts, 0, 31))
+>A : Symbol(A, Decl(same.mts, 2, 5), Decl(same.mts, 2, 29))
+
+const A2 = struct({ u: f64 });
+>A2 : Symbol(A2, Decl(same.mts, 4, 5), Decl(same.mts, 4, 30))
+>struct : Symbol(struct, Decl(same.mts, 0, 23))
+>u : Symbol(u, Decl(same.mts, 4, 19))
+>f64 : Symbol(f64, Decl(same.mts, 0, 8))
+
+type A2 = Struct<typeof A2>;
+>A2 : Symbol(A2, Decl(same.mts, 4, 5), Decl(same.mts, 4, 30))
+>Struct : Symbol(Struct, Decl(same.mts, 0, 31))
+>A2 : Symbol(A2, Decl(same.mts, 4, 5), Decl(same.mts, 4, 30))
+
+const flag = Math.random() > 2;
+>flag : Symbol(flag, Decl(same.mts, 6, 5))
+>Math.random : Symbol(Math.random, Decl(lib.es5.d.ts, --, --))
+>Math : Symbol(Math, Decl(lib.es5.d.ts, --, --), Decl(lib.es5.d.ts, --, --), Decl(lib.es2015.core.d.ts, --, --), Decl(lib.es2015.symbol.wellknown.d.ts, --, --))
+>random : Symbol(Math.random, Decl(lib.es5.d.ts, --, --))
+
+// Through `new`: a struct type that is one of two with the same layout.
+const Either = flag ? struct({ u: f64 }) : A;
+>Either : Symbol(Either, Decl(same.mts, 9, 5))
+>flag : Symbol(flag, Decl(same.mts, 6, 5))
+>struct : Symbol(struct, Decl(same.mts, 0, 23))
+>u : Symbol(u, Decl(same.mts, 9, 30))
+>f64 : Symbol(f64, Decl(same.mts, 0, 8))
+>A : Symbol(A, Decl(same.mts, 2, 5), Decl(same.mts, 2, 29))
+
+export function viaNew() {
+>viaNew : Symbol(viaNew, Decl(same.mts, 9, 45))
+
+    const m = new Either();                 // one of two structs with one layout
+>m : Symbol(m, Decl(same.mts, 11, 9))
+>Either : Symbol(Either, Decl(same.mts, 9, 5))
+
+    m.u = 7;                                // slot 1 of either
+>m.u : Symbol(u, Decl(same.mts, 2, 18), Decl(same.mts, 9, 30))
+>m : Symbol(m, Decl(same.mts, 11, 9))
+>u : Symbol(u, Decl(same.mts, 2, 18), Decl(same.mts, 9, 30))
+
+    log(`${m.u}`);
+>log : Symbol(log, Decl(same.mts, 0, 13))
+>m.u : Symbol(u, Decl(same.mts, 2, 18), Decl(same.mts, 9, 30))
+>m : Symbol(m, Decl(same.mts, 11, 9))
+>u : Symbol(u, Decl(same.mts, 2, 18), Decl(same.mts, 9, 30))
+}
+
+export function viaNewOfUnion() {
+>viaNewOfUnion : Symbol(viaNewOfUnion, Decl(same.mts, 14, 1))
+
+    const m = flag ? new A() : new A2();    // A | A2
+>m : Symbol(m, Decl(same.mts, 17, 9))
+>flag : Symbol(flag, Decl(same.mts, 6, 5))
+>A : Symbol(A, Decl(same.mts, 2, 5), Decl(same.mts, 2, 29))
+>A2 : Symbol(A2, Decl(same.mts, 4, 5), Decl(same.mts, 4, 30))
+
+    return m.u;
+>m.u : Symbol(u, Decl(same.mts, 2, 18), Decl(same.mts, 4, 19))
+>m : Symbol(m, Decl(same.mts, 17, 9))
+>u : Symbol(u, Decl(same.mts, 2, 18), Decl(same.mts, 4, 19))
+}
+
+// Through a parameter: a union of structs, or of struct types.
+export function viaParam(x: A | A2 | null) {
+>viaParam : Symbol(viaParam, Decl(same.mts, 19, 1))
+>x : Symbol(x, Decl(same.mts, 22, 25))
+>A : Symbol(A, Decl(same.mts, 2, 5), Decl(same.mts, 2, 29))
+>A2 : Symbol(A2, Decl(same.mts, 4, 5), Decl(same.mts, 4, 30))
+
+    if (x !== null) x.u += 1;
+>x : Symbol(x, Decl(same.mts, 22, 25))
+>x.u : Symbol(u, Decl(same.mts, 2, 18), Decl(same.mts, 4, 19))
+>x : Symbol(x, Decl(same.mts, 22, 25))
+>u : Symbol(u, Decl(same.mts, 2, 18), Decl(same.mts, 4, 19))
+
+    return x === null ? 0 : x.u;
+>x : Symbol(x, Decl(same.mts, 22, 25))
+>x.u : Symbol(u, Decl(same.mts, 2, 18), Decl(same.mts, 4, 19))
+>x : Symbol(x, Decl(same.mts, 22, 25))
+>u : Symbol(u, Decl(same.mts, 2, 18), Decl(same.mts, 4, 19))
+}
+
+export function viaStructTypeParam(S: typeof A | typeof A2) {
+>viaStructTypeParam : Symbol(viaStructTypeParam, Decl(same.mts, 25, 1))
+>S : Symbol(S, Decl(same.mts, 27, 35))
+>A : Symbol(A, Decl(same.mts, 2, 5), Decl(same.mts, 2, 29))
+>A2 : Symbol(A2, Decl(same.mts, 4, 5), Decl(same.mts, 4, 30))
+
+    const m = new S();
+>m : Symbol(m, Decl(same.mts, 28, 9))
+>S : Symbol(S, Decl(same.mts, 27, 35))
+
+    m.u = 2;
+>m.u : Symbol(u, Decl(same.mts, 2, 18), Decl(same.mts, 4, 19))
+>m : Symbol(m, Decl(same.mts, 28, 9))
+>u : Symbol(u, Decl(same.mts, 2, 18), Decl(same.mts, 4, 19))
+
+    return m.u;
+>m.u : Symbol(u, Decl(same.mts, 2, 18), Decl(same.mts, 4, 19))
+>m : Symbol(m, Decl(same.mts, 28, 9))
+>u : Symbol(u, Decl(same.mts, 2, 18), Decl(same.mts, 4, 19))
+}
+
+// Structs that differ only after a field have it at the same place.
+const P = struct({ u: f64, w: f64 });
+>P : Symbol(P, Decl(same.mts, 34, 5), Decl(same.mts, 34, 37))
+>struct : Symbol(struct, Decl(same.mts, 0, 23))
+>u : Symbol(u, Decl(same.mts, 34, 18))
+>f64 : Symbol(f64, Decl(same.mts, 0, 8))
+>w : Symbol(w, Decl(same.mts, 34, 26))
+>f64 : Symbol(f64, Decl(same.mts, 0, 8))
+
+type P = Struct<typeof P>;
+>P : Symbol(P, Decl(same.mts, 34, 5), Decl(same.mts, 34, 37))
+>Struct : Symbol(Struct, Decl(same.mts, 0, 31))
+>P : Symbol(P, Decl(same.mts, 34, 5), Decl(same.mts, 34, 37))
+
+export function prefix(x: A | P) {
+>prefix : Symbol(prefix, Decl(same.mts, 35, 26))
+>x : Symbol(x, Decl(same.mts, 36, 23))
+>A : Symbol(A, Decl(same.mts, 2, 5), Decl(same.mts, 2, 29))
+>P : Symbol(P, Decl(same.mts, 34, 5), Decl(same.mts, 34, 37))
+
+    return x.u;
+>x.u : Symbol(u, Decl(same.mts, 2, 18), Decl(same.mts, 34, 18))
+>x : Symbol(x, Decl(same.mts, 36, 23))
+>u : Symbol(u, Decl(same.mts, 2, 18), Decl(same.mts, 34, 18))
+}
+
+// So do reference fields.
+const R = struct({ next: ref<A>(), u: f64 });
+>R : Symbol(R, Decl(same.mts, 41, 5), Decl(same.mts, 41, 45))
+>struct : Symbol(struct, Decl(same.mts, 0, 23))
+>next : Symbol(next, Decl(same.mts, 41, 18))
+>ref : Symbol(ref, Decl(same.mts, 0, 18))
+>A : Symbol(A, Decl(same.mts, 2, 5), Decl(same.mts, 2, 29))
+>u : Symbol(u, Decl(same.mts, 41, 34))
+>f64 : Symbol(f64, Decl(same.mts, 0, 8))
+
+type R = Struct<typeof R>;
+>R : Symbol(R, Decl(same.mts, 41, 5), Decl(same.mts, 41, 45))
+>Struct : Symbol(Struct, Decl(same.mts, 0, 31))
+>R : Symbol(R, Decl(same.mts, 41, 5), Decl(same.mts, 41, 45))
+
+const R2 = struct({ next: ref<A>(), x: f64, u: f64 });
+>R2 : Symbol(R2, Decl(same.mts, 43, 5), Decl(same.mts, 43, 54))
+>struct : Symbol(struct, Decl(same.mts, 0, 23))
+>next : Symbol(next, Decl(same.mts, 43, 19))
+>ref : Symbol(ref, Decl(same.mts, 0, 18))
+>A : Symbol(A, Decl(same.mts, 2, 5), Decl(same.mts, 2, 29))
+>x : Symbol(x, Decl(same.mts, 43, 35))
+>f64 : Symbol(f64, Decl(same.mts, 0, 8))
+>u : Symbol(u, Decl(same.mts, 43, 43))
+>f64 : Symbol(f64, Decl(same.mts, 0, 8))
+
+type R2 = Struct<typeof R2>;
+>R2 : Symbol(R2, Decl(same.mts, 43, 5), Decl(same.mts, 43, 54))
+>Struct : Symbol(Struct, Decl(same.mts, 0, 31))
+>R2 : Symbol(R2, Decl(same.mts, 43, 5), Decl(same.mts, 43, 54))
+
+export function references(r: R | R2) {
+>references : Symbol(references, Decl(same.mts, 44, 28))
+>r : Symbol(r, Decl(same.mts, 45, 27))
+>R : Symbol(R, Decl(same.mts, 41, 5), Decl(same.mts, 41, 45))
+>R2 : Symbol(R2, Decl(same.mts, 43, 5), Decl(same.mts, 43, 54))
+
+    r.next = new A();
+>r.next : Symbol(next, Decl(same.mts, 41, 18), Decl(same.mts, 43, 19))
+>r : Symbol(r, Decl(same.mts, 45, 27))
+>next : Symbol(next, Decl(same.mts, 41, 18), Decl(same.mts, 43, 19))
+>A : Symbol(A, Decl(same.mts, 2, 5), Decl(same.mts, 2, 29))
+
+    return r.next;
+>r.next : Symbol(next, Decl(same.mts, 41, 18), Decl(same.mts, 43, 19))
+>r : Symbol(r, Decl(same.mts, 45, 27))
+>next : Symbol(next, Decl(same.mts, 41, 18), Decl(same.mts, 43, 19))
+}
+

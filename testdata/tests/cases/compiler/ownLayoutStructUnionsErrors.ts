@@ -1,0 +1,86 @@
+// @target: es2022
+// @module: esnext
+// @moduleResolution: bundler
+// @strict: true
+// @lib: es2022
+// @ownRuntime: ./threads.mjs
+// @noEmit: true
+
+// Unions of shared structs with different layouts: a field at different places in the structs of
+// a union cannot be read or written in place, whether the union comes from `new` or a parameter.
+
+// @filename: threads.d.mts
+// The shared struct part of threads.d.mts (porffor's threads/escape-proto).
+declare const cellBrand: unique symbol;
+declare const fieldBrand: unique symbol;
+
+/** A cell: shared and mutable. Any number of threads may hold the same one. */
+export interface Cell {
+  readonly [cellBrand]: true;
+}
+
+/** A field of a shared struct, declared with `f64` or `ref<T>()`. */
+export interface Field<T> {
+  readonly [fieldBrand]: T;
+}
+/** A number field: an f64 in shared memory. */
+export declare const f64: Field<number>;
+/** A reference field: a shared struct or a SharedArray, or null. */
+export declare function ref<T>(): Field<T | null>;
+
+/** What `struct(...)` returns: `new S()` makes a zeroed struct in shared memory. */
+export interface StructType<T> {
+  new (): T & Cell;
+  readonly fields: readonly string[];
+}
+/** The value type of a struct type: `type Body = Struct<typeof Body>`. */
+export type Struct<S> = S extends StructType<infer T> ? T & Cell : never;
+
+export declare function struct<F extends Record<string, Field<any>>>(
+  fields: F,
+): StructType<{ -readonly [K in keyof F]: F[K] extends Field<infer V> ? V : never }>;
+export declare function struct<T>(fields: { [K in keyof T]-?: Field<T[K]> }): StructType<T>;
+
+/** Prints a line, synchronously, from any thread. */
+export declare function log(...args: unknown[]): void;
+
+// @filename: different.mts
+import { f64, log, struct, type Struct } from "./threads.mjs";
+
+const A = struct({ u: f64 });
+type A = Struct<typeof A>;
+const B = struct({ v: f64, u: f64 });
+type B = Struct<typeof B>;
+const flag = Math.random() > 2;
+
+// Through `new`: u is slot 1 of the one struct and slot 2 of the other.
+const Mixed = flag ? struct({ u: f64 }) : B;
+function readU(b: B) { return b.u; }
+export function viaNew() {
+    const m = new Mixed();
+    m.u = 7;                                // error
+    log(`${m.u} ${readU(m as B)}`);         // error
+}
+
+export function viaNewOfUnion() {
+    const m = flag ? new A() : new B();     // A | B, not A
+    return m.u;                             // error
+}
+
+// Through a parameter: a union of structs, or of struct types.
+export function viaParam(x: A | B | null) {
+    return x === null ? 0 : x.u;            // error
+}
+
+export function viaStructTypeParam(S: typeof A | typeof B) {
+    const m = new S();
+    m.u = 2;                                // error
+}
+
+// Through `shared struct` declarations.
+shared struct SA { u: number }
+shared struct SB { v: number; u: number }
+export function viaSharedStruct() {
+    const m = new (flag ? SA : SB)();
+    return m.u;                             // error
+}

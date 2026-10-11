@@ -25941,7 +25941,7 @@ func (c *Checker) removeSubtypes(types []*Type, hasObjectTypes bool) []*Type {
 					}
 					if c.isTypeRelatedTo(source, target, c.strictSubtypeRelation) && (c.getTargetType(source).objectFlags&ObjectFlagsClass == 0 ||
 						c.getTargetType(target).objectFlags&ObjectFlagsClass == 0 ||
-						c.isTypeDerivedFrom(source, target)) {
+						c.isTypeDerivedFrom(source, target)) && c.isOwnReducibleTo(source, target) {
 						types = slices.Delete(types, i, i+1)
 						break
 					}
