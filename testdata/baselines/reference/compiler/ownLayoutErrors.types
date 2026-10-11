@@ -133,8 +133,8 @@ export shared struct Bad {
     s: string;
 >s : string
 
-    f: boolean;
->f : boolean
+    f: boolean | null;
+>f : boolean | null
 
     o?: number;
 >o : number | undefined

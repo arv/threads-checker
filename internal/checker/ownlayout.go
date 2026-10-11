@@ -19,11 +19,12 @@ import (
 // that representation from leaking:
 //
 //   - A shared struct with fields f0..f(n-1) is a header word (written by the runtime) and n 8-byte
-//     slots: field k is at byte offset 8 + 8*k. A field must be a number (stored as f64), a shared
-//     struct or a SharedArray (stored as an address).
+//     slots: field k is at byte offset 8 + 8*k. A field must be a number (stored as f64), a boolean
+//     (a byte, 0 or 1, at the start of its slot), a shared struct or a SharedArray (stored as an
+//     address).
 //   - A SharedArray<E> (the `SharedArray` interface declared in the module that `ownRuntime` names) is
-//     a 16-byte header followed by its elements; E must be a number or a shared struct (stored inline,
-//     header included).
+//     a 16-byte header followed by its elements; E must be a number, a boolean (one byte each) or a
+//     shared struct (stored inline, header included).
 //   - A union of shared structs has the fields that are at the same place in every member, and
 //     accessing any other field is an error (see "Unions of shared structs" below).
 //   - Where such a value flows to or from a place typed otherwise, the emit boxes or unboxes it (see
@@ -91,7 +92,8 @@ func (c *Checker) getOwnStructOfType(t *Type) *ownStructInfo {
 }
 
 // The layout of a `shared struct` declaration: its fields in declaration order, and which of them
-// are reference fields (a shared struct or a SharedArray, possibly with null or undefined).
+// are reference fields (a shared struct or a SharedArray, possibly with null or undefined) and which
+// are booleans.
 func (c *Checker) getOwnStructOfDeclaration(s *ast.Symbol) *ownStructInfo {
 	if info, ok := c.ownLayout.structDecls[s]; ok {
 		return info
@@ -105,11 +107,13 @@ func (c *Checker) getOwnStructOfDeclaration(s *ast.Symbol) *ownStructInfo {
 	for _, member := range decl.Members() {
 		if ast.IsPropertySignatureDeclaration(member) && member.Name() != nil {
 			info.fields = append(info.fields, member.Name().Text())
-			isRef := false
+			isRef, isBool := false, false
 			if symbol := c.getSymbolOfDeclaration(member); symbol != nil {
-				isRef = c.isOwnCellType(c.getTypeOfSymbol(symbol))
+				t := c.getTypeOfSymbol(symbol)
+				isRef, isBool = c.isOwnCellType(t), isOwnBooleanType(t)
 			}
 			info.refs = append(info.refs, isRef)
+			info.bools = append(info.bools, isBool)
 		}
 	}
 	return info
@@ -146,8 +150,21 @@ func (c *Checker) ownNonNullishMembers(t *Type) []*Type {
 	return []*Type{t}
 }
 
+// Reports whether a field or element of type t is a boolean: `boolean`, `true` or `false` (not a
+// union with anything else).
+func isOwnBooleanType(t *Type) bool {
+	return t.flags&TypeFlagsBoolean != 0 || t.flags&TypeFlagsBooleanLiteral != 0
+}
+
+// Reports whether a shared struct may have a field of type t: a number, a boolean, or a reference (a
+// shared struct or a SharedArray, possibly with null or undefined).
+func (c *Checker) isOwnFieldType(t *Type) bool {
+	return t.flags&TypeFlagsNumber != 0 && t.flags&TypeFlagsUnion == 0 || isOwnBooleanType(t) ||
+		len(c.ownNonNullishMembers(t)) == 1 && c.isOwnCellType(t)
+}
+
 // Classifies a type for the layout emit: a shared struct (or a union of them), a SharedArray of
-// numbers or a SharedArray of a shared struct (looking through null and undefined).
+// numbers or booleans, or a SharedArray of a shared struct (looking through null and undefined).
 func (c *Checker) getOwnCellType(t *Type) printer.OwnCellType {
 	if t == nil || c.compilerOptions.OwnRuntime == "" {
 		return printer.OwnCellType{}
@@ -155,7 +172,7 @@ func (c *Checker) getOwnCellType(t *Type) printer.OwnCellType {
 	members := c.ownNonNullishMembers(t)
 	if len(members) > 1 {
 		if s := c.getOwnStructOfUnion(t, members); s != nil {
-			return printer.OwnCellType{Kind: printer.OwnCellStruct, Fields: s.fields, Refs: s.refs}
+			return printer.OwnCellType{Kind: printer.OwnCellStruct, Fields: s.fields, Refs: s.refs, Bools: s.bools}
 		}
 		return printer.OwnCellType{}
 	}
@@ -164,14 +181,17 @@ func (c *Checker) getOwnCellType(t *Type) printer.OwnCellType {
 	}
 	t = members[0]
 	if s := c.getOwnStructOfType(t); s != nil {
-		return printer.OwnCellType{Kind: printer.OwnCellStruct, Fields: s.fields, Refs: s.refs}
+		return printer.OwnCellType{Kind: printer.OwnCellStruct, Fields: s.fields, Refs: s.refs, Bools: s.bools}
 	}
 	if element := c.getOwnSharedArrayElementType(t); element != nil {
 		if element.flags&TypeFlagsNumber != 0 {
 			return printer.OwnCellType{Kind: printer.OwnCellArrayOfNumber}
 		}
+		if isOwnBooleanType(element) {
+			return printer.OwnCellType{Kind: printer.OwnCellArrayOfBoolean}
+		}
 		if s := c.getOwnStructOfType(element); s != nil {
-			return printer.OwnCellType{Kind: printer.OwnCellArrayOfStruct, Fields: s.fields, Refs: s.refs}
+			return printer.OwnCellType{Kind: printer.OwnCellArrayOfStruct, Fields: s.fields, Refs: s.refs, Bools: s.bools}
 		}
 	}
 	return printer.OwnCellType{}
@@ -215,8 +235,8 @@ func (c *Checker) getTypeOfSharedStructValue(symbol *ast.Symbol) *Type {
 	return c.newAnonymousType(symbol, ast.SymbolTable{}, nil, []*Signature{signature}, nil)
 }
 
-// Checks the fields of a shared struct for the layout: numbers, and reference fields (a shared struct
-// or a SharedArray, possibly with null or undefined).
+// Checks the fields of a shared struct for the layout: numbers, booleans, and reference fields (a
+// shared struct or a SharedArray, possibly with null or undefined).
 func (c *Checker) checkSharedStructLayout(node *ast.Node) {
 	if c.compilerOptions.OwnRuntime == "" || node.Flags&ast.NodeFlagsAmbient != 0 {
 		return
@@ -225,28 +245,27 @@ func (c *Checker) checkSharedStructLayout(node *ast.Node) {
 		if !ast.IsPropertySignatureDeclaration(member) {
 			continue
 		}
-		t := c.getTypeOfSymbol(c.getSymbolOfDeclaration(member))
-		if t.flags&TypeFlagsNumber != 0 && t.flags&TypeFlagsUnion == 0 || len(c.ownNonNullishMembers(t)) == 1 && c.isOwnCellType(t) {
+		if c.isOwnFieldType(c.getTypeOfSymbol(c.getSymbolOfDeclaration(member))) {
 			continue
 		}
 		location := member.Type()
 		if location == nil {
 			location = member.Name()
 		}
-		c.error(location, diagnostics.A_shared_struct_field_must_be_a_number_a_shared_struct_or_a_SharedArray)
+		c.error(location, diagnostics.A_shared_struct_field_must_be_a_number_a_boolean_a_shared_struct_or_a_SharedArray)
 	}
 }
 
-// Checks the element type of a SharedArray type reference: numbers or a shared struct.
+// Checks the element type of a SharedArray type reference: numbers, booleans or a shared struct.
 func (c *Checker) checkSharedArrayElementType(node *ast.Node, t *Type) {
 	if c.compilerOptions.OwnRuntime == "" || node.Flags&ast.NodeFlagsAmbient != 0 {
 		return
 	}
 	element := c.getOwnSharedArrayElementType(t)
-	if element == nil || element.flags&TypeFlagsNumber != 0 && element.flags&TypeFlagsUnion == 0 || c.getOwnStructOfType(element) != nil {
+	if element == nil || element.flags&TypeFlagsNumber != 0 && element.flags&TypeFlagsUnion == 0 || isOwnBooleanType(element) || c.getOwnStructOfType(element) != nil {
 		return
 	}
-	c.error(node, diagnostics.The_elements_of_a_SharedArray_must_be_numbers_or_a_shared_struct)
+	c.error(node, diagnostics.The_elements_of_a_SharedArray_must_be_numbers_booleans_or_a_shared_struct)
 }
 
 // Unions of shared structs
@@ -311,11 +330,11 @@ func (c *Checker) getOwnStructOfUnion(t *Type, members []*Type) *ownStructInfo {
 	for _, s := range structs[1:] {
 		n = min(n, len(s.fields))
 	}
-	info := &ownStructInfo{fields: slices.Clone(structs[0].fields[:n]), refs: slices.Clone(structs[0].refs[:n])}
+	info := &ownStructInfo{fields: slices.Clone(structs[0].fields[:n]), refs: slices.Clone(structs[0].refs[:n]), bools: slices.Clone(structs[0].bools[:n])}
 	for _, s := range structs[1:] {
 		for k := range n {
-			if s.fields[k] != info.fields[k] || s.refs[k] != info.refs[k] {
-				info.fields[k], info.refs[k] = "", false
+			if s.fields[k] != info.fields[k] || s.refs[k] != info.refs[k] || s.bools[k] != info.bools[k] {
+				info.fields[k], info.refs[k], info.bools[k] = "", false, false
 			}
 		}
 	}
@@ -582,7 +601,7 @@ func (c *Checker) computeOwnConversion(node *ast.Node, report bool) {
 				c.checkOwnStructUnionField(node, t)
 			}
 			c.setOwnTarget(object, inLayout)
-		case printer.OwnCellArrayOfNumber, printer.OwnCellArrayOfStruct:
+		case printer.OwnCellArrayOfNumber, printer.OwnCellArrayOfStruct, printer.OwnCellArrayOfBoolean:
 			c.setOwnTarget(object, name == "length")
 		default:
 			c.setOwnTarget(object, false)
@@ -599,8 +618,7 @@ func (c *Checker) computeOwnConversion(node *ast.Node, report bool) {
 			}
 			return
 		}
-		kind := c.getOwnCellType(t).Kind
-		c.setOwnTarget(object, kind == printer.OwnCellArrayOfNumber || kind == printer.OwnCellArrayOfStruct)
+		c.setOwnTarget(object, c.getOwnCellType(t).Kind.IsArray())
 	}
 }
 

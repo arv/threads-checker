@@ -193,11 +193,11 @@ export shared struct Bad {
     s: string;
 >s : Symbol(Bad.s, Decl(errors.mts, 3, 26))
 
-    f: boolean;
+    f: boolean | null;
 >f : Symbol(Bad.f, Decl(errors.mts, 4, 14))
 
     o?: number;
->o : Symbol(Bad.o, Decl(errors.mts, 5, 15))
+>o : Symbol(Bad.o, Decl(errors.mts, 5, 22))
 
     u: number | undefined;
 >u : Symbol(Bad.u, Decl(errors.mts, 6, 15))

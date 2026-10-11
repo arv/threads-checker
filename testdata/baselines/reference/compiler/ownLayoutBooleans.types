@@ -1,0 +1,549 @@
+//// [tests/cases/compiler/ownLayoutBooleans.ts] ////
+
+=== threads.d.mts ===
+// Threads for JavaScript in plain TypeScript: own and shared values, shared structs, and channels.
+//
+// Code written against these types is ordinary TypeScript: tsc, editors, linters and formatters
+// accept it as it is. Two tools add what the types cannot say:
+//   - the ownership checker (`tsgo own check`, from the tsgo fork) runs in CI like a linter and
+//     proves the rules below: nothing is used after it is sent, and shared values never change;
+//   - the bundler plugin (vite-plugin-threads.mjs) compiles shared structs and SharedArrays to
+//     typed-array accesses on shared memory, counts their references, and registers the functions
+//     threads run.
+//
+// Every value a thread touches is one of three kinds:
+//   - owned, the default: an ordinary object only one thread can reach. `Sending<T>` moves it: the
+//     caller gives it up and the receiver owns it;
+//   - shared: `Shared<T>`, deeply immutable, so any number of threads may read it;
+//   - a cell: shared and mutable, but only through what synchronizes it (Barrier, Slots, Channel), or,
+//     for shared structs and SharedArrays, in place, ordered by one of those.
+
+declare const cellBrand: unique symbol;
+>cellBrand : unique symbol
+
+declare const fieldBrand: unique symbol;
+>fieldBrand : unique symbol
+
+/** A cell: shared and mutable. Any number of threads may hold the same one. */
+export interface Cell {
+  readonly [cellBrand]: true;
+>[cellBrand] : true
+>cellBrand : unique symbol
+>true : true
+}
+
+/**
+ * A value whose ownership moves, on a parameter or a result: the caller must not use it, or anything
+ * it reaches, afterwards. The ownership checker enforces this; to TypeScript it is just T.
+ */
+export type Sending<T> = T;
+>Sending : T
+
+/** A deeply immutable value, which any number of threads may read. To TypeScript it is deeply readonly. */
+export type Shared<T> = T extends Cell | ((...args: any[]) => any) ? T
+>Shared : Shared<T>
+>args : any[]
+
+  : T extends object ? { readonly [K in keyof T]: Shared<T[K]> }
+  : T;
+
+/** Ends `x`'s lifetime: its value, and what it reaches, moves to the caller. At run time, `x` itself. */
+export declare function consume<T>(x: T): Sending<T>;
+>consume : <T>(x: T) => Sending<T>
+>x : T
+
+/** Freezes a value the caller owns into a deeply immutable value every thread can read. */
+export declare function share<T>(value: Sending<T>): Shared<T>;
+>share : <T>(value: Sending<T>) => Shared<T>
+>value : T
+
+// ---- shared structs ----
+
+/** A field of a shared struct, declared with `f64`, `bool` or `ref<T>()`. */
+export interface Field<T> {
+  readonly [fieldBrand]: T;
+>[fieldBrand] : T
+>fieldBrand : unique symbol
+}
+/** A number field: an f64 in shared memory. */
+export declare const f64: Field<number>;
+>f64 : Field<number>
+
+/** A boolean field: a byte in shared memory, 0 or 1. */
+export declare const bool: Field<boolean>;
+>bool : Field<boolean>
+
+/** A reference field: a shared struct or a SharedArray, or null. */
+export declare function ref<T>(): Field<T | null>;
+>ref : <T>() => Field<T | null>
+
+/** What `struct(...)` returns: `new S()` makes a zeroed struct in shared memory. */
+export interface StructType<T> {
+  new (): T & Cell;
+  readonly fields: readonly string[];
+>fields : readonly string[]
+}
+/** The value type of a struct type: `type Body = Struct<typeof Body>`. */
+export type Struct<S> = S extends StructType<infer T> ? T & Cell : never;
+>Struct : Struct<S>
+
+/**
+ * Declares a shared struct: fields at fixed places in shared memory, which every thread reads and
+ * writes in place. Reads and writes are not ordered between threads: a Barrier or a Channel orders
+ * them.
+ *
+ *     const Body = struct({ x: f64, y: f64, m: f64 });
+ *     type Body = Struct<typeof Body>;
+ *
+ * A struct that refers to its own type is declared with an interface:
+ *
+ *     interface Node { value: number; next: Node | null }
+ *     const Node = struct<Node>({ value: f64, next: ref<Node>() });
+ */
+export declare function struct<F extends Record<string, Field<any>>>(
+>struct : { <F extends Record<string, Field<any>>>(fields: F): StructType<{ -readonly [K in keyof F]: F[K] extends Field<infer V> ? V : never; }>; <T>(fields: { [K in keyof T]-?: Field<T[K]>; }): StructType<T>; }
+
+  fields: F,
+>fields : F
+
+): StructType<{ -readonly [K in keyof F]: F[K] extends Field<infer V> ? V : never }>;
+export declare function struct<T>(fields: { [K in keyof T]-?: Field<T[K]> }): StructType<T>;
+>struct : { <F extends Record<string, Field<any>>>(fields: F): StructType<{ -readonly [K in keyof F]: F[K] extends Field<infer V> ? V : never; }>; <T>(fields: { [K in keyof T]-?: Field<T[K]>; }): StructType<T>; }
+>fields : { [K in keyof T]-?: Field<T[K]>; }
+
+/**
+ * A fixed-length array in shared memory, of numbers or of shared structs stored inline. Every thread
+ * reads and writes the same elements, with no copying; a Barrier or a Channel orders them.
+ */
+export interface SharedArray<T> extends Cell {
+  readonly length: number;
+>length : number
+
+  [index: number]: T;
+>index : number
+}
+export declare const SharedArray: {
+>SharedArray : { new (type: NumberConstructor, length: number): SharedArray<number>; new (type: BooleanConstructor, length: number): SharedArray<boolean>; new <T>(type: StructType<T>, length: number): SharedArray<T & Cell>; }
+
+  new (type: NumberConstructor, length: number): SharedArray<number>;
+>type : NumberConstructor
+>length : number
+
+  new (type: BooleanConstructor, length: number): SharedArray<boolean>;
+>type : BooleanConstructor
+>length : number
+
+  new <T>(type: StructType<T>, length: number): SharedArray<T & Cell>;
+>type : StructType<T>
+>length : number
+
+};
+
+// ---- threads ----
+
+/** A thread; joining it moves the thread's result back. */
+export interface Thread<R> extends Cell {
+  /** Waits for the thread, from a thread that may block (not a page's main thread). */
+  join(): Sending<R>;
+>join : () => Sending<R>
+
+  /** Waits for the thread without blocking: for a page's main thread. */
+  joinAsync(): Promise<Sending<R>>;
+>joinAsync : () => Promise<Sending<R>>
+}
+
+/** Starts `f` on a thread. Every argument is sent: owned values move, shared values and cells are shared. */
+export declare function spawn<A extends unknown[], R>(f: (...args: A) => Sending<R>, ...args: Sending<A>): Thread<R>;
+>spawn : <A extends unknown[], R>(f: (...args: A) => Sending<R>, ...args: Sending<A>) => Thread<R>
+>f : (...args: A) => Sending<R>
+>args : A
+>args : A
+
+/** Spawns threads that cannot outlive the scope. */
+export interface Scope extends Cell {
+  spawn<A extends unknown[], R>(f: (...args: A) => Sending<R>, ...args: Sending<A>): Thread<R>;
+>spawn : <A extends unknown[], R>(f: (...args: A) => Sending<R>, ...args: Sending<A>) => Thread<R>
+>f : (...args: A) => Sending<R>
+>args : A
+>args : A
+}
+/** Runs `body` and joins every thread it spawned before returning. */
+export declare function scope<R>(body: (s: Scope) => R): R;
+>scope : <R>(body: (s: Scope) => R) => R
+>body : (s: Scope) => R
+>s : Scope
+
+/** Splits an owned array into `parts` owned, disjoint chunks of nearly equal size. Trusted. */
+export declare function partition<T>(items: Sending<T[]>, parts: number): Sending<T[]>[];
+>partition : <T>(items: Sending<T[]>, parts: number) => Sending<T[]>[]
+>items : T[]
+>parts : number
+
+/** Takes element `index` out of an array of owned values, so the caller owns it. Trusted. */
+export declare function take<T>(items: Sending<T>[], index: number): Sending<T>;
+>take : <T>(items: Sending<T>[], index: number) => Sending<T>
+>items : T[]
+>index : number
+
+/** A reusable barrier for a fixed number of threads. */
+export declare class Barrier implements Cell {
+>Barrier : Barrier
+
+  readonly [cellBrand]: true;
+>[cellBrand] : true
+>cellBrand : unique symbol
+>true : true
+
+  constructor(threads: number);
+>threads : number
+
+  /** Blocks until all threads have called `wait`. */
+  wait(): void;
+>wait : () => void
+}
+
+/** One slot per thread: a thread publishes a shared value into its slot, and everyone reads every slot. */
+export declare class Slots<T> implements Cell {
+>Slots : Slots<T>
+
+  readonly [cellBrand]: true;
+>[cellBrand] : true
+>cellBrand : unique symbol
+>true : true
+
+  constructor(count: number);
+>count : number
+
+  readonly length: number;
+>length : number
+
+  set(index: number, value: Shared<T>): void;
+>set : (index: number, value: Shared<T>) => void
+>index : number
+>value : Shared<T>
+
+  get(index: number): Shared<T> | undefined;
+>get : (index: number) => Shared<T> | undefined
+>index : number
+
+  /** The arrays in all slots, concatenated in slot order. */
+  flat(): Shared<T extends readonly (infer E)[] ? E[] : T[]>;
+>flat : () => Shared<T extends readonly (infer E)[] ? E[] : T[]>
+}
+
+// ---- goroutines and channels ----
+
+/** A channel: values move through it from thread to thread, in order. */
+export declare class Channel<T> implements Cell {
+>Channel : Channel<T>
+
+  readonly [cellBrand]: true;
+>[cellBrand] : true
+>cellBrand : unique symbol
+>true : true
+
+  /** Holds up to `capacity` values; 0, the default, is unbuffered. */
+  constructor(capacity?: number);
+>capacity : number | undefined
+
+  /** Moves `value` in: waits while the channel is full, or, unbuffered, until a receiver takes it. */
+  send(value: Sending<T>): void;
+>send : (value: Sending<T>) => void
+>value : T
+
+  /** The next value, which the caller now owns; waits while empty. Undefined once closed and empty. */
+  recv(): Sending<T> | undefined;
+>recv : () => Sending<T> | undefined
+
+  /** No more sends. Receivers still get what is left. */
+  close(): void;
+>close : () => void
+
+  [Symbol.iterator](): Iterator<T>;
+>[Symbol.iterator] : () => Iterator<T>
+>Symbol.iterator : unique symbol
+>Symbol : SymbolConstructor
+>iterator : unique symbol
+}
+/** Starts `f` on a thread of its own, a goroutine. Nothing waits for it. */
+export declare function go<A extends unknown[]>(f: (...args: A) => void, ...args: Sending<A>): void;
+>go : <A extends unknown[]>(f: (...args: A) => void, ...args: Sending<A>) => void
+>f : (...args: A) => void
+>args : A
+>args : A
+
+/** Waits until one of the channels has a value or is closed: its index and the value (undefined if closed). */
+export declare function select<T>(...channels: Channel<T>[]): [index: number, value: T | undefined];
+>select : <T>(...channels: Channel<T>[]) => [index: number, value: T | undefined]
+>channels : Channel<T>[]
+
+/** Prints a line, synchronously, from any thread. */
+export declare function log(...args: unknown[]): void;
+>log : (...args: unknown[]) => void
+>args : unknown[]
+
+/** Shared memory in use, and shared structs and SharedArrays allocated and freed. */
+export declare function heapStats(): { heapBytes: number; allocated: number; freed: number; pending: number };
+>heapStats : () => { heapBytes: number; allocated: number; freed: number; pending: number; }
+>heapBytes : number
+>allocated : number
+>freed : number
+>pending : number
+
+=== booleans.mts ===
+import { bool, f64, ref, SharedArray, struct } from "./threads.mjs";
+>bool : import("./threads.mjs").Field<boolean>
+>f64 : import("./threads.mjs").Field<number>
+>ref : <T>() => import("./threads.mjs").Field<T | null>
+>SharedArray : { new (type: NumberConstructor, length: number): SharedArray<number>; new (type: BooleanConstructor, length: number): SharedArray<boolean>; new <T>(type: import("./threads.mjs").StructType<T>, length: number): SharedArray<T & import("./threads.mjs").Cell>; }
+>struct : { <F extends Record<string, import("./threads.mjs").Field<any>>>(fields: F): import("./threads.mjs").StructType<{ -readonly [K in keyof F]: F[K] extends import("./threads.mjs").Field<infer V> ? V : never; }>; <T>(fields: { [K in keyof T]-?: import("./threads.mjs").Field<T[K]>; }): import("./threads.mjs").StructType<T>; }
+
+interface Task { id: number; done: boolean; next: Task | null; urgent: boolean }
+>id : number
+>done : boolean
+>next : Task | null
+>urgent : boolean
+
+const Task = struct<Task>({ id: f64, done: bool, next: ref<Task>(), urgent: bool });
+>Task : import("./threads.mjs").StructType<Task>
+>struct<Task>({ id: f64, done: bool, next: ref<Task>(), urgent: bool }) : import("./threads.mjs").StructType<Task>
+>struct : { <F extends Record<string, import("./threads.mjs").Field<any>>>(fields: F): import("./threads.mjs").StructType<{ -readonly [K in keyof F]: F[K] extends import("./threads.mjs").Field<infer V> ? V : never; }>; <T>(fields: { [K in keyof T]-?: import("./threads.mjs").Field<T[K]>; }): import("./threads.mjs").StructType<T>; }
+>{ id: f64, done: bool, next: ref<Task>(), urgent: bool } : { id: import("./threads.mjs").Field<number>; done: import("./threads.mjs").Field<boolean>; next: import("./threads.mjs").Field<Task | null>; urgent: import("./threads.mjs").Field<boolean>; }
+>id : import("./threads.mjs").Field<number>
+>f64 : import("./threads.mjs").Field<number>
+>done : import("./threads.mjs").Field<boolean>
+>bool : import("./threads.mjs").Field<boolean>
+>next : import("./threads.mjs").Field<Task | null>
+>ref<Task>() : import("./threads.mjs").Field<Task | null>
+>ref : <T>() => import("./threads.mjs").Field<T | null>
+>urgent : import("./threads.mjs").Field<boolean>
+>bool : import("./threads.mjs").Field<boolean>
+
+export function finish(t: Task): boolean {
+>finish : (t: Task) => boolean
+>t : Task
+
+    const was = t.done;
+>was : boolean
+>t.done : boolean
+>t : Task
+>done : boolean
+
+    t.done = true;
+>t.done = true : true
+>t.done : boolean
+>t : Task
+>done : boolean
+>true : true
+
+    t.urgent = !t.urgent;
+>t.urgent = !t.urgent : boolean
+>t.urgent : boolean
+>t : Task
+>urgent : boolean
+>!t.urgent : boolean
+>t.urgent : boolean
+>t : Task
+>urgent : boolean
+
+    if (t.next && !t.next.done) t.next.urgent = was || t.urgent;
+>t.next && !t.next.done : boolean | null
+>t.next : Task | null
+>t : Task
+>next : Task | null
+>!t.next.done : boolean
+>t.next.done : boolean
+>t.next : Task
+>t : Task
+>next : Task
+>done : boolean
+>t.next.urgent = was || t.urgent : boolean
+>t.next.urgent : boolean
+>t.next : Task
+>t : Task
+>next : Task
+>urgent : boolean
+>was || t.urgent : boolean
+>was : boolean
+>t.urgent : boolean
+>t : Task
+>urgent : boolean
+
+    return t.done && !was;
+>t.done && !was : boolean
+>t.done : true
+>t : Task
+>done : true
+>!was : boolean
+>was : boolean
+}
+
+// A logical assignment's value is a boolean too.
+export function mark(t: Task, flag: boolean): boolean {
+>mark : (t: Task, flag: boolean) => boolean
+>t : Task
+>flag : boolean
+
+    const a = (t.done ||= flag);
+>a : boolean
+>(t.done ||= flag) : boolean
+>t.done ||= flag : boolean
+>t.done : boolean
+>t : Task
+>done : boolean
+>flag : boolean
+
+    const b = (t.urgent &&= flag);
+>b : boolean
+>(t.urgent &&= flag) : boolean
+>t.urgent &&= flag : boolean
+>t.urgent : boolean
+>t : Task
+>urgent : boolean
+>flag : boolean
+
+    t.done ??= flag;                                  // a boolean is never null: only read
+>t.done ??= flag : boolean
+>t.done : boolean
+>t : Task
+>done : boolean
+>flag : boolean
+
+    return a && b;
+>a && b : boolean
+>a : boolean
+>b : boolean
+}
+
+// Destructuring into a boolean field stores the byte.
+export function assign(t: Task, pair: [boolean, number]) {
+>assign : (t: Task, pair: [boolean, number]) => void
+>t : Task
+>pair : [boolean, number]
+
+    [t.done, t.id] = pair;
+>[t.done, t.id] = pair : [boolean, number]
+>[t.done, t.id] : [boolean, number]
+>t.done : boolean
+>t : Task
+>done : boolean
+>t.id : number
+>t : Task
+>id : number
+>pair : [boolean, number]
+
+    for (t.urgent of [true, false]) {}
+>t.urgent : boolean
+>t : Task
+>urgent : boolean
+>[true, false] : boolean[]
+>true : true
+>false : false
+}
+
+export function sieve(n: number): number {
+>sieve : (n: number) => number
+>n : number
+
+    const composite = new SharedArray(Boolean, n);
+>composite : SharedArray<boolean>
+>new SharedArray(Boolean, n) : SharedArray<boolean>
+>SharedArray : { new (type: NumberConstructor, length: number): SharedArray<number>; new (type: BooleanConstructor, length: number): SharedArray<boolean>; new <T>(type: import("./threads.mjs").StructType<T>, length: number): SharedArray<T & import("./threads.mjs").Cell>; }
+>Boolean : BooleanConstructor
+>n : number
+
+    let primes = 0;
+>primes : number
+>0 : 0
+
+    for (let i = 2; i < composite.length; i++) {
+>i : number
+>2 : 2
+>i < composite.length : boolean
+>i : number
+>composite.length : number
+>composite : SharedArray<boolean>
+>length : number
+>i++ : number
+>i : number
+
+        if (composite[i]) continue;               // in bounds: no check
+>composite[i] : boolean
+>composite : SharedArray<boolean>
+>i : number
+
+        primes++;
+>primes++ : number
+>primes : number
+
+        for (let j = i * i; j < n; j += i) composite[j] = true;
+>j : number
+>i * i : number
+>i : number
+>i : number
+>j < n : boolean
+>j : number
+>n : number
+>j += i : number
+>j : number
+>i : number
+>composite[j] = true : true
+>composite[j] : boolean
+>composite : SharedArray<boolean>
+>j : number
+>true : true
+    }
+    composite[n - 1] ||= composite[0];
+>composite[n - 1] ||= composite[0] : boolean
+>composite[n - 1] : boolean
+>composite : SharedArray<boolean>
+>n - 1 : number
+>n : number
+>1 : 1
+>composite[0] : boolean
+>composite : SharedArray<boolean>
+>0 : 0
+
+    return primes + composite.length;
+>primes + composite.length : number
+>primes : number
+>composite.length : number
+>composite : SharedArray<boolean>
+>length : number
+}
+
+=== syntax.mts ===
+// The syntax's shared structs take boolean fields as well.
+shared struct Flags { count: number; on: boolean; off: false }
+>Flags : Flags
+>count : number
+>on : boolean
+>off : false
+>false : false
+
+export function toggle(f: Flags): boolean {
+>toggle : (f: Flags) => boolean
+>f : Flags
+
+    f.on = !f.on;
+>f.on = !f.on : boolean
+>f.on : boolean
+>f : Flags
+>on : boolean
+>!f.on : boolean
+>f.on : boolean
+>f : Flags
+>on : boolean
+
+    f.count++;
+>f.count++ : number
+>f.count : number
+>f : Flags
+>count : number
+
+    return f.on;
+>f.on : boolean
+>f : Flags
+>on : boolean
+}
+

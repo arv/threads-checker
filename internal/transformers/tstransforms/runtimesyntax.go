@@ -660,16 +660,26 @@ func (tx *RuntimeSyntaxTransformer) visitSharedStructDeclaration(node *ast.Share
 		f.NewArrayLiteralExpression(f.NewNodeList(fieldNames), false /*multiLine*/),
 	}
 	if usesOwnRuntime && tx.emitResolver != nil {
-		// The indexes of the reference fields, which the runtime releases when it frees a block.
-		var refs []*ast.Expression
+		// The indexes of the reference fields, which the runtime releases when it frees a block, and
+		// of the boolean fields, if any.
+		var refs, bools []*ast.Expression
 		if original := tx.EmitContext().MostOriginal(node.AsNode()); original != nil && original.Flags&ast.NodeFlagsSynthesized == 0 {
-			for k, isRef := range tx.emitResolver.GetOwnCellType(original).Refs {
+			cell := tx.emitResolver.GetOwnCellType(original)
+			for k, isRef := range cell.Refs {
 				if isRef {
 					refs = append(refs, f.NewNumericLiteral(strconv.Itoa(k), ast.TokenFlagsNone))
 				}
 			}
+			for k, isBool := range cell.Bools {
+				if isBool {
+					bools = append(bools, f.NewNumericLiteral(strconv.Itoa(k), ast.TokenFlagsNone))
+				}
+			}
 		}
 		args = append(args, f.NewArrayLiteralExpression(f.NewNodeList(refs), false /*multiLine*/))
+		if len(bools) > 0 {
+			args = append(args, f.NewArrayLiteralExpression(f.NewNodeList(bools), false /*multiLine*/))
+		}
 	}
 	call := f.NewCallExpression(
 		helper,

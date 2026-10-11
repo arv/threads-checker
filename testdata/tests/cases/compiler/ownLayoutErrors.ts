@@ -86,7 +86,7 @@ import { SharedArray } from "./own.mjs";
 export shared struct Good { a: number; b: Good; c: SharedArray<number>; d: SharedArray<Good> }
 export shared struct Bad {
     s: string;
-    f: boolean;
+    f: boolean | null;
     o?: number;
     u: number | undefined;
     arr: number[];

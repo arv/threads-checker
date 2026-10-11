@@ -151,7 +151,7 @@ func (r *EmitResolver) GetOwnStructCall(call *ast.Node) *printer.OwnStructCall {
 	if info == nil {
 		return nil
 	}
-	return &printer.OwnStructCall{Name: info.name, Layout: printer.OwnCellType{Kind: printer.OwnCellStruct, Fields: info.fields, Refs: info.refs}}
+	return &printer.OwnStructCall{Name: info.name, Layout: printer.OwnCellType{Kind: printer.OwnCellStruct, Fields: info.fields, Refs: info.refs, Bools: info.bools}}
 }
 
 // Reports whether a call of the original tree is `consume(x)` (own/shared threads extension, plain

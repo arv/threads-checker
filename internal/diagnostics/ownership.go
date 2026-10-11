@@ -35,9 +35,9 @@ var Specify_the_module_that_files_using_the_own_Slashshared_threads_syntax_impor
 
 var Option_0_can_only_be_used_when_module_is_set_to_es2015_or_later = &Message{code: 96014, category: CategoryError, key: "Option_0_can_only_be_used_when_module_is_set_to_es2015_or_later_96014", text: "Option '{0}' can only be used when 'module' is set to 'es2015' or later."}
 
-var A_shared_struct_field_must_be_a_number_a_shared_struct_or_a_SharedArray = &Message{code: 96015, category: CategoryError, key: "A_shared_struct_field_must_be_a_number_a_shared_struct_or_a_SharedArray_96015", text: "A shared struct field must be a number, a shared struct or a SharedArray."}
+var A_shared_struct_field_must_be_a_number_a_boolean_a_shared_struct_or_a_SharedArray = &Message{code: 96015, category: CategoryError, key: "A_shared_struct_field_must_be_a_number_a_boolean_a_shared_struct_or_a_SharedArray_96015", text: "A shared struct field must be a number, a boolean, a shared struct or a SharedArray."}
 
-var The_elements_of_a_SharedArray_must_be_numbers_or_a_shared_struct = &Message{code: 96016, category: CategoryError, key: "The_elements_of_a_SharedArray_must_be_numbers_or_a_shared_struct_96016", text: "The elements of a SharedArray must be numbers or a shared struct."}
+var The_elements_of_a_SharedArray_must_be_numbers_booleans_or_a_shared_struct = &Message{code: 96016, category: CategoryError, key: "The_elements_of_a_SharedArray_must_be_numbers_booleans_or_a_shared_struct_96016", text: "The elements of a SharedArray must be numbers, booleans or a shared struct."}
 
 var The_elements_of_a_SharedArray_of_shared_structs_are_stored_inline_Colon_assign_their_fields_instead = &Message{code: 96017, category: CategoryError, key: "The_elements_of_a_SharedArray_of_shared_structs_are_stored_inline_Colon_assign_their_fields_instead_96017", text: "The elements of a SharedArray of shared structs are stored inline: assign their fields instead."}
 
@@ -77,8 +77,8 @@ func ownershipKeyToMessage(key Key) *Message {
 		X_0_is_consumed_here,
 		Specify_the_module_that_files_using_the_own_Slashshared_threads_syntax_import_their_runtime_helpers_from_e_g_Dot_Slashown_mjs,
 		Option_0_can_only_be_used_when_module_is_set_to_es2015_or_later,
-		A_shared_struct_field_must_be_a_number_a_shared_struct_or_a_SharedArray,
-		The_elements_of_a_SharedArray_must_be_numbers_or_a_shared_struct,
+		A_shared_struct_field_must_be_a_number_a_boolean_a_shared_struct_or_a_SharedArray,
+		The_elements_of_a_SharedArray_must_be_numbers_booleans_or_a_shared_struct,
 		The_elements_of_a_SharedArray_of_shared_structs_are_stored_inline_Colon_assign_their_fields_instead,
 		Optional_chaining_is_not_supported_on_0_Colon_its_value_is_an_address_in_the_shared_heap,
 		X_0_cannot_be_destructured_here_Colon_its_value_is_an_address_in_the_shared_heap,
