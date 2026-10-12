@@ -80,15 +80,17 @@ export declare const f64: Field<number>;
 
 /**
  * A 32-bit integer: a number, which the field or element it is stored in keeps as an Int32Array would
- * (3.7 as 3, and 2 ** 31 as -(2 ** 31)). Any number may be stored in one. Atomic operations act on
- * i32s (see `atomic`).
+ * (2 ** 31 as -(2 ** 31)). Atomic operations act on i32s (see `atomic`). The ownership checker
+ * requires an integer of a value stored into one (or passed or returned as one): integer arithmetic,
+ * which wraps, but not a number that may have a fraction, which must be converted explicitly, as with
+ * Math.round(x), Math.trunc(x) or x | 0.
  */
 export type i32 = number & { readonly [int32Brand]?: never };
 >i32 : i32
 >[int32Brand] : undefined
 >int32Brand : unique symbol
 
-/** An 8-bit unsigned integer: a number, kept as a Uint8Array would (256 as 0, and -1 as 255). */
+/** An 8-bit unsigned integer: a number, kept as a Uint8Array would (256 as 0, and -1 as 255). As an i32's, its values must be integers. */
 export type u8 = number & { readonly [uint8Brand]?: never };
 >u8 : u8
 >[uint8Brand] : undefined
@@ -243,47 +245,47 @@ export interface AtomicOperation<A extends unknown[], R> {
  */
 export interface Atomic {
   /** The i32's value. */
-  readonly load: AtomicOperation<[], number>;
->load : AtomicOperation<[], number>
+  readonly load: AtomicOperation<[], i32>;
+>load : AtomicOperation<[], i32>
 
-  /** Stores `value` (as an i32), and returns it. */
-  readonly store: AtomicOperation<[value: number], number>;
->store : AtomicOperation<[value: number], number>
+  /** Stores `value`, and returns it. */
+  readonly store: AtomicOperation<[value: i32], i32>;
+>store : AtomicOperation<[value: i32], i32>
 
   /** Adds `value`, and returns the old value. */
-  readonly add: AtomicOperation<[value: number], number>;
->add : AtomicOperation<[value: number], number>
+  readonly add: AtomicOperation<[value: i32], i32>;
+>add : AtomicOperation<[value: i32], i32>
 
   /** Subtracts `value`, and returns the old value. */
-  readonly sub: AtomicOperation<[value: number], number>;
->sub : AtomicOperation<[value: number], number>
+  readonly sub: AtomicOperation<[value: i32], i32>;
+>sub : AtomicOperation<[value: i32], i32>
 
   /** Stores the bitwise and of the i32 and `value`, and returns the old value. */
-  readonly and: AtomicOperation<[value: number], number>;
->and : AtomicOperation<[value: number], number>
+  readonly and: AtomicOperation<[value: i32], i32>;
+>and : AtomicOperation<[value: i32], i32>
 
   /** Stores the bitwise or of the i32 and `value`, and returns the old value. */
-  readonly or: AtomicOperation<[value: number], number>;
->or : AtomicOperation<[value: number], number>
+  readonly or: AtomicOperation<[value: i32], i32>;
+>or : AtomicOperation<[value: i32], i32>
 
   /** Stores the bitwise xor of the i32 and `value`, and returns the old value. */
-  readonly xor: AtomicOperation<[value: number], number>;
->xor : AtomicOperation<[value: number], number>
+  readonly xor: AtomicOperation<[value: i32], i32>;
+>xor : AtomicOperation<[value: i32], i32>
 
   /** Stores `value`, and returns the old value. */
-  readonly exchange: AtomicOperation<[value: number], number>;
->exchange : AtomicOperation<[value: number], number>
+  readonly exchange: AtomicOperation<[value: i32], i32>;
+>exchange : AtomicOperation<[value: i32], i32>
 
   /** Stores `replacement` if the i32 is `expected`, and returns the old value either way. */
-  readonly compareExchange: AtomicOperation<[expected: number, replacement: number], number>;
->compareExchange : AtomicOperation<[expected: number, replacement: number], number>
+  readonly compareExchange: AtomicOperation<[expected: i32, replacement: i32], i32>;
+>compareExchange : AtomicOperation<[expected: i32, replacement: i32], i32>
 
   /**
    * Waits while the i32 is `value`, until notify() wakes the thread or `timeout` ms pass. Not on a
    * page's main thread, which must not block.
    */
-  readonly wait: AtomicOperation<[value: number, timeout?: number], "ok" | "not-equal" | "timed-out">;
->wait : AtomicOperation<[value: number, timeout?: number | undefined], "not-equal" | "ok" | "timed-out">
+  readonly wait: AtomicOperation<[value: i32, timeout?: number], "ok" | "not-equal" | "timed-out">;
+>wait : AtomicOperation<[value: i32, timeout?: number | undefined], "not-equal" | "ok" | "timed-out">
 
   /** Wakes up to `count` threads waiting on the i32 (all of them by default); returns how many it woke. */
   readonly notify: AtomicOperation<[count?: number], number>;
@@ -509,12 +511,12 @@ export function fields(n: Node): number {
 >fields : (n: Node) => number
 >n : Node
 
-    n.value = 3.7;                                  // stored as 3
->n.value = 3.7 : 3.7
+    n.value = 3;
+>n.value = 3 : 3
 >n.value : i32
 >n : Node
 >value : i32
->3.7 : 3.7
+>3 : 3
 
     n.value += 2;
 >n.value += 2 : number
@@ -581,13 +583,13 @@ export function claim(work: Work, pixels: SharedArray<u8>, counts: SharedArray<i
     for (let i; (i = atomic.add(work, "next", 1)) < n; claimed++) {
 >i : any
 >(i = atomic.add(work, "next", 1)) < n : boolean
->(i = atomic.add(work, "next", 1)) : number
->i = atomic.add(work, "next", 1) : number
+>(i = atomic.add(work, "next", 1)) : i32
+>i = atomic.add(work, "next", 1) : i32
 >i : any
->atomic.add(work, "next", 1) : number
->atomic.add : import("./threads.mjs").AtomicOperation<[value: number], number>
+>atomic.add(work, "next", 1) : i32
+>atomic.add : import("./threads.mjs").AtomicOperation<[value: i32], i32>
 >atomic : import("./threads.mjs").Atomic
->add : import("./threads.mjs").AtomicOperation<[value: number], number>
+>add : import("./threads.mjs").AtomicOperation<[value: i32], i32>
 >work : { next: i32; done: i32; flags: u8; } & import("./threads.mjs").Cell
 >"next" : "next"
 >1 : 1
@@ -599,29 +601,29 @@ export function claim(work: Work, pixels: SharedArray<u8>, counts: SharedArray<i
 >pixels[i] = i & 255 : number
 >pixels[i] : u8
 >pixels : SharedArray<u8, "u8">
->i : number
+>i : i32
 >i & 255 : number
->i : number
+>i : i32
 >255 : 255
 
         atomic.add(counts, i % counts.length, 1);
->atomic.add(counts, i % counts.length, 1) : number
->atomic.add : import("./threads.mjs").AtomicOperation<[value: number], number>
+>atomic.add(counts, i % counts.length, 1) : i32
+>atomic.add : import("./threads.mjs").AtomicOperation<[value: i32], i32>
 >atomic : import("./threads.mjs").Atomic
->add : import("./threads.mjs").AtomicOperation<[value: number], number>
+>add : import("./threads.mjs").AtomicOperation<[value: i32], i32>
 >counts : SharedArray<i32, "i32">
 >i % counts.length : number
->i : number
+>i : i32
 >counts.length : number
 >counts : SharedArray<i32, "i32">
 >length : number
 >1 : 1
     }
     atomic.or(work, "done", 1);
->atomic.or(work, "done", 1) : number
->atomic.or : import("./threads.mjs").AtomicOperation<[value: number], number>
+>atomic.or(work, "done", 1) : i32
+>atomic.or : import("./threads.mjs").AtomicOperation<[value: i32], i32>
 >atomic : import("./threads.mjs").Atomic
->or : import("./threads.mjs").AtomicOperation<[value: number], number>
+>or : import("./threads.mjs").AtomicOperation<[value: i32], i32>
 >work : { next: i32; done: i32; flags: u8; } & import("./threads.mjs").Cell
 >"done" : "done"
 >1 : 1
@@ -644,27 +646,27 @@ export function waitFor(work: Work): number {
 
     while (atomic.load(work, "done") === 0) atomic.wait(work, "done", 0, 10);
 >atomic.load(work, "done") === 0 : boolean
->atomic.load(work, "done") : number
->atomic.load : import("./threads.mjs").AtomicOperation<[], number>
+>atomic.load(work, "done") : i32
+>atomic.load : import("./threads.mjs").AtomicOperation<[], i32>
 >atomic : import("./threads.mjs").Atomic
->load : import("./threads.mjs").AtomicOperation<[], number>
+>load : import("./threads.mjs").AtomicOperation<[], i32>
 >work : { next: i32; done: i32; flags: u8; } & import("./threads.mjs").Cell
 >"done" : "done"
 >0 : 0
 >atomic.wait(work, "done", 0, 10) : "not-equal" | "ok" | "timed-out"
->atomic.wait : import("./threads.mjs").AtomicOperation<[value: number, timeout?: number | undefined], "not-equal" | "ok" | "timed-out">
+>atomic.wait : import("./threads.mjs").AtomicOperation<[value: i32, timeout?: number | undefined], "not-equal" | "ok" | "timed-out">
 >atomic : import("./threads.mjs").Atomic
->wait : import("./threads.mjs").AtomicOperation<[value: number, timeout?: number | undefined], "not-equal" | "ok" | "timed-out">
+>wait : import("./threads.mjs").AtomicOperation<[value: i32, timeout?: number | undefined], "not-equal" | "ok" | "timed-out">
 >work : { next: i32; done: i32; flags: u8; } & import("./threads.mjs").Cell
 >"done" : "done"
 >0 : 0
 >10 : 10
 
     atomic.store(work, "next", 0);
->atomic.store(work, "next", 0) : number
->atomic.store : import("./threads.mjs").AtomicOperation<[value: number], number>
+>atomic.store(work, "next", 0) : i32
+>atomic.store : import("./threads.mjs").AtomicOperation<[value: i32], i32>
 >atomic : import("./threads.mjs").Atomic
->store : import("./threads.mjs").AtomicOperation<[value: number], number>
+>store : import("./threads.mjs").AtomicOperation<[value: i32], i32>
 >work : { next: i32; done: i32; flags: u8; } & import("./threads.mjs").Cell
 >"next" : "next"
 >0 : 0
@@ -673,32 +675,32 @@ export function waitFor(work: Work): number {
 >atomic.compareExchange(work, "next", 0, 1) + atomic.exchange(work, "done", 0) + atomic.and(work, "next", 3) + atomic.xor(work, "next", 1) : number
 >atomic.compareExchange(work, "next", 0, 1) + atomic.exchange(work, "done", 0) + atomic.and(work, "next", 3) : number
 >atomic.compareExchange(work, "next", 0, 1) + atomic.exchange(work, "done", 0) : number
->atomic.compareExchange(work, "next", 0, 1) : number
->atomic.compareExchange : import("./threads.mjs").AtomicOperation<[expected: number, replacement: number], number>
+>atomic.compareExchange(work, "next", 0, 1) : i32
+>atomic.compareExchange : import("./threads.mjs").AtomicOperation<[expected: i32, replacement: i32], i32>
 >atomic : import("./threads.mjs").Atomic
->compareExchange : import("./threads.mjs").AtomicOperation<[expected: number, replacement: number], number>
+>compareExchange : import("./threads.mjs").AtomicOperation<[expected: i32, replacement: i32], i32>
 >work : { next: i32; done: i32; flags: u8; } & import("./threads.mjs").Cell
 >"next" : "next"
 >0 : 0
 >1 : 1
->atomic.exchange(work, "done", 0) : number
->atomic.exchange : import("./threads.mjs").AtomicOperation<[value: number], number>
+>atomic.exchange(work, "done", 0) : i32
+>atomic.exchange : import("./threads.mjs").AtomicOperation<[value: i32], i32>
 >atomic : import("./threads.mjs").Atomic
->exchange : import("./threads.mjs").AtomicOperation<[value: number], number>
+>exchange : import("./threads.mjs").AtomicOperation<[value: i32], i32>
 >work : { next: i32; done: i32; flags: u8; } & import("./threads.mjs").Cell
 >"done" : "done"
 >0 : 0
->atomic.and(work, "next", 3) : number
->atomic.and : import("./threads.mjs").AtomicOperation<[value: number], number>
+>atomic.and(work, "next", 3) : i32
+>atomic.and : import("./threads.mjs").AtomicOperation<[value: i32], i32>
 >atomic : import("./threads.mjs").Atomic
->and : import("./threads.mjs").AtomicOperation<[value: number], number>
+>and : import("./threads.mjs").AtomicOperation<[value: i32], i32>
 >work : { next: i32; done: i32; flags: u8; } & import("./threads.mjs").Cell
 >"next" : "next"
 >3 : 3
->atomic.xor(work, "next", 1) : number
->atomic.xor : import("./threads.mjs").AtomicOperation<[value: number], number>
+>atomic.xor(work, "next", 1) : i32
+>atomic.xor : import("./threads.mjs").AtomicOperation<[value: i32], i32>
 >atomic : import("./threads.mjs").Atomic
->xor : import("./threads.mjs").AtomicOperation<[value: number], number>
+>xor : import("./threads.mjs").AtomicOperation<[value: i32], i32>
 >work : { next: i32; done: i32; flags: u8; } & import("./threads.mjs").Cell
 >"next" : "next"
 >1 : 1
@@ -786,10 +788,10 @@ export function arrays(n: number, image: SharedArray<Pixel>): number {
 >bytes[0] : u8
 >bytes : SharedArray<u8, "u8">
 >0 : 0
->atomic.sub(ints, 0, 1) : number
->atomic.sub : import("./threads.mjs").AtomicOperation<[value: number], number>
+>atomic.sub(ints, 0, 1) : i32
+>atomic.sub : import("./threads.mjs").AtomicOperation<[value: i32], i32>
 >atomic : import("./threads.mjs").Atomic
->sub : import("./threads.mjs").AtomicOperation<[value: number], number>
+>sub : import("./threads.mjs").AtomicOperation<[value: i32], i32>
 >ints : SharedArray<i32, "i32">
 >0 : 0
 >1 : 1

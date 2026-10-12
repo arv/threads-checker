@@ -35,7 +35,7 @@ var Specify_the_module_that_files_using_the_own_Slashshared_threads_syntax_impor
 
 var Option_0_can_only_be_used_when_module_is_set_to_es2015_or_later = &Message{code: 96014, category: CategoryError, key: "Option_0_can_only_be_used_when_module_is_set_to_es2015_or_later_96014", text: "Option '{0}' can only be used when 'module' is set to 'es2015' or later."}
 
-var A_shared_struct_field_must_be_a_number_a_boolean_a_string_a_shared_struct_or_a_SharedArray = &Message{code: 96015, category: CategoryError, key: "A_shared_struct_field_must_be_a_number_a_boolean_a_string_a_shared_struct_or_a_SharedArray_96015", text: "A shared struct field must be a number, a boolean, a string, a shared struct or a SharedArray."}
+var A_shared_struct_field_must_be_a_number_a_boolean_a_string_a_shared_struct_a_SharedArray_or_a_Channel = &Message{code: 96015, category: CategoryError, key: "A_shared_struct_field_must_be_a_number_a_boolean_a_string_a_shared_struct_a_SharedArray_or_a_Channel_96015", text: "A shared struct field must be a number, a boolean, a string, a shared struct, a SharedArray or a Channel."}
 
 var The_elements_of_a_SharedArray_must_be_numbers_booleans_strings_or_a_shared_struct = &Message{code: 96016, category: CategoryError, key: "The_elements_of_a_SharedArray_must_be_numbers_booleans_strings_or_a_shared_struct_96016", text: "The elements of a SharedArray must be numbers, booleans, strings or a shared struct."}
 
@@ -61,7 +61,9 @@ var Field_0_is_at_different_places_in_the_shared_structs_of_this_union = &Messag
 
 var An_atomic_operation_takes_an_i32_field_of_a_shared_struct_named_by_a_string_literal_or_an_element_of_a_SharedArray_i32 = &Message{code: 96028, category: CategoryError, key: "An_atomic_operation_takes_an_i32_field_of_a_shared_struct_named_by_a_string_literal_or_an_element_of_a_SharedArray_i32_96028", text: "An atomic operation takes an i32 field of a shared struct, named by a string literal, or an element of a SharedArray<i32>."}
 
-var A_string_in_a_shared_struct_or_SharedArray_cannot_be_assigned_by_destructuring_or_as_a_loop_variable = &Message{code: 96027, category: CategoryError, key: "A_string_in_a_shared_struct_or_SharedArray_cannot_be_assigned_by_destructuring_or_as_a_loop_variable_96027", text: "A string in a shared struct or SharedArray cannot be assigned by destructuring or as a loop variable."}
+var This_value_may_not_be_an_integer_which_0_would_truncate_silently_Colon_convert_it_explicitly_as_with_Math_round_Math_trunc_or_0 = &Message{code: 96029, category: CategoryError, key: "This_value_may_not_be_an_integer_which_0_would_truncate_silently_Colon_convert_it_explicitly_as_with_Math_round_Math_trunc_or_0_96029", text: "This value may not be an integer, which {0} would truncate silently: convert it explicitly, as with Math.round(), Math.trunc() or | 0."}
+
+var A_string_or_a_channel_in_a_shared_struct_or_SharedArray_cannot_be_assigned_by_destructuring_or_as_a_loop_variable = &Message{code: 96027, category: CategoryError, key: "A_string_or_a_channel_in_a_shared_struct_or_SharedArray_cannot_be_assigned_by_destructuring_or_as_a_loop_variable_96027", text: "A string or a channel in a shared struct or SharedArray cannot be assigned by destructuring or as a loop variable."}
 
 // Looks up an extension diagnostic by key, for diagnostics that are re-localized from their key
 // (keyToMessage only knows the generated messages).
@@ -81,7 +83,7 @@ func ownershipKeyToMessage(key Key) *Message {
 		X_0_is_consumed_here,
 		Specify_the_module_that_files_using_the_own_Slashshared_threads_syntax_import_their_runtime_helpers_from_e_g_Dot_Slashown_mjs,
 		Option_0_can_only_be_used_when_module_is_set_to_es2015_or_later,
-		A_shared_struct_field_must_be_a_number_a_boolean_a_string_a_shared_struct_or_a_SharedArray,
+		A_shared_struct_field_must_be_a_number_a_boolean_a_string_a_shared_struct_a_SharedArray_or_a_Channel,
 		The_elements_of_a_SharedArray_must_be_numbers_booleans_strings_or_a_shared_struct,
 		The_elements_of_a_SharedArray_of_shared_structs_are_stored_inline_Colon_assign_their_fields_instead,
 		Optional_chaining_is_not_supported_on_0_Colon_its_value_is_an_address_in_the_shared_heap,
@@ -93,8 +95,9 @@ func ownershipKeyToMessage(key Key) *Message {
 		X_0_cannot_be_bound_by_destructuring_Colon_its_value_is_an_address_in_the_shared_heap,
 		A_generator_s_parameter_cannot_have_type_0_Colon_the_generator_runs_after_its_caller_s_borrow_ends,
 		Field_0_is_at_different_places_in_the_shared_structs_of_this_union,
-		A_string_in_a_shared_struct_or_SharedArray_cannot_be_assigned_by_destructuring_or_as_a_loop_variable,
+		A_string_or_a_channel_in_a_shared_struct_or_SharedArray_cannot_be_assigned_by_destructuring_or_as_a_loop_variable,
 		An_atomic_operation_takes_an_i32_field_of_a_shared_struct_named_by_a_string_literal_or_an_element_of_a_SharedArray_i32,
+		This_value_may_not_be_an_integer_which_0_would_truncate_silently_Colon_convert_it_explicitly_as_with_Math_round_Math_trunc_or_0,
 	} {
 		if m.key == key {
 			return m

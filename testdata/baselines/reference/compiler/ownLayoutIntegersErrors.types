@@ -80,15 +80,17 @@ export declare const f64: Field<number>;
 
 /**
  * A 32-bit integer: a number, which the field or element it is stored in keeps as an Int32Array would
- * (3.7 as 3, and 2 ** 31 as -(2 ** 31)). Any number may be stored in one. Atomic operations act on
- * i32s (see `atomic`).
+ * (2 ** 31 as -(2 ** 31)). Atomic operations act on i32s (see `atomic`). The ownership checker
+ * requires an integer of a value stored into one (or passed or returned as one): integer arithmetic,
+ * which wraps, but not a number that may have a fraction, which must be converted explicitly, as with
+ * Math.round(x), Math.trunc(x) or x | 0.
  */
 export type i32 = number & { readonly [int32Brand]?: never };
 >i32 : i32
 >[int32Brand] : undefined
 >int32Brand : unique symbol
 
-/** An 8-bit unsigned integer: a number, kept as a Uint8Array would (256 as 0, and -1 as 255). */
+/** An 8-bit unsigned integer: a number, kept as a Uint8Array would (256 as 0, and -1 as 255). As an i32's, its values must be integers. */
 export type u8 = number & { readonly [uint8Brand]?: never };
 >u8 : u8
 >[uint8Brand] : undefined
@@ -243,47 +245,47 @@ export interface AtomicOperation<A extends unknown[], R> {
  */
 export interface Atomic {
   /** The i32's value. */
-  readonly load: AtomicOperation<[], number>;
->load : AtomicOperation<[], number>
+  readonly load: AtomicOperation<[], i32>;
+>load : AtomicOperation<[], i32>
 
-  /** Stores `value` (as an i32), and returns it. */
-  readonly store: AtomicOperation<[value: number], number>;
->store : AtomicOperation<[value: number], number>
+  /** Stores `value`, and returns it. */
+  readonly store: AtomicOperation<[value: i32], i32>;
+>store : AtomicOperation<[value: i32], i32>
 
   /** Adds `value`, and returns the old value. */
-  readonly add: AtomicOperation<[value: number], number>;
->add : AtomicOperation<[value: number], number>
+  readonly add: AtomicOperation<[value: i32], i32>;
+>add : AtomicOperation<[value: i32], i32>
 
   /** Subtracts `value`, and returns the old value. */
-  readonly sub: AtomicOperation<[value: number], number>;
->sub : AtomicOperation<[value: number], number>
+  readonly sub: AtomicOperation<[value: i32], i32>;
+>sub : AtomicOperation<[value: i32], i32>
 
   /** Stores the bitwise and of the i32 and `value`, and returns the old value. */
-  readonly and: AtomicOperation<[value: number], number>;
->and : AtomicOperation<[value: number], number>
+  readonly and: AtomicOperation<[value: i32], i32>;
+>and : AtomicOperation<[value: i32], i32>
 
   /** Stores the bitwise or of the i32 and `value`, and returns the old value. */
-  readonly or: AtomicOperation<[value: number], number>;
->or : AtomicOperation<[value: number], number>
+  readonly or: AtomicOperation<[value: i32], i32>;
+>or : AtomicOperation<[value: i32], i32>
 
   /** Stores the bitwise xor of the i32 and `value`, and returns the old value. */
-  readonly xor: AtomicOperation<[value: number], number>;
->xor : AtomicOperation<[value: number], number>
+  readonly xor: AtomicOperation<[value: i32], i32>;
+>xor : AtomicOperation<[value: i32], i32>
 
   /** Stores `value`, and returns the old value. */
-  readonly exchange: AtomicOperation<[value: number], number>;
->exchange : AtomicOperation<[value: number], number>
+  readonly exchange: AtomicOperation<[value: i32], i32>;
+>exchange : AtomicOperation<[value: i32], i32>
 
   /** Stores `replacement` if the i32 is `expected`, and returns the old value either way. */
-  readonly compareExchange: AtomicOperation<[expected: number, replacement: number], number>;
->compareExchange : AtomicOperation<[expected: number, replacement: number], number>
+  readonly compareExchange: AtomicOperation<[expected: i32, replacement: i32], i32>;
+>compareExchange : AtomicOperation<[expected: i32, replacement: i32], i32>
 
   /**
    * Waits while the i32 is `value`, until notify() wakes the thread or `timeout` ms pass. Not on a
    * page's main thread, which must not block.
    */
-  readonly wait: AtomicOperation<[value: number, timeout?: number], "ok" | "not-equal" | "timed-out">;
->wait : AtomicOperation<[value: number, timeout?: number | undefined], "not-equal" | "ok" | "timed-out">
+  readonly wait: AtomicOperation<[value: i32, timeout?: number], "ok" | "not-equal" | "timed-out">;
+>wait : AtomicOperation<[value: i32, timeout?: number | undefined], "not-equal" | "ok" | "timed-out">
 
   /** Wakes up to `count` threads waiting on the i32 (all of them by default); returns how many it woke. */
   readonly notify: AtomicOperation<[count?: number], number>;
@@ -476,38 +478,38 @@ export function bad(s: Stats, key: "hits", anything: any) {
 >anything : any
 
     atomic.add(s, key, 1);                          // error: not a string literal
->atomic.add(s, key, 1) : number
->atomic.add : import("./threads.mjs").AtomicOperation<[value: number], number>
+>atomic.add(s, key, 1) : i32
+>atomic.add : import("./threads.mjs").AtomicOperation<[value: i32], i32>
 >atomic : import("./threads.mjs").Atomic
->add : import("./threads.mjs").AtomicOperation<[value: number], number>
+>add : import("./threads.mjs").AtomicOperation<[value: i32], i32>
 >s : { hits: i32; ratio: number; level: u8; } & import("./threads.mjs").Cell
 >key : "hits"
 >1 : 1
 
     atomic.add(anything, "hits", 1);                // error: not a struct
->atomic.add(anything, "hits", 1) : number
->atomic.add : import("./threads.mjs").AtomicOperation<[value: number], number>
+>atomic.add(anything, "hits", 1) : i32
+>atomic.add : import("./threads.mjs").AtomicOperation<[value: i32], i32>
 >atomic : import("./threads.mjs").Atomic
->add : import("./threads.mjs").AtomicOperation<[value: number], number>
+>add : import("./threads.mjs").AtomicOperation<[value: i32], i32>
 >anything : any
 >"hits" : "hits"
 >1 : 1
 
     atomic.add(s, "ratio" as never, 1);             // error: an f64 field, past the types
->atomic.add(s, "ratio" as never, 1) : number
->atomic.add : import("./threads.mjs").AtomicOperation<[value: number], number>
+>atomic.add(s, "ratio" as never, 1) : i32
+>atomic.add : import("./threads.mjs").AtomicOperation<[value: i32], i32>
 >atomic : import("./threads.mjs").Atomic
->add : import("./threads.mjs").AtomicOperation<[value: number], number>
+>add : import("./threads.mjs").AtomicOperation<[value: i32], i32>
 >s : { hits: i32; ratio: number; level: u8; } & import("./threads.mjs").Cell
 >"ratio" as never : never
 >"ratio" : "ratio"
 >1 : 1
 
     atomic.load(s, "level" as never);               // error: a u8 field
->atomic.load(s, "level" as never) : number
->atomic.load : import("./threads.mjs").AtomicOperation<[], number>
+>atomic.load(s, "level" as never) : i32
+>atomic.load : import("./threads.mjs").AtomicOperation<[], i32>
 >atomic : import("./threads.mjs").Atomic
->load : import("./threads.mjs").AtomicOperation<[], number>
+>load : import("./threads.mjs").AtomicOperation<[], i32>
 >s : { hits: i32; ratio: number; level: u8; } & import("./threads.mjs").Cell
 >"level" as never : never
 >"level" : "level"

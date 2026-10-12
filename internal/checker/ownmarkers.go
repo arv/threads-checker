@@ -269,13 +269,13 @@ func (c *Checker) checkOwnStructCall(call *ast.Node) {
 	}
 	literal := ast.SkipParentheses(call.Arguments()[0])
 	if !ast.IsObjectLiteralExpression(literal) {
-		c.error(call.Arguments()[0], diagnostics.A_shared_struct_field_must_be_a_number_a_boolean_a_string_a_shared_struct_or_a_SharedArray)
+		c.error(call.Arguments()[0], diagnostics.A_shared_struct_field_must_be_a_number_a_boolean_a_string_a_shared_struct_a_SharedArray_or_a_Channel)
 		return
 	}
 	for _, property := range literal.Properties() {
 		name := property.Name()
 		if name == nil || !(ast.IsPropertyAssignment(property) || ast.IsShorthandPropertyAssignment(property)) || !ast.IsPropertyNameLiteral(name) || ast.IsNumericLiteral(name) {
-			c.error(property, diagnostics.A_shared_struct_field_must_be_a_number_a_boolean_a_string_a_shared_struct_or_a_SharedArray)
+			c.error(property, diagnostics.A_shared_struct_field_must_be_a_number_a_boolean_a_string_a_shared_struct_a_SharedArray_or_a_Channel)
 			continue
 		}
 		symbol := c.getPropertyOfType(t, name.Text())
@@ -285,6 +285,6 @@ func (c *Checker) checkOwnStructCall(call *ast.Node) {
 		if c.isOwnFieldType(c.getTypeOfSymbol(symbol)) {
 			continue
 		}
-		c.error(property, diagnostics.A_shared_struct_field_must_be_a_number_a_boolean_a_string_a_shared_struct_or_a_SharedArray)
+		c.error(property, diagnostics.A_shared_struct_field_must_be_a_number_a_boolean_a_string_a_shared_struct_a_SharedArray_or_a_Channel)
 	}
 }

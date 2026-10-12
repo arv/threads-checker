@@ -1,9 +1,9 @@
-errors.mts(4,27): error TS96015: A shared struct field must be a number, a boolean, a string, a shared struct or a SharedArray.
-errors.mts(4,39): error TS96015: A shared struct field must be a number, a boolean, a string, a shared struct or a SharedArray.
-errors.mts(8,6): error TS96027: A string in a shared struct or SharedArray cannot be assigned by destructuring or as a loop variable.
-errors.mts(9,15): error TS96027: A string in a shared struct or SharedArray cannot be assigned by destructuring or as a loop variable.
-errors.mts(10,10): error TS96027: A string in a shared struct or SharedArray cannot be assigned by destructuring or as a loop variable.
-errors.mts(11,10): error TS96027: A string in a shared struct or SharedArray cannot be assigned by destructuring or as a loop variable.
+errors.mts(4,27): error TS96015: A shared struct field must be a number, a boolean, a string, a shared struct, a SharedArray or a Channel.
+errors.mts(4,39): error TS96015: A shared struct field must be a number, a boolean, a string, a shared struct, a SharedArray or a Channel.
+errors.mts(8,6): error TS96027: A string or a channel in a shared struct or SharedArray cannot be assigned by destructuring or as a loop variable.
+errors.mts(9,15): error TS96027: A string or a channel in a shared struct or SharedArray cannot be assigned by destructuring or as a loop variable.
+errors.mts(10,10): error TS96027: A string or a channel in a shared struct or SharedArray cannot be assigned by destructuring or as a loop variable.
+errors.mts(11,10): error TS96027: A string or a channel in a shared struct or SharedArray cannot be assigned by destructuring or as a loop variable.
 errors.mts(16,20): error TS96016: The elements of a SharedArray must be numbers, booleans, strings or a shared struct.
 
 
@@ -181,24 +181,24 @@ errors.mts(16,20): error TS96016: The elements of a SharedArray must be numbers,
     interface Bad { maybe: string | null; either: string | number; ok: string }
     const Bad = struct<Bad>({ maybe: str, either: str, ok: str });  // error: maybe and either
                               ~~~~~~~~~~
-!!! error TS96015: A shared struct field must be a number, a boolean, a string, a shared struct or a SharedArray.
+!!! error TS96015: A shared struct field must be a number, a boolean, a string, a shared struct, a SharedArray or a Channel.
                                           ~~~~~~~~~~~
-!!! error TS96015: A shared struct field must be a number, a boolean, a string, a shared struct or a SharedArray.
+!!! error TS96015: A shared struct field must be a number, a boolean, a string, a shared struct, a SharedArray or a Channel.
     
     const Named = struct({ name: str, n: f64 });
     export function assign(x: InstanceType<typeof Named>, names: SharedArray<string>, pair: [string, number]) {
         [x.name, x.n] = pair;                                        // error: x.name
          ~~~~~~
-!!! error TS96027: A string in a shared struct or SharedArray cannot be assigned by destructuring or as a loop variable.
+!!! error TS96027: A string or a channel in a shared struct or SharedArray cannot be assigned by destructuring or as a loop variable.
         ({ first: names[0] } = { first: "a" });                      // error: names[0]
                   ~~~~~~~~
-!!! error TS96027: A string in a shared struct or SharedArray cannot be assigned by destructuring or as a loop variable.
+!!! error TS96027: A string or a channel in a shared struct or SharedArray cannot be assigned by destructuring or as a loop variable.
         for (x.name of ["a", "b"]) {}                                // error
              ~~~~~~
-!!! error TS96027: A string in a shared struct or SharedArray cannot be assigned by destructuring or as a loop variable.
+!!! error TS96027: A string or a channel in a shared struct or SharedArray cannot be assigned by destructuring or as a loop variable.
         for (names[1] in { a: 1 }) {}                                // error
              ~~~~~~~~
-!!! error TS96027: A string in a shared struct or SharedArray cannot be assigned by destructuring or as a loop variable.
+!!! error TS96027: A string or a channel in a shared struct or SharedArray cannot be assigned by destructuring or as a loop variable.
         x.name = pair[0];
         names[2] += x.name;
     }

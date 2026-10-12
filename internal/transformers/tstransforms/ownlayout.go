@@ -32,6 +32,8 @@ import (
 //	e.fk (i32 field)            __I32[(E >> 2) + 2 + 2 * k]
 //	e.fk (u8 field)             __U8[E + 8 + 8 * k]
 //	e.fk (string field, read)   __str(__I32[(E >> 2) + 2 + 2 * k])
+//	e.fk (channel field, read)  __box(__I32[(E >> 2) + 2 + 2 * k])
+//	e.fk = V (channel field)    __I32[(E >> 2) + 2 + 2 * k] = __cellAddress(V)
 //	e.fk = V (string field)     __I32[(E >> 2) + 2 + 2 * k] = __intern(V)
 //	e.fk (reference field)      __I32[(E >> 2) + 2 + 2 * k]              (2 + 2 * k folded; 0 for null)
 //	e.fk = V (reference field)  __store((E >> 2) + 2 + 2 * k, V)
@@ -1070,8 +1072,10 @@ func (tx *OwnLayoutTransformer) lowerAssignment(node *ast.Node, ctx ownContext) 
 		}
 		return nil
 	}
-	if originalLeft != nil && tx.isStringTarget(originalLeft) {
-		return tx.lowerStringAssignment(node, left, ctx)
+	if originalLeft != nil {
+		if kind := tx.convertedTarget(originalLeft); kind != printer.OwnFieldNone {
+			return tx.lowerConvertedAssignment(node, left, ctx, kind)
+		}
 	}
 	if originalLeft != nil && tx.isBooleanTarget(originalLeft) {
 		switch operator {
@@ -1151,9 +1155,10 @@ func (tx *OwnLayoutTransformer) lowerLocalAssignment(node *ast.Node, x *ast.Node
 	return nil
 }
 
-// An assignment to a string field or element (see "A string is interned" above); nil if the target
-// is not one after all.
-func (tx *OwnLayoutTransformer) lowerStringAssignment(node *ast.Node, left *ast.Node, ctx ownContext) *ast.Node {
+// An assignment to a string field or element, or a channel field, whose value is converted as it is
+// stored and read (see "A string is interned" above): `__I32[I] = __intern(V)` and `__str(__I32[I])`,
+// or `__I32[I] = __cellAddress(V)` and `__box(__I32[I])`. nil if the target is not one after all.
+func (tx *OwnLayoutTransformer) lowerConvertedAssignment(node *ast.Node, left *ast.Node, ctx ownContext, kind printer.OwnFieldKind) *ast.Node {
 	n := node.AsBinaryExpression()
 	operator := n.OperatorToken.Kind
 	access := tx.lowerAccess(left, true /*isWrite*/, n.Right)
@@ -1165,30 +1170,41 @@ func (tx *OwnLayoutTransformer) lowerStringAssignment(node *ast.Node, left *ast.
 	if operator != ast.KindEqualsToken {
 		index = tx.copiable(index, &temps) // read and written
 	}
+	readHelper, storeHelper := transformers.OwnRuntimeStrHelper, transformers.OwnRuntimeInternHelper
+	if kind == printer.OwnFieldChan {
+		readHelper, storeHelper = transformers.OwnRuntimeBoxHelper, transformers.OwnRuntimeCellAddressHelper
+	}
 	read := func() *ast.Node {
-		return tx.call(transformers.OwnRuntimeStrHelper, tx.i32(tx.dup(index)))
+		return tx.call(readHelper, tx.i32(tx.dup(index)))
 	}
 	// __I32[I] = __intern(V), or (__I32[I] = __intern(_v = V), _v) where its value is used
 	store := func(value *ast.Node) *ast.Node {
 		if ctx == ownDiscard {
-			return tx.Factory().NewAssignmentExpression(tx.i32(tx.dup(index)), tx.call(transformers.OwnRuntimeInternHelper, value))
+			return tx.Factory().NewAssignmentExpression(tx.i32(tx.dup(index)), tx.call(storeHelper, value))
 		}
 		v := tx.Factory().NewTempVariable()
 		tx.EmitContext().AddVariableDeclaration(v)
-		interned := tx.call(transformers.OwnRuntimeInternHelper, tx.Factory().NewAssignmentExpression(v, value))
-		return tx.paren(tx.Factory().InlineExpressions([]*ast.Node{tx.Factory().NewAssignmentExpression(tx.i32(tx.dup(index)), interned), v}))
+		converted := tx.call(storeHelper, tx.Factory().NewAssignmentExpression(v, value))
+		return tx.paren(tx.Factory().InlineExpressions([]*ast.Node{tx.Factory().NewAssignmentExpression(tx.i32(tx.dup(index)), converted), v}))
 	}
 	switch operator {
 	case ast.KindEqualsToken:
 		return tx.finish(store(tx.Visitor().VisitNode(n.Right)), node)
 	case ast.KindPlusEqualsToken:
+		if kind != printer.OwnFieldStr {
+			return nil
+		}
 		return tx.finish(tx.sequence(temps, store(tx.add(read(), tx.Visitor().VisitNode(n.Right)))), node)
-	case ast.KindQuestionQuestionEqualsToken:
-		return tx.finish(tx.sequence(temps, read()), node) // a string is never null
-	case ast.KindBarBarEqualsToken, ast.KindAmpersandAmpersandEqualsToken:
+	case ast.KindQuestionQuestionEqualsToken, ast.KindBarBarEqualsToken, ast.KindAmpersandAmpersandEqualsToken:
+		if operator == ast.KindQuestionQuestionEqualsToken && kind == printer.OwnFieldStr {
+			return tx.finish(tx.sequence(temps, read()), node) // a string is never null
+		}
 		logical := ast.KindBarBarToken
-		if operator == ast.KindAmpersandAmpersandEqualsToken {
+		switch operator {
+		case ast.KindAmpersandAmpersandEqualsToken:
 			logical = ast.KindAmpersandAmpersandToken
+		case ast.KindQuestionQuestionEqualsToken:
+			logical = ast.KindQuestionQuestionToken
 		}
 		tx.conditional++
 		value := tx.Visitor().VisitNode(n.Right)
@@ -1245,20 +1261,25 @@ func (tx *OwnLayoutTransformer) isReferenceField(access *ast.Node) bool {
 	return cell.FieldKind(slices.Index(cell.Fields, access.Name().Text())) == printer.OwnFieldRef
 }
 
-// Reports whether an access of the original tree is a string field of a shared struct or an element of
-// a SharedArray<string>.
-func (tx *OwnLayoutTransformer) isStringTarget(access *ast.Node) bool {
+// The kind of an access of the original tree whose value is converted as it is stored: a string field
+// of a shared struct or an element of a SharedArray<string> (OwnFieldStr), or a channel field
+// (OwnFieldChan); OwnFieldNone for any other.
+func (tx *OwnLayoutTransformer) convertedTarget(access *ast.Node) printer.OwnFieldKind {
 	switch {
 	case ast.IsPropertyAccessExpression(access):
 		cell := tx.emitResolver.GetOwnCellType(access.Expression())
 		if cell.Kind != printer.OwnCellStruct {
-			return false
+			return printer.OwnFieldNone
 		}
-		return cell.FieldKind(slices.Index(cell.Fields, access.Name().Text())) == printer.OwnFieldStr
+		if kind := cell.FieldKind(slices.Index(cell.Fields, access.Name().Text())); kind == printer.OwnFieldStr || kind == printer.OwnFieldChan {
+			return kind
+		}
 	case ast.IsElementAccessExpression(access):
-		return tx.emitResolver.GetOwnCellType(access.Expression()).Kind == printer.OwnCellArrayOfString
+		if tx.emitResolver.GetOwnCellType(access.Expression()).Kind == printer.OwnCellArrayOfString {
+			return printer.OwnFieldStr
+		}
 	}
-	return false
+	return printer.OwnFieldNone
 }
 
 // Reports whether an access of the original tree is a boolean field of a shared struct or an element
@@ -1320,6 +1341,11 @@ func (tx *OwnLayoutTransformer) lowerAccess(node *ast.Node, isWrite bool, value 
 				return tx.i32(word())
 			case printer.OwnFieldStr:
 				return tx.readString(tx.i32(word()), isRead)
+			case printer.OwnFieldChan:
+				if isRead {
+					return tx.call(transformers.OwnRuntimeBoxHelper, tx.i32(word()))
+				}
+				return tx.i32(word())
 			case printer.OwnFieldBool:
 				return tx.readBoolean(tx.u8(tx.add(object, tx.number(8+8*k))), isRead)
 			case printer.OwnFieldU8:

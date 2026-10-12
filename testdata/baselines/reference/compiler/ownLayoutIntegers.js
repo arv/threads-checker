@@ -57,11 +57,13 @@ export declare const f64: Field<number>;
 
 /**
  * A 32-bit integer: a number, which the field or element it is stored in keeps as an Int32Array would
- * (3.7 as 3, and 2 ** 31 as -(2 ** 31)). Any number may be stored in one. Atomic operations act on
- * i32s (see `atomic`).
+ * (2 ** 31 as -(2 ** 31)). Atomic operations act on i32s (see `atomic`). The ownership checker
+ * requires an integer of a value stored into one (or passed or returned as one): integer arithmetic,
+ * which wraps, but not a number that may have a fraction, which must be converted explicitly, as with
+ * Math.round(x), Math.trunc(x) or x | 0.
  */
 export type i32 = number & { readonly [int32Brand]?: never };
-/** An 8-bit unsigned integer: a number, kept as a Uint8Array would (256 as 0, and -1 as 255). */
+/** An 8-bit unsigned integer: a number, kept as a Uint8Array would (256 as 0, and -1 as 255). As an i32's, its values must be integers. */
 export type u8 = number & { readonly [uint8Brand]?: never };
 /** The field of an integer, which a SharedArray also takes as its element type. */
 export interface IntegerField<T, K extends "i32" | "u8"> extends Field<T> {
@@ -155,28 +157,28 @@ export interface AtomicOperation<A extends unknown[], R> {
  */
 export interface Atomic {
   /** The i32's value. */
-  readonly load: AtomicOperation<[], number>;
-  /** Stores `value` (as an i32), and returns it. */
-  readonly store: AtomicOperation<[value: number], number>;
+  readonly load: AtomicOperation<[], i32>;
+  /** Stores `value`, and returns it. */
+  readonly store: AtomicOperation<[value: i32], i32>;
   /** Adds `value`, and returns the old value. */
-  readonly add: AtomicOperation<[value: number], number>;
+  readonly add: AtomicOperation<[value: i32], i32>;
   /** Subtracts `value`, and returns the old value. */
-  readonly sub: AtomicOperation<[value: number], number>;
+  readonly sub: AtomicOperation<[value: i32], i32>;
   /** Stores the bitwise and of the i32 and `value`, and returns the old value. */
-  readonly and: AtomicOperation<[value: number], number>;
+  readonly and: AtomicOperation<[value: i32], i32>;
   /** Stores the bitwise or of the i32 and `value`, and returns the old value. */
-  readonly or: AtomicOperation<[value: number], number>;
+  readonly or: AtomicOperation<[value: i32], i32>;
   /** Stores the bitwise xor of the i32 and `value`, and returns the old value. */
-  readonly xor: AtomicOperation<[value: number], number>;
+  readonly xor: AtomicOperation<[value: i32], i32>;
   /** Stores `value`, and returns the old value. */
-  readonly exchange: AtomicOperation<[value: number], number>;
+  readonly exchange: AtomicOperation<[value: i32], i32>;
   /** Stores `replacement` if the i32 is `expected`, and returns the old value either way. */
-  readonly compareExchange: AtomicOperation<[expected: number, replacement: number], number>;
+  readonly compareExchange: AtomicOperation<[expected: i32, replacement: i32], i32>;
   /**
    * Waits while the i32 is `value`, until notify() wakes the thread or `timeout` ms pass. Not on a
    * page's main thread, which must not block.
    */
-  readonly wait: AtomicOperation<[value: number, timeout?: number], "ok" | "not-equal" | "timed-out">;
+  readonly wait: AtomicOperation<[value: i32, timeout?: number], "ok" | "not-equal" | "timed-out">;
   /** Wakes up to `count` threads waiting on the i32 (all of them by default); returns how many it woke. */
   readonly notify: AtomicOperation<[count?: number], number>;
 }
@@ -262,7 +264,7 @@ const Pixel = struct({ x: i32, gray: u8 });
 type Pixel = Struct<typeof Pixel>;
 
 export function fields(n: Node): number {
-    n.value = 3.7;                                  // stored as 3
+    n.value = 3;
     n.value += 2;
     n.level = 300;                                  // stored as 44
     n.level++;
@@ -315,7 +317,7 @@ const Node = __sharedStruct("Node", ["value", "level", "next", "weight"], [2], "
 const Work = __sharedStruct("Work", ["next", "done", "flags"], [], "iiu");
 const Pixel = __sharedStruct("Pixel", ["x", "gray"], [], "iu");
 export function fields(n) {
-    __I32[(n >> 2) + 2] = 3.7; // stored as 3
+    __I32[(n >> 2) + 2] = 3;
     __I32[(n >> 2) + 2] += 2;
     __U8[n + 16] = 300; // stored as 44
     __U8[n + 16]++;

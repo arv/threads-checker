@@ -1,0 +1,853 @@
+//// [tests/cases/compiler/ownLayoutIntegerStores.ts] ////
+
+=== threads.d.mts ===
+// Threads for JavaScript in plain TypeScript: own and shared values, shared structs, and channels.
+//
+// Code written against these types is ordinary TypeScript: tsc, editors, linters and formatters
+// accept it as it is. Two tools add what the types cannot say:
+//   - the ownership checker (`tsgo own check`, from the tsgo fork) runs in CI like a linter and
+//     proves the rules below: nothing is used after it is sent, and shared values never change;
+//   - the bundler plugin (vite-plugin-threads.mjs) compiles shared structs and SharedArrays to
+//     typed-array accesses on shared memory, counts their references, and registers the functions
+//     threads run.
+//
+// Every value a thread touches is one of three kinds:
+//   - owned, the default: an ordinary object only one thread can reach. `Sending<T>` moves it: the
+//     caller gives it up and the receiver owns it;
+//   - shared: `Shared<T>`, deeply immutable, so any number of threads may read it;
+//   - a cell: shared and mutable, but only through what synchronizes it (Barrier, Slots, Channel), or,
+//     for shared structs and SharedArrays, in place, ordered by one of those.
+
+declare const cellBrand: unique symbol;
+>cellBrand : unique symbol
+
+declare const fieldBrand: unique symbol;
+>fieldBrand : unique symbol
+
+declare const int32Brand: unique symbol;
+>int32Brand : unique symbol
+
+declare const uint8Brand: unique symbol;
+>uint8Brand : unique symbol
+
+declare const layoutBrand: unique symbol;
+>layoutBrand : unique symbol
+
+/** A cell: shared and mutable. Any number of threads may hold the same one. */
+export interface Cell {
+  readonly [cellBrand]: true;
+>[cellBrand] : true
+>cellBrand : unique symbol
+>true : true
+}
+
+/**
+ * A value whose ownership moves, on a parameter or a result: the caller must not use it, or anything
+ * it reaches, afterwards. The ownership checker enforces this; to TypeScript it is just T.
+ */
+export type Sending<T> = T;
+>Sending : T
+
+/** A deeply immutable value, which any number of threads may read. To TypeScript it is deeply readonly. */
+export type Shared<T> = T extends Cell | ((...args: any[]) => any) ? T
+>Shared : Shared<T>
+>args : any[]
+
+  : T extends object ? { readonly [K in keyof T]: Shared<T[K]> }
+  : T;
+
+/** Ends `x`'s lifetime: its value, and what it reaches, moves to the caller. At run time, `x` itself. */
+export declare function consume<T>(x: T): Sending<T>;
+>consume : <T>(x: T) => Sending<T>
+>x : T
+
+/** Freezes a value the caller owns into a deeply immutable value every thread can read. */
+export declare function share<T>(value: Sending<T>): Shared<T>;
+>share : <T>(value: Sending<T>) => Shared<T>
+>value : T
+
+// ---- shared structs ----
+
+/** A field of a shared struct, declared with `f64`, `i32`, `u8`, `bool`, `str` or `ref<T>()`. */
+export interface Field<T> {
+  readonly [fieldBrand]: T;
+>[fieldBrand] : T
+>fieldBrand : unique symbol
+}
+/** A number field: an f64 in shared memory. */
+export declare const f64: Field<number>;
+>f64 : Field<number>
+
+/**
+ * A 32-bit integer: a number, which the field or element it is stored in keeps as an Int32Array would
+ * (2 ** 31 as -(2 ** 31)). Atomic operations act on i32s (see `atomic`). The ownership checker
+ * requires an integer of a value stored into one (or passed or returned as one): integer arithmetic,
+ * which wraps, but not a number that may have a fraction, which must be converted explicitly, as with
+ * Math.round(x), Math.trunc(x) or x | 0.
+ */
+export type i32 = number & { readonly [int32Brand]?: never };
+>i32 : i32
+>[int32Brand] : undefined
+>int32Brand : unique symbol
+
+/** An 8-bit unsigned integer: a number, kept as a Uint8Array would (256 as 0, and -1 as 255). As an i32's, its values must be integers. */
+export type u8 = number & { readonly [uint8Brand]?: never };
+>u8 : u8
+>[uint8Brand] : undefined
+>uint8Brand : unique symbol
+
+/** The field of an integer, which a SharedArray also takes as its element type. */
+export interface IntegerField<T, K extends "i32" | "u8"> extends Field<T> {
+  readonly kind: K;
+>kind : K
+}
+/** An i32 field: a 32-bit integer in shared memory, which atomic operations act on. */
+export declare const i32: IntegerField<i32, "i32">;
+>i32 : IntegerField<i32, "i32">
+
+/** A u8 field: a byte in shared memory. */
+export declare const u8: IntegerField<u8, "u8">;
+>u8 : IntegerField<u8, "u8">
+
+/** A boolean field: a byte in shared memory, 0 or 1. */
+export declare const bool: Field<boolean>;
+>bool : Field<boolean>
+
+/**
+ * A string field: the address of the string's one copy in shared memory. Strings are interned, so
+ * each distinct string is stored once, and each thread decodes it once. They are never freed.
+ */
+export declare const str: Field<string>;
+>str : Field<string>
+
+/** A reference field: a shared struct or a SharedArray, or null. */
+export declare function ref<T>(): Field<T | null>;
+>ref : <T>() => Field<T | null>
+
+/** What `struct(...)` returns: `new S()` makes a zeroed struct in shared memory. */
+export interface StructType<T> {
+  new (): T & Cell;
+  readonly fields: readonly string[];
+>fields : readonly string[]
+}
+/** The value type of a struct type: `type Body = Struct<typeof Body>`. */
+export type Struct<S> = S extends StructType<infer T> ? T & Cell : never;
+>Struct : Struct<S>
+
+/**
+ * Declares a shared struct: fields at fixed places in shared memory, which every thread reads and
+ * writes in place. Reads and writes are not ordered between threads: a Barrier or a Channel orders
+ * them.
+ *
+ *     const Body = struct({ x: f64, y: f64, m: f64 });
+ *     type Body = Struct<typeof Body>;
+ *
+ * A struct that refers to its own type is declared with an interface:
+ *
+ *     interface Node { value: number; next: Node | null }
+ *     const Node = struct<Node>({ value: f64, next: ref<Node>() });
+ */
+export declare function struct<F extends Record<string, Field<any>>>(
+>struct : { <F extends Record<string, Field<any>>>(fields: F): StructType<{ -readonly [K in keyof F]: F[K] extends Field<infer V> ? V : never; }>; <T>(fields: { [K in keyof T]-?: Field<T[K]>; }): StructType<T>; }
+
+  fields: F,
+>fields : F
+
+): StructType<{ -readonly [K in keyof F]: F[K] extends Field<infer V> ? V : never }>;
+export declare function struct<T>(fields: { [K in keyof T]-?: Field<T[K]> }): StructType<T>;
+>struct : { <F extends Record<string, Field<any>>>(fields: F): StructType<{ -readonly [K in keyof F]: F[K] extends Field<infer V> ? V : never; }>; <T>(fields: { [K in keyof T]-?: Field<T[K]>; }): StructType<T>; }
+>fields : { [K in keyof T]-?: Field<T[K]>; }
+
+/**
+ * A fixed-length array in shared memory: of numbers (`Number`), of i32s (`i32`), of bytes (`u8`), of
+ * booleans (`Boolean`, a byte each), of strings (`String`, interned as `str` fields are), or of shared
+ * structs stored inline. Every thread reads and writes the same elements, with no copying; a Barrier,
+ * a Channel or an atomic operation orders them.
+ */
+export interface SharedArray<T, L = ElementLayout<T>> extends Cell {
+  readonly length: number;
+>length : number
+
+  [index: number]: T;
+>index : number
+
+  /**
+   * Not there at run time: L keeps SharedArrays of numbers, i32s and u8s apart, whose elements
+   * TypeScript would otherwise let one stand for another, though they are stored differently. (A
+   * property of type ElementLayout<T> would not: TypeScript relates two SharedArrays by T alone.)
+   */
+  readonly [layoutBrand]?: L;
+>[layoutBrand] : L | undefined
+>layoutBrand : unique symbol
+}
+/** How a SharedArray of T stores its elements, as far as telling numbers, i32s and u8s apart goes. */
+type ElementLayout<T> = typeof int32Brand extends keyof T ? "i32" : typeof uint8Brand extends keyof T ? "u8" : "other";
+>ElementLayout : ElementLayout<T>
+>int32Brand : unique symbol
+>uint8Brand : unique symbol
+
+export declare const SharedArray: {
+>SharedArray : { new (type: NumberConstructor, length: number): SharedArray<number>; new (type: BooleanConstructor, length: number): SharedArray<boolean>; new (type: StringConstructor, length: number): SharedArray<string>; new (type: IntegerField<i32, "i32">, length: number): SharedArray<i32>; new (type: IntegerField<u8, "u8">, length: number): SharedArray<u8>; new <T>(type: StructType<T>, length: number): SharedArray<T & Cell>; }
+
+  new (type: NumberConstructor, length: number): SharedArray<number>;
+>type : NumberConstructor
+>length : number
+
+  new (type: BooleanConstructor, length: number): SharedArray<boolean>;
+>type : BooleanConstructor
+>length : number
+
+  new (type: StringConstructor, length: number): SharedArray<string>;
+>type : StringConstructor
+>length : number
+
+  new (type: IntegerField<i32, "i32">, length: number): SharedArray<i32>;
+>type : IntegerField<i32, "i32">
+>length : number
+
+  new (type: IntegerField<u8, "u8">, length: number): SharedArray<u8>;
+>type : IntegerField<u8, "u8">
+>length : number
+
+  new <T>(type: StructType<T>, length: number): SharedArray<T & Cell>;
+>type : StructType<T>
+>length : number
+
+};
+
+// ---- atomic operations ----
+
+/** The fields of a struct type S that are i32s. */
+export type I32Fields<S> = { [K in keyof S]-?: typeof int32Brand extends keyof S[K] ? K : never }[keyof S];
+>I32Fields : I32Fields<S>
+>int32Brand : unique symbol
+
+/** An atomic operation on an element of a SharedArray<i32>, or on an i32 field of a shared struct. */
+export interface AtomicOperation<A extends unknown[], R> {
+  (array: SharedArray<i32>, index: number, ...args: A): R;
+>array : SharedArray<i32, "i32">
+>index : number
+>args : A
+
+  <S extends Cell>(struct: S, field: I32Fields<S>, ...args: A): R;
+>struct : S
+>field : I32Fields<S>
+>args : A
+}
+
+/**
+ * Atomic operations, which `Atomics` performs: on an element of a SharedArray<i32>, or on an i32 field
+ * of a shared struct, named by a string literal. Each is indivisible, and orders the reads and writes
+ * around it as a lock would. Compiled, a call is that `Atomics` call, on the i32 itself:
+ *
+ *     const Work = struct({ next: i32, done: i32 });
+ *     for (let i; (i = atomic.add(work, "next", 1)) < n; ) process(i);   // claims item i
+ */
+export interface Atomic {
+  /** The i32's value. */
+  readonly load: AtomicOperation<[], i32>;
+>load : AtomicOperation<[], i32>
+
+  /** Stores `value`, and returns it. */
+  readonly store: AtomicOperation<[value: i32], i32>;
+>store : AtomicOperation<[value: i32], i32>
+
+  /** Adds `value`, and returns the old value. */
+  readonly add: AtomicOperation<[value: i32], i32>;
+>add : AtomicOperation<[value: i32], i32>
+
+  /** Subtracts `value`, and returns the old value. */
+  readonly sub: AtomicOperation<[value: i32], i32>;
+>sub : AtomicOperation<[value: i32], i32>
+
+  /** Stores the bitwise and of the i32 and `value`, and returns the old value. */
+  readonly and: AtomicOperation<[value: i32], i32>;
+>and : AtomicOperation<[value: i32], i32>
+
+  /** Stores the bitwise or of the i32 and `value`, and returns the old value. */
+  readonly or: AtomicOperation<[value: i32], i32>;
+>or : AtomicOperation<[value: i32], i32>
+
+  /** Stores the bitwise xor of the i32 and `value`, and returns the old value. */
+  readonly xor: AtomicOperation<[value: i32], i32>;
+>xor : AtomicOperation<[value: i32], i32>
+
+  /** Stores `value`, and returns the old value. */
+  readonly exchange: AtomicOperation<[value: i32], i32>;
+>exchange : AtomicOperation<[value: i32], i32>
+
+  /** Stores `replacement` if the i32 is `expected`, and returns the old value either way. */
+  readonly compareExchange: AtomicOperation<[expected: i32, replacement: i32], i32>;
+>compareExchange : AtomicOperation<[expected: i32, replacement: i32], i32>
+
+  /**
+   * Waits while the i32 is `value`, until notify() wakes the thread or `timeout` ms pass. Not on a
+   * page's main thread, which must not block.
+   */
+  readonly wait: AtomicOperation<[value: i32, timeout?: number], "ok" | "not-equal" | "timed-out">;
+>wait : AtomicOperation<[value: i32, timeout?: number | undefined], "not-equal" | "ok" | "timed-out">
+
+  /** Wakes up to `count` threads waiting on the i32 (all of them by default); returns how many it woke. */
+  readonly notify: AtomicOperation<[count?: number], number>;
+>notify : AtomicOperation<[count?: number | undefined], number>
+}
+export declare const atomic: Atomic;
+>atomic : Atomic
+
+// ---- threads ----
+
+/** A thread; joining it moves the thread's result back. */
+export interface Thread<R> extends Cell {
+  /** Waits for the thread, from a thread that may block (not a page's main thread). */
+  join(): Sending<R>;
+>join : () => Sending<R>
+
+  /** Waits for the thread without blocking: for a page's main thread. */
+  joinAsync(): Promise<Sending<R>>;
+>joinAsync : () => Promise<Sending<R>>
+}
+
+/** Starts `f` on a thread. Every argument is sent: owned values move, shared values and cells are shared. */
+export declare function spawn<A extends unknown[], R>(f: (...args: A) => Sending<R>, ...args: Sending<A>): Thread<R>;
+>spawn : <A extends unknown[], R>(f: (...args: A) => Sending<R>, ...args: Sending<A>) => Thread<R>
+>f : (...args: A) => Sending<R>
+>args : A
+>args : A
+
+/** Spawns threads that cannot outlive the scope. */
+export interface Scope extends Cell {
+  spawn<A extends unknown[], R>(f: (...args: A) => Sending<R>, ...args: Sending<A>): Thread<R>;
+>spawn : <A extends unknown[], R>(f: (...args: A) => Sending<R>, ...args: Sending<A>) => Thread<R>
+>f : (...args: A) => Sending<R>
+>args : A
+>args : A
+}
+/** Runs `body` and joins every thread it spawned before returning. */
+export declare function scope<R>(body: (s: Scope) => R): R;
+>scope : <R>(body: (s: Scope) => R) => R
+>body : (s: Scope) => R
+>s : Scope
+
+/** Splits an owned array into `parts` owned, disjoint chunks of nearly equal size. Trusted. */
+export declare function partition<T>(items: Sending<T[]>, parts: number): Sending<T[]>[];
+>partition : <T>(items: Sending<T[]>, parts: number) => Sending<T[]>[]
+>items : T[]
+>parts : number
+
+/** Takes element `index` out of an array of owned values, so the caller owns it. Trusted. */
+export declare function take<T>(items: Sending<T>[], index: number): Sending<T>;
+>take : <T>(items: Sending<T>[], index: number) => Sending<T>
+>items : T[]
+>index : number
+
+/** A reusable barrier for a fixed number of threads. */
+export declare class Barrier implements Cell {
+>Barrier : Barrier
+
+  readonly [cellBrand]: true;
+>[cellBrand] : true
+>cellBrand : unique symbol
+>true : true
+
+  constructor(threads: number);
+>threads : number
+
+  /** Blocks until all threads have called `wait`. */
+  wait(): void;
+>wait : () => void
+}
+
+/** One slot per thread: a thread publishes a shared value into its slot, and everyone reads every slot. */
+export declare class Slots<T> implements Cell {
+>Slots : Slots<T>
+
+  readonly [cellBrand]: true;
+>[cellBrand] : true
+>cellBrand : unique symbol
+>true : true
+
+  constructor(count: number);
+>count : number
+
+  readonly length: number;
+>length : number
+
+  set(index: number, value: Shared<T>): void;
+>set : (index: number, value: Shared<T>) => void
+>index : number
+>value : Shared<T>
+
+  get(index: number): Shared<T> | undefined;
+>get : (index: number) => Shared<T> | undefined
+>index : number
+
+  /** The arrays in all slots, concatenated in slot order. */
+  flat(): Shared<T extends readonly (infer E)[] ? E[] : T[]>;
+>flat : () => Shared<T extends readonly (infer E)[] ? E[] : T[]>
+}
+
+// ---- goroutines and channels ----
+
+/** A channel: values move through it from thread to thread, in order. */
+export declare class Channel<T> implements Cell {
+>Channel : Channel<T>
+
+  readonly [cellBrand]: true;
+>[cellBrand] : true
+>cellBrand : unique symbol
+>true : true
+
+  /** Holds up to `capacity` values; 0, the default, is unbuffered. */
+  constructor(capacity?: number);
+>capacity : number | undefined
+
+  /** Moves `value` in: waits while the channel is full, or, unbuffered, until a receiver takes it. */
+  send(value: Sending<T>): void;
+>send : (value: Sending<T>) => void
+>value : T
+
+  /** The next value, which the caller now owns; waits while empty. Undefined once closed and empty. */
+  recv(): Sending<T> | undefined;
+>recv : () => Sending<T> | undefined
+
+  /** No more sends. Receivers still get what is left. */
+  close(): void;
+>close : () => void
+
+  [Symbol.iterator](): Iterator<T>;
+>[Symbol.iterator] : () => Iterator<T>
+>Symbol.iterator : unique symbol
+>Symbol : SymbolConstructor
+>iterator : unique symbol
+}
+/** Starts `f` on a thread of its own, a goroutine. Nothing waits for it. */
+export declare function go<A extends unknown[]>(f: (...args: A) => void, ...args: Sending<A>): void;
+>go : <A extends unknown[]>(f: (...args: A) => void, ...args: Sending<A>) => void
+>f : (...args: A) => void
+>args : A
+>args : A
+
+/** Waits until one of the channels has a value or is closed: its index and the value (undefined if closed). */
+export declare function select<T>(...channels: Channel<T>[]): [index: number, value: T | undefined];
+>select : <T>(...channels: Channel<T>[]) => [index: number, value: T | undefined]
+>channels : Channel<T>[]
+
+/** Prints a line, synchronously, from any thread. */
+export declare function log(...args: unknown[]): void;
+>log : (...args: unknown[]) => void
+>args : unknown[]
+
+/** Shared memory in use, and shared structs and SharedArrays allocated and freed. */
+export declare function heapStats(): { heapBytes: number; allocated: number; freed: number; pending: number };
+>heapStats : () => { heapBytes: number; allocated: number; freed: number; pending: number; }
+>heapBytes : number
+>allocated : number
+>freed : number
+>pending : number
+
+=== stores.mts ===
+import { atomic, f64, i32, SharedArray, struct, u8, type Struct } from "./threads.mjs";
+>atomic : import("./threads.mjs").Atomic
+>f64 : import("./threads.mjs").Field<number>
+>i32 : import("./threads.mjs").IntegerField<i32, "i32">
+>SharedArray : { new (type: NumberConstructor, length: number): SharedArray<number>; new (type: BooleanConstructor, length: number): SharedArray<boolean>; new (type: StringConstructor, length: number): SharedArray<string>; new (type: import("./threads.mjs").IntegerField<i32, "i32">, length: number): SharedArray<i32>; new (type: import("./threads.mjs").IntegerField<u8, "u8">, length: number): SharedArray<u8>; new <T>(type: import("./threads.mjs").StructType<T>, length: number): SharedArray<T & import("./threads.mjs").Cell>; }
+>struct : { <F extends Record<string, import("./threads.mjs").Field<any>>>(fields: F): import("./threads.mjs").StructType<{ -readonly [K in keyof F]: F[K] extends import("./threads.mjs").Field<infer V> ? V : never; }>; <T>(fields: { [K in keyof T]-?: import("./threads.mjs").Field<T[K]>; }): import("./threads.mjs").StructType<T>; }
+>u8 : import("./threads.mjs").IntegerField<u8, "u8">
+>Struct : any
+
+const P = struct({ x: f64, level: u8, count: i32 });
+>P : import("./threads.mjs").StructType<{ x: number; level: u8; count: i32; }>
+>struct({ x: f64, level: u8, count: i32 }) : import("./threads.mjs").StructType<{ x: number; level: u8; count: i32; }>
+>struct : { <F extends Record<string, import("./threads.mjs").Field<any>>>(fields: F): import("./threads.mjs").StructType<{ -readonly [K in keyof F]: F[K] extends import("./threads.mjs").Field<infer V> ? V : never; }>; <T>(fields: { [K in keyof T]-?: import("./threads.mjs").Field<T[K]>; }): import("./threads.mjs").StructType<T>; }
+>{ x: f64, level: u8, count: i32 } : { x: import("./threads.mjs").Field<number>; level: import("./threads.mjs").IntegerField<u8, "u8">; count: import("./threads.mjs").IntegerField<i32, "i32">; }
+>x : import("./threads.mjs").Field<number>
+>f64 : import("./threads.mjs").Field<number>
+>level : import("./threads.mjs").IntegerField<u8, "u8">
+>u8 : import("./threads.mjs").IntegerField<u8, "u8">
+>count : import("./threads.mjs").IntegerField<i32, "i32">
+>i32 : import("./threads.mjs").IntegerField<i32, "i32">
+
+type P = Struct<typeof P>;
+>P : { x: number; level: u8; count: i32; } & import("./threads.mjs").Cell
+>P : import("./threads.mjs").StructType<{ x: number; level: u8; count: i32; }>
+
+export function ok(p: P, bytes: SharedArray<u8>, ints: SharedArray<i32>, n: number, k: i32): i32 {
+>ok : (p: P, bytes: SharedArray<u8>, ints: SharedArray<i32>, n: number, k: i32) => i32
+>p : { x: number; level: u8; count: i32; } & import("./threads.mjs").Cell
+>bytes : SharedArray<u8, "u8">
+>ints : SharedArray<i32, "i32">
+>n : number
+>k : i32
+
+    p.level = 300;                                          // an integer literal: wraps, as integers do
+>p.level = 300 : 300
+>p.level : u8
+>p : { x: number; level: u8; count: i32; } & import("./threads.mjs").Cell
+>level : u8
+>300 : 300
+
+    p.level = p.level + 1;                                  // integer arithmetic
+>p.level = p.level + 1 : number
+>p.level : u8
+>p : { x: number; level: u8; count: i32; } & import("./threads.mjs").Cell
+>level : u8
+>p.level + 1 : number
+>p.level : u8
+>p : { x: number; level: u8; count: i32; } & import("./threads.mjs").Cell
+>level : u8
+>1 : 1
+
+    p.level++;
+>p.level++ : number
+>p.level : u8
+>p : { x: number; level: u8; count: i32; } & import("./threads.mjs").Cell
+>level : u8
+
+    p.count += p.level * 2 - 1;
+>p.count += p.level * 2 - 1 : number
+>p.count : i32
+>p : { x: number; level: u8; count: i32; } & import("./threads.mjs").Cell
+>count : i32
+>p.level * 2 - 1 : number
+>p.level * 2 : number
+>p.level : u8
+>p : { x: number; level: u8; count: i32; } & import("./threads.mjs").Cell
+>level : u8
+>2 : 2
+>1 : 1
+
+    p.count = p.count % 7;
+>p.count = p.count % 7 : number
+>p.count : i32
+>p : { x: number; level: u8; count: i32; } & import("./threads.mjs").Cell
+>count : i32
+>p.count % 7 : number
+>p.count : i32
+>p : { x: number; level: u8; count: i32; } & import("./threads.mjs").Cell
+>count : i32
+>7 : 7
+
+    p.level = Math.round(p.x * 255);                        // converted
+>p.level = Math.round(p.x * 255) : number
+>p.level : u8
+>p : { x: number; level: u8; count: i32; } & import("./threads.mjs").Cell
+>level : u8
+>Math.round(p.x * 255) : number
+>Math.round : (x: number) => number
+>Math : Math
+>round : (x: number) => number
+>p.x * 255 : number
+>p.x : number
+>p : { x: number; level: u8; count: i32; } & import("./threads.mjs").Cell
+>x : number
+>255 : 255
+
+    p.level = Math.min(255, Math.max(0, Math.round(p.x)));
+>p.level = Math.min(255, Math.max(0, Math.round(p.x))) : number
+>p.level : u8
+>p : { x: number; level: u8; count: i32; } & import("./threads.mjs").Cell
+>level : u8
+>Math.min(255, Math.max(0, Math.round(p.x))) : number
+>Math.min : (...values: number[]) => number
+>Math : Math
+>min : (...values: number[]) => number
+>255 : 255
+>Math.max(0, Math.round(p.x)) : number
+>Math.max : (...values: number[]) => number
+>Math : Math
+>max : (...values: number[]) => number
+>0 : 0
+>Math.round(p.x) : number
+>Math.round : (x: number) => number
+>Math : Math
+>round : (x: number) => number
+>p.x : number
+>p : { x: number; level: u8; count: i32; } & import("./threads.mjs").Cell
+>x : number
+
+    p.count = p.x | 0;
+>p.count = p.x | 0 : number
+>p.count : i32
+>p : { x: number; level: u8; count: i32; } & import("./threads.mjs").Cell
+>count : i32
+>p.x | 0 : number
+>p.x : number
+>p : { x: number; level: u8; count: i32; } & import("./threads.mjs").Cell
+>x : number
+>0 : 0
+
+    p.count = ~~p.x;
+>p.count = ~~p.x : number
+>p.count : i32
+>p : { x: number; level: u8; count: i32; } & import("./threads.mjs").Cell
+>count : i32
+>~~p.x : number
+>~p.x : number
+>p.x : number
+>p : { x: number; level: u8; count: i32; } & import("./threads.mjs").Cell
+>x : number
+
+    p.count = p.x >>> 0;
+>p.count = p.x >>> 0 : number
+>p.count : i32
+>p : { x: number; level: u8; count: i32; } & import("./threads.mjs").Cell
+>count : i32
+>p.x >>> 0 : number
+>p.x : number
+>p : { x: number; level: u8; count: i32; } & import("./threads.mjs").Cell
+>x : number
+>0 : 0
+
+    p.level = n & 255;
+>p.level = n & 255 : number
+>p.level : u8
+>p : { x: number; level: u8; count: i32; } & import("./threads.mjs").Cell
+>level : u8
+>n & 255 : number
+>n : number
+>255 : 255
+
+    p.count = k;                                            // declared i32
+>p.count = k : i32
+>p.count : i32
+>p : { x: number; level: u8; count: i32; } & import("./threads.mjs").Cell
+>count : i32
+>k : i32
+
+    p.count = "hello".length + "x".charCodeAt(0);
+>p.count = "hello".length + "x".charCodeAt(0) : number
+>p.count : i32
+>p : { x: number; level: u8; count: i32; } & import("./threads.mjs").Cell
+>count : i32
+>"hello".length + "x".charCodeAt(0) : number
+>"hello".length : number
+>"hello" : "hello"
+>length : number
+>"x".charCodeAt(0) : number
+>"x".charCodeAt : (index: number) => number
+>"x" : "x"
+>charCodeAt : (index: number) => number
+>0 : 0
+
+    for (let i = 0; i < bytes.length; i++) bytes[i] = i;    // a counter: an integer by its values
+>i : number
+>0 : 0
+>i < bytes.length : boolean
+>i : number
+>bytes.length : number
+>bytes : SharedArray<u8, "u8">
+>length : number
+>i++ : number
+>i : number
+>bytes[i] = i : number
+>bytes[i] : u8
+>bytes : SharedArray<u8, "u8">
+>i : number
+>i : number
+
+    let total = 0;
+>total : number
+>0 : 0
+
+    for (let i = 0; i < ints.length; i++) total += ints[i];
+>i : number
+>0 : 0
+>i < ints.length : boolean
+>i : number
+>ints.length : number
+>ints : SharedArray<i32, "i32">
+>length : number
+>i++ : number
+>i : number
+>total += ints[i] : number
+>total : number
+>ints[i] : i32
+>ints : SharedArray<i32, "i32">
+>i : number
+
+    p.count = total;
+>p.count = total : number
+>p.count : i32
+>p : { x: number; level: u8; count: i32; } & import("./threads.mjs").Cell
+>count : i32
+>total : number
+
+    const half = 3;
+>half : 3
+>3 : 3
+
+    p.count = n > 0 ? half : -half;
+>p.count = n > 0 ? half : -half : number
+>p.count : i32
+>p : { x: number; level: u8; count: i32; } & import("./threads.mjs").Cell
+>count : i32
+>n > 0 ? half : -half : number
+>n > 0 : boolean
+>n : number
+>0 : 0
+>half : 3
+>-half : number
+>half : 3
+
+    atomic.add(p, "count", p.level);
+>atomic.add(p, "count", p.level) : i32
+>atomic.add : import("./threads.mjs").AtomicOperation<[value: i32], i32>
+>atomic : import("./threads.mjs").Atomic
+>add : import("./threads.mjs").AtomicOperation<[value: i32], i32>
+>p : { x: number; level: u8; count: i32; } & import("./threads.mjs").Cell
+>"count" : "count"
+>p.level : u8
+>p : { x: number; level: u8; count: i32; } & import("./threads.mjs").Cell
+>level : u8
+
+    atomic.store(ints, 0, atomic.load(ints, 1) + 1);
+>atomic.store(ints, 0, atomic.load(ints, 1) + 1) : i32
+>atomic.store : import("./threads.mjs").AtomicOperation<[value: i32], i32>
+>atomic : import("./threads.mjs").Atomic
+>store : import("./threads.mjs").AtomicOperation<[value: i32], i32>
+>ints : SharedArray<i32, "i32">
+>0 : 0
+>atomic.load(ints, 1) + 1 : number
+>atomic.load(ints, 1) : i32
+>atomic.load : import("./threads.mjs").AtomicOperation<[], i32>
+>atomic : import("./threads.mjs").Atomic
+>load : import("./threads.mjs").AtomicOperation<[], i32>
+>ints : SharedArray<i32, "i32">
+>1 : 1
+>1 : 1
+
+    return twice(p.level);
+>twice(p.level) : i32
+>twice : (v: i32) => i32
+>p.level : u8
+>p : { x: number; level: u8; count: i32; } & import("./threads.mjs").Cell
+>level : u8
+}
+function twice(v: i32): i32 { return v * 2; }
+>twice : (v: i32) => i32
+>v : i32
+>v * 2 : number
+>v : i32
+>2 : 2
+
+export function bad(p: P, bytes: SharedArray<u8>, ints: SharedArray<i32>, n: number): i32 {
+>bad : (p: P, bytes: SharedArray<u8>, ints: SharedArray<i32>, n: number) => i32
+>p : { x: number; level: u8; count: i32; } & import("./threads.mjs").Cell
+>bytes : SharedArray<u8, "u8">
+>ints : SharedArray<i32, "i32">
+>n : number
+
+    p.level = p.x * 255;                                    // error: an f64
+>p.level = p.x * 255 : number
+>p.level : u8
+>p : { x: number; level: u8; count: i32; } & import("./threads.mjs").Cell
+>level : u8
+>p.x * 255 : number
+>p.x : number
+>p : { x: number; level: u8; count: i32; } & import("./threads.mjs").Cell
+>x : number
+>255 : 255
+
+    p.level = 1.5;                                          // error: a fraction
+>p.level = 1.5 : 1.5
+>p.level : u8
+>p : { x: number; level: u8; count: i32; } & import("./threads.mjs").Cell
+>level : u8
+>1.5 : 1.5
+
+    p.count = n;                                            // error: a number parameter
+>p.count = n : number
+>p.count : i32
+>p : { x: number; level: u8; count: i32; } & import("./threads.mjs").Cell
+>count : i32
+>n : number
+
+    p.count = p.count / 2;                                  // error: a quotient
+>p.count = p.count / 2 : number
+>p.count : i32
+>p : { x: number; level: u8; count: i32; } & import("./threads.mjs").Cell
+>count : i32
+>p.count / 2 : number
+>p.count : i32
+>p : { x: number; level: u8; count: i32; } & import("./threads.mjs").Cell
+>count : i32
+>2 : 2
+
+    p.count /= 2;                                           // error
+>p.count /= 2 : number
+>p.count : i32
+>p : { x: number; level: u8; count: i32; } & import("./threads.mjs").Cell
+>count : i32
+>2 : 2
+
+    p.count += 0.5;                                         // error
+>p.count += 0.5 : number
+>p.count : i32
+>p : { x: number; level: u8; count: i32; } & import("./threads.mjs").Cell
+>count : i32
+>0.5 : 0.5
+
+    bytes[0] = Math.random() * 256;                         // error
+>bytes[0] = Math.random() * 256 : number
+>bytes[0] : u8
+>bytes : SharedArray<u8, "u8">
+>0 : 0
+>Math.random() * 256 : number
+>Math.random() : number
+>Math.random : () => number
+>Math : Math
+>random : () => number
+>256 : 256
+
+    ints[0] = Math.sqrt(p.count);                           // error
+>ints[0] = Math.sqrt(p.count) : number
+>ints[0] : i32
+>ints : SharedArray<i32, "i32">
+>0 : 0
+>Math.sqrt(p.count) : number
+>Math.sqrt : (x: number) => number
+>Math : Math
+>sqrt : (x: number) => number
+>p.count : i32
+>p : { x: number; level: u8; count: i32; } & import("./threads.mjs").Cell
+>count : i32
+
+    let average = 0;
+>average : number
+>0 : 0
+
+    average = n / 3;
+>average = n / 3 : number
+>average : number
+>n / 3 : number
+>n : number
+>3 : 3
+
+    p.count = average;                                      // error: average is given a quotient
+>p.count = average : number
+>p.count : i32
+>p : { x: number; level: u8; count: i32; } & import("./threads.mjs").Cell
+>count : i32
+>average : number
+
+    atomic.add(p, "count", n);                              // error: a number argument
+>atomic.add(p, "count", n) : i32
+>atomic.add : import("./threads.mjs").AtomicOperation<[value: i32], i32>
+>atomic : import("./threads.mjs").Atomic
+>add : import("./threads.mjs").AtomicOperation<[value: i32], i32>
+>p : { x: number; level: u8; count: i32; } & import("./threads.mjs").Cell
+>"count" : "count"
+>n : number
+
+    return twice(n / 2) + (n as i32);                       // error: a quotient argument; error: a cast converts nothing
+>twice(n / 2) + (n as i32) : number
+>twice(n / 2) : i32
+>twice : (v: i32) => i32
+>n / 2 : number
+>n : number
+>2 : 2
+>(n as i32) : i32
+>n as i32 : i32
+>n : number
+}
+

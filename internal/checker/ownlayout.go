@@ -22,7 +22,8 @@ import (
 //     slots: field k is at byte offset 8 + 8*k. A field must be a number (stored as f64), an `i32`
 //     (an i32 at the start of its slot), a `u8` or a boolean (a byte at the start of its slot; a
 //     boolean is 0 or 1), a string (the address of its interned copy, 0 for "", as an i32), a shared
-//     struct or a SharedArray (stored as an address).
+//     struct or a SharedArray (stored as an address), or a Channel (its block's address, which needs
+//     no count: a channel lives as long as the program).
 //   - A SharedArray<E> (the `SharedArray` interface declared in the module that `ownRuntime` names) is
 //     a 16-byte header followed by its elements; E must be a number, an `i32` or a string (an i32
 //     each), a `u8` or a boolean (a byte each), or a shared struct (stored inline, header included).
@@ -45,6 +46,7 @@ type ownLayoutState struct {
 	structCalls     map[*ast.Node]*ownStructInfo        // the same, by call
 	structDecls     map[*ast.Symbol]*ownStructInfo      // the `shared struct` declarations
 	structUnions    map[*Type]*ownStructInfo            // the layouts of unions of shared structs (nil if not all are)
+	integers        ownIntegerState                     // what flows into i32s and u8s (ownintegers.go)
 }
 
 // The files that the `ownRuntime` specifier resolves to (from any file that imports it).
@@ -195,13 +197,27 @@ func (c *Checker) getOwnIntegerKind(t *Type) printer.OwnFieldKind {
 	return printer.OwnFieldNone
 }
 
+// Reports whether a field of type t holds a channel: the runtime's Channel, possibly with null or
+// undefined.
+func (c *Checker) isOwnChannelFieldType(t *Type) bool {
+	members := c.ownNonNullishMembers(t)
+	if len(members) != 1 || members[0].flags&TypeFlagsObject == 0 {
+		return false
+	}
+	target := members[0].Target()
+	return target != nil && target.symbol != nil && target.symbol.Name == "Channel" && c.getOwnRuntimeExportName(target.symbol) == "Channel"
+}
+
 // The kind of a field of type t: an f64 for a number (and for a type no field may have, which is
-// reported), an i32 or a u8, a boolean, a string, or a reference (a shared struct or a SharedArray).
+// reported), an i32 or a u8, a boolean, a string, a reference (a shared struct or a SharedArray), or
+// a channel.
 func (c *Checker) getOwnFieldKind(t *Type) printer.OwnFieldKind {
 	if kind := c.getOwnIntegerKind(t); kind != printer.OwnFieldNone {
 		return kind
 	}
 	switch {
+	case c.isOwnChannelFieldType(t):
+		return printer.OwnFieldChan
 	case isOwnBooleanType(t):
 		return printer.OwnFieldBool
 	case isOwnStringType(t):
@@ -213,10 +229,12 @@ func (c *Checker) getOwnFieldKind(t *Type) printer.OwnFieldKind {
 }
 
 // Reports whether a shared struct may have a field of type t: a number (or an i32 or a u8), a boolean,
-// a string, or a reference (a shared struct or a SharedArray, possibly with null or undefined).
+// a string, or a reference (a shared struct, a SharedArray or a Channel, possibly with null or
+// undefined).
 func (c *Checker) isOwnFieldType(t *Type) bool {
 	return t.flags&TypeFlagsNumber != 0 && t.flags&TypeFlagsUnion == 0 || c.getOwnIntegerKind(t) != printer.OwnFieldNone ||
-		isOwnBooleanType(t) || isOwnStringType(t) || len(c.ownNonNullishMembers(t)) == 1 && c.isOwnCellType(t)
+		isOwnBooleanType(t) || isOwnStringType(t) || len(c.ownNonNullishMembers(t)) == 1 && c.isOwnCellType(t) ||
+		c.isOwnChannelFieldType(t)
 }
 
 // Classifies a type for the layout emit: a shared struct (or a union of them), a SharedArray of
@@ -318,7 +336,7 @@ func (c *Checker) checkSharedStructLayout(node *ast.Node) {
 		if location == nil {
 			location = member.Name()
 		}
-		c.error(location, diagnostics.A_shared_struct_field_must_be_a_number_a_boolean_a_string_a_shared_struct_or_a_SharedArray)
+		c.error(location, diagnostics.A_shared_struct_field_must_be_a_number_a_boolean_a_string_a_shared_struct_a_SharedArray_or_a_Channel)
 	}
 }
 
@@ -516,6 +534,7 @@ func (c *Checker) setOwnTargetType(expr *ast.Node, target *Type) {
 	if expr == nil || target == nil {
 		return
 	}
+	c.checkOwnIntegerTarget(expr, target)
 	c.setOwnTarget(expr, c.isOwnCellType(target))
 }
 
@@ -542,6 +561,9 @@ func (c *Checker) computeOwnConversions(file *ast.SourceFile, report bool) {
 		c.ownLayout.conversionFiles = map[*ast.SourceFile]bool{}
 	}
 	c.ownLayout.conversionFiles[file] = true
+	reporting := c.ownLayout.integers.reporting
+	c.ownLayout.integers.reporting = report
+	defer func() { c.ownLayout.integers.reporting = reporting }()
 	var visit ast.Visitor
 	visit = func(node *ast.Node) bool {
 		if ast.IsTypeNode(node) {
@@ -668,8 +690,8 @@ func (c *Checker) computeOwnConversion(node *ast.Node, report bool) {
 			if k < 0 && report {
 				c.checkOwnStructUnionField(node, t)
 			}
-			if cell.FieldKind(k) == printer.OwnFieldStr && report {
-				c.checkOwnStringTarget(node)
+			if kind := cell.FieldKind(k); (kind == printer.OwnFieldStr || kind == printer.OwnFieldChan) && report {
+				c.checkOwnConvertedTarget(node)
 			}
 			c.setOwnTarget(object, k >= 0)
 		default:
@@ -689,22 +711,23 @@ func (c *Checker) computeOwnConversion(node *ast.Node, report bool) {
 		}
 		kind := c.getOwnCellType(t).Kind
 		if kind == printer.OwnCellArrayOfString && report {
-			c.checkOwnStringTarget(node)
+			c.checkOwnConvertedTarget(node)
 		}
 		c.setOwnTarget(object, kind.IsArray())
 	}
 }
 
-// Reports a string field or element that is assigned by destructuring or as a for-in or for-of
-// variable: the emit interns a string only where it is assigned on its own.
-func (c *Checker) checkOwnStringTarget(access *ast.Node) {
+// Reports a string or channel field, or a string element, that is assigned by destructuring or as a
+// for-in or for-of variable: the emit converts the value (interns a string, takes a channel's address)
+// only where it is assigned on its own.
+func (c *Checker) checkOwnConvertedTarget(access *ast.Node) {
 	switch target := ast.GetAssignmentTarget(access); {
 	case target == nil, ast.IsPrefixUnaryExpression(target), ast.IsPostfixUnaryExpression(target):
 		return // `++` on a string is a type error already
 	case ast.IsBinaryExpression(target) && ast.SkipParentheses(target.AsBinaryExpression().Left) == access:
 		return
 	}
-	c.error(access, diagnostics.A_string_in_a_shared_struct_or_SharedArray_cannot_be_assigned_by_destructuring_or_as_a_loop_variable)
+	c.error(access, diagnostics.A_string_or_a_channel_in_a_shared_struct_or_SharedArray_cannot_be_assigned_by_destructuring_or_as_a_loop_variable)
 }
 
 func (c *Checker) computeOwnBinaryConversion(node *ast.Node, report bool) {
@@ -730,6 +753,11 @@ func (c *Checker) computeOwnBinaryConversion(node *ast.Node, report bool) {
 		if c.isOwnCellExpression(n.Right) {
 			c.setOwnTarget(n.Right, false)
 		}
+		if op == ast.KindPlusEqualsToken {
+			c.checkOwnIntegerCompoundAssignment(node)
+		}
+	case ast.KindMinusEqualsToken, ast.KindAsteriskEqualsToken, ast.KindSlashEqualsToken, ast.KindPercentEqualsToken, ast.KindAsteriskAsteriskEqualsToken:
+		c.checkOwnIntegerCompoundAssignment(node)
 	case ast.KindEqualsEqualsEqualsToken, ast.KindExclamationEqualsEqualsToken, ast.KindEqualsEqualsToken, ast.KindExclamationEqualsToken:
 		leftType, rightType := c.getTypeOfExpression(n.Left), c.getTypeOfExpression(n.Right)
 		leftCell, rightCell := c.isOwnCellType(leftType), c.isOwnCellType(rightType)
