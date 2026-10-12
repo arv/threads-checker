@@ -146,7 +146,11 @@ func (tx *OwnLayoutTransformer) visit(node *ast.Node) *ast.Node {
 	case ast.KindExpressionStatement:
 		return tx.visitExpressionStatement(node)
 	case ast.KindReturnStatement:
-		return tx.Factory().UpdateReturnStatement(node.AsReturnStatement(), tx.fullExpression(node.Expression(), ownReturn))
+		expression := tx.fullExpression(node.Expression(), ownReturn)
+		if expression != nil {
+			expression = tx.moved(expression, node.Expression())
+		}
+		return tx.Factory().UpdateReturnStatement(node.AsReturnStatement(), expression)
 	case ast.KindIfStatement:
 		n := node.AsIfStatement()
 		expression := tx.fullExpression(n.Expression, ownAtOnce)
@@ -581,7 +585,7 @@ func (tx *OwnLayoutTransformer) visitConciseBody(node *ast.Node, fn *ast.Node) *
 	frame := tx.pushFrame(&ownFrame{})
 	result := tx.visitExpression(node, ownReturn)
 	tx.popFrame()
-	result = tx.releaseAfter(result, frame, true /*keepValue*/)
+	result = tx.moved(tx.releaseAfter(result, frame, true /*keepValue*/), node)
 	if len(prologue) == 0 {
 		return result
 	}
@@ -590,6 +594,15 @@ func (tx *OwnLayoutTransformer) visitConciseBody(node *ast.Node, fn *ast.Node) *
 		statements = []*ast.Node{tx.tryFinally(statements, owned)}
 	}
 	return tx.Factory().NewBlock(tx.Factory().NewNodeList(append(prologue, statements...)), true /*multiLine*/)
+}
+
+// A function's result, as `__moved(E)` where it moves into the runtime with its count (a callback
+// whose runtime type has a `sending` result, see the checker's isOwnMovedReturn).
+func (tx *OwnLayoutTransformer) moved(result *ast.Node, expression *ast.Node) *ast.Node {
+	if original := tx.original(expression); original != nil && tx.emitResolver.IsOwnMovedReturn(original) {
+		return tx.call(transformers.OwnRuntimeMovedHelper, result)
+	}
+	return result
 }
 
 // The statements a function body starts with for its counted parameters: an owned parameter is

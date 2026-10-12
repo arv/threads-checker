@@ -687,6 +687,35 @@ func (c *Checker) isOwnRefArgument(arg *ast.Node) bool {
 	return param != nil && a.isSendingTypeNode(param.Type()) && !a.isConsumingSignature(signature.declaration)
 }
 
+// Reports whether a returned expression is a counted value that moves into the runtime, which the
+// emit passes as `__moved(E)`: the result of an arrow function or function expression that a runtime
+// (ambient) function type with a `sending` result types, as a SharedMap's getOrInsertComputed types
+// its callback. A result carries a count (ownReturn), which the runtime takes over; `__moved` tells it
+// that the number is an address with a count rather than a number.
+func (c *Checker) isOwnMovedReturn(expr *ast.Node) bool {
+	if c.compilerOptions.OwnRuntime == "" || expr == nil || !c.isOwnCellExpression(expr) || c.getOwnConversion(expr) == printer.OwnConversionBox {
+		return false
+	}
+	var fn *ast.Node
+	switch parent := expr.Parent; {
+	case parent == nil:
+		return false
+	case ast.IsReturnStatement(parent):
+		fn = ast.GetContainingFunction(parent)
+	case ast.IsArrowFunction(parent) && parent.Body() == expr:
+		fn = parent
+	}
+	if fn == nil || !ast.IsArrowFunction(fn) && !ast.IsFunctionExpression(fn) {
+		return false
+	}
+	signature := c.getContextualSignatureForFunctionLikeDeclaration(fn)
+	if signature == nil || signature.declaration == nil || !isOwnAmbientDeclaration(signature.declaration) {
+		return false
+	}
+	a := &ownAnalyzer{c: c}
+	return a.isSendingTypeNode(signature.declaration.Type())
+}
+
 // Reports the reference counting errors of a file: a captured counted variable that is reassigned, a
 // raw address stored in an ordinary array or object, bound by destructuring or used as a for-of
 // variable, and a counted local captured by a method or a class.

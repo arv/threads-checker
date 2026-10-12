@@ -209,6 +209,7 @@ type EmitResolver interface {
 	GetOwnCaptures(function *ast.Node) []*ast.Node
 	IsOwnQuiescentLoop(loop *ast.Node) bool
 	IsOwnRefArgument(argument *ast.Node) bool
+	IsOwnMovedReturn(expression *ast.Node) bool
 	GetOwnStructCall(call *ast.Node) *OwnStructCall
 	GetOwnAtomicCall(call *ast.Node) *OwnAtomicCall
 	IsOwnConsumeCall(call *ast.Node) bool

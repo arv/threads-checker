@@ -136,6 +136,18 @@ func (r *EmitResolver) IsOwnRefArgument(argument *ast.Node) bool {
 	return r.checker.isOwnRefArgument(argument)
 }
 
+// Reports whether a returned expression of the original tree is a counted value that moves into the
+// runtime: the result of a callback that a runtime function type with a `sending` result types (own/
+// shared threads extension).
+func (r *EmitResolver) IsOwnMovedReturn(expression *ast.Node) bool {
+	if !isOwnOriginalNode(expression) {
+		return false
+	}
+	r.checkerMu.Lock()
+	defer r.checkerMu.Unlock()
+	return r.checker.isOwnMovedReturn(expression)
+}
+
 // The shared struct a `struct({...})` call of the original tree declares, if it is one (own/shared
 // threads extension, plain API).
 func (r *EmitResolver) GetOwnStructCall(call *ast.Node) *printer.OwnStructCall {

@@ -1,0 +1,112 @@
+//// [tests/cases/compiler/ownLayoutMovedReturns.ts] ////
+
+=== own.d.mts ===
+type Entry<K, V> = [key: K, value: V];
+>Entry : Entry<K, V>
+
+type Computed<K, V> = [key: K, callback: (key: K) => sending V];
+>Computed : Computed<K, V>
+>key : K
+
+/** A map in shared memory. */
+export declare class SharedMap<K, V> {
+>SharedMap : SharedMap<K, V>
+
+    get(key: K): V | undefined;
+>get : (key: K) => V | undefined
+>key : K
+
+    set(...entry: sending Entry<K, V>): this;
+>set : (key: K, value: V) => this
+>entry : Entry<K, V>
+
+    getOrInsertComputed(...entry: sending Computed<K, V>): V;
+>getOrInsertComputed : (key: K, callback: (key: K) => V) => V
+>entry : Computed<K, V>
+}
+/** A callback whose result is not sent. */
+export declare function peek<V>(f: () => V): void;
+>peek : <V>(f: () => V) => void
+>f : () => V
+
+=== main.mts ===
+import { SharedMap, peek } from "./own.mjs";
+>SharedMap : typeof SharedMap
+>peek : <V>(f: () => V) => void
+
+shared struct Count { n: number; }
+>Count : Count
+>n : number
+
+export function count(counts: SharedMap<string, Count>, word: string) {
+>count : (counts: SharedMap<string, Count>, word: string) => void
+>counts : SharedMap<string, Count>
+>word : string
+
+    counts.getOrInsertComputed(word, () => new Count()).n++;
+>counts.getOrInsertComputed(word, () => new Count()).n++ : number
+>counts.getOrInsertComputed(word, () => new Count()).n : number
+>counts.getOrInsertComputed(word, () => new Count()) : Count
+>counts.getOrInsertComputed : (key: string, callback: (key: string) => Count) => Count
+>counts : SharedMap<string, Count>
+>getOrInsertComputed : (key: string, callback: (key: string) => Count) => Count
+>word : string
+>() => new Count() : () => Count
+>new Count() : Count
+>Count : new () => Count
+>n : number
+
+    counts.getOrInsertComputed(word, function () { return new Count(); }).n++;
+>counts.getOrInsertComputed(word, function () { return new Count(); }).n++ : number
+>counts.getOrInsertComputed(word, function () { return new Count(); }).n : number
+>counts.getOrInsertComputed(word, function () { return new Count(); }) : Count
+>counts.getOrInsertComputed : (key: string, callback: (key: string) => Count) => Count
+>counts : SharedMap<string, Count>
+>getOrInsertComputed : (key: string, callback: (key: string) => Count) => Count
+>word : string
+>function () { return new Count(); } : () => Count
+>new Count() : Count
+>Count : new () => Count
+>n : number
+
+    counts.getOrInsertComputed(word, () => {
+>counts.getOrInsertComputed(word, () => {        const c = new Count();        c.n = 1;        return c;    }) : Count
+>counts.getOrInsertComputed : (key: string, callback: (key: string) => Count) => Count
+>counts : SharedMap<string, Count>
+>getOrInsertComputed : (key: string, callback: (key: string) => Count) => Count
+>word : string
+>() => {        const c = new Count();        c.n = 1;        return c;    } : () => Count
+
+        const c = new Count();
+>c : Count
+>new Count() : Count
+>Count : new () => Count
+
+        c.n = 1;
+>c.n = 1 : 1
+>c.n : number
+>c : Count
+>n : number
+>1 : 1
+
+        return c;
+>c : Count
+
+    });
+    counts.set(word, new Count());
+>counts.set(word, new Count()) : SharedMap<string, Count>
+>counts.set : (key: string, value: Count) => SharedMap<string, Count>
+>counts : SharedMap<string, Count>
+>set : (key: string, value: Count) => SharedMap<string, Count>
+>word : string
+>new Count() : Count
+>Count : new () => Count
+
+    peek(() => new Count());
+>peek(() => new Count()) : void
+>peek : <V>(f: () => V) => void
+>() => new Count() : () => Count
+>new Count() : Count
+>Count : new () => Count
+}
+

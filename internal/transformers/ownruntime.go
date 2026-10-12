@@ -26,7 +26,7 @@ import (
 // The typed layouts of shared structs and SharedArrays use more helpers (`__F64`, `__I32`, `__U8`,
 // `__newStruct`, `__newSharedArray`, `__OOB`, `__box`, `__unbox`, `__intern` and `__str` for strings,
 // and `__cellAddress` for channels), and so does their reference
-// counting (`__retain`, `__release`, `__store`, `__ref`, `__quiescent`, `__hold`; see
+// counting (`__retain`, `__release`, `__store`, `__ref`, `__moved`, `__quiescent`, `__hold`; see
 // tstransforms/ownlayout.go). The import lists exactly the helpers the emitted module references.
 //
 // The helpers are referenced through helper names, so a file that declares its own `__register`
@@ -50,6 +50,7 @@ const (
 	OwnRuntimeReleaseHelper        = "__release"
 	OwnRuntimeStoreHelper          = "__store"
 	OwnRuntimeRefHelper            = "__ref"
+	OwnRuntimeMovedHelper          = "__moved"
 	OwnRuntimeQuiescentHelper      = "__quiescent"
 	OwnRuntimeHoldHelper           = "__hold"
 )
@@ -63,6 +64,7 @@ var ownRuntimeHelpers = []string{ // sorted
 	OwnRuntimeCellAddressHelper,
 	OwnRuntimeHoldHelper,
 	OwnRuntimeInternHelper,
+	OwnRuntimeMovedHelper,
 	OwnRuntimeNewSharedArrayHelper,
 	OwnRuntimeNewStructHelper,
 	OwnRuntimeQuiescentHelper,
