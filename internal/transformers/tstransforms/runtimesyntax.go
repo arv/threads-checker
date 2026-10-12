@@ -661,32 +661,21 @@ func (tx *RuntimeSyntaxTransformer) visitSharedStructDeclaration(node *ast.Share
 	}
 	if usesOwnRuntime && tx.emitResolver != nil {
 		// The indexes of the reference fields, which the runtime releases when it frees a block, and
-		// of the boolean and the string fields, if any.
-		var refs, bools, strs []*ast.Expression
+		// the fields' kinds if any is other than a number or a reference.
+		var refs []*ast.Expression
+		kinds := ""
 		if original := tx.EmitContext().MostOriginal(node.AsNode()); original != nil && original.Flags&ast.NodeFlagsSynthesized == 0 {
 			cell := tx.emitResolver.GetOwnCellType(original)
-			for k, isRef := range cell.Refs {
-				if isRef {
+			for k, kind := range cell.Kinds {
+				if kind == printer.OwnFieldRef {
 					refs = append(refs, f.NewNumericLiteral(strconv.Itoa(k), ast.TokenFlagsNone))
 				}
 			}
-			for k, isBool := range cell.Bools {
-				if isBool {
-					bools = append(bools, f.NewNumericLiteral(strconv.Itoa(k), ast.TokenFlagsNone))
-				}
-			}
-			for k, isStr := range cell.Strs {
-				if isStr {
-					strs = append(strs, f.NewNumericLiteral(strconv.Itoa(k), ast.TokenFlagsNone))
-				}
-			}
+			kinds = cell.KindLetters()
 		}
 		args = append(args, f.NewArrayLiteralExpression(f.NewNodeList(refs), false /*multiLine*/))
-		if len(bools) > 0 || len(strs) > 0 {
-			args = append(args, f.NewArrayLiteralExpression(f.NewNodeList(bools), false /*multiLine*/))
-		}
-		if len(strs) > 0 {
-			args = append(args, f.NewArrayLiteralExpression(f.NewNodeList(strs), false /*multiLine*/))
+		if kinds != "" {
+			args = append(args, f.NewStringLiteral(kinds, ast.TokenFlagsNone))
 		}
 	}
 	call := f.NewCallExpression(

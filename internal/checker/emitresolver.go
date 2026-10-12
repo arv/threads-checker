@@ -151,7 +151,22 @@ func (r *EmitResolver) GetOwnStructCall(call *ast.Node) *printer.OwnStructCall {
 	if info == nil {
 		return nil
 	}
-	return &printer.OwnStructCall{Name: info.name, Layout: printer.OwnCellType{Kind: printer.OwnCellStruct, Fields: info.fields, Refs: info.refs, Bools: info.bools, Strs: info.strs}}
+	return &printer.OwnStructCall{Name: info.name, Layout: printer.OwnCellType{Kind: printer.OwnCellStruct, Fields: info.fields, Kinds: info.kinds}}
+}
+
+// The atomic operation a call of the original tree is (own/shared threads extension, plain API), or
+// nil.
+func (r *EmitResolver) GetOwnAtomicCall(call *ast.Node) *printer.OwnAtomicCall {
+	if !isOwnOriginalNode(call) || !ast.IsCallExpression(call) {
+		return nil
+	}
+	r.checkerMu.Lock()
+	defer r.checkerMu.Unlock()
+	atomic, ok := r.checker.getOwnAtomicCall(call)
+	if !ok {
+		return nil
+	}
+	return atomic
 }
 
 // Reports whether a call of the original tree is `consume(x)` (own/shared threads extension, plain

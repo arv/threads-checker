@@ -59,6 +59,8 @@ var A_generator_s_parameter_cannot_have_type_0_Colon_the_generator_runs_after_it
 
 var Field_0_is_at_different_places_in_the_shared_structs_of_this_union = &Message{code: 96026, category: CategoryError, key: "Field_0_is_at_different_places_in_the_shared_structs_of_this_union_96026", text: "Field '{0}' is at different places in the shared structs of this union."}
 
+var An_atomic_operation_takes_an_i32_field_of_a_shared_struct_named_by_a_string_literal_or_an_element_of_a_SharedArray_i32 = &Message{code: 96028, category: CategoryError, key: "An_atomic_operation_takes_an_i32_field_of_a_shared_struct_named_by_a_string_literal_or_an_element_of_a_SharedArray_i32_96028", text: "An atomic operation takes an i32 field of a shared struct, named by a string literal, or an element of a SharedArray<i32>."}
+
 var A_string_in_a_shared_struct_or_SharedArray_cannot_be_assigned_by_destructuring_or_as_a_loop_variable = &Message{code: 96027, category: CategoryError, key: "A_string_in_a_shared_struct_or_SharedArray_cannot_be_assigned_by_destructuring_or_as_a_loop_variable_96027", text: "A string in a shared struct or SharedArray cannot be assigned by destructuring or as a loop variable."}
 
 // Looks up an extension diagnostic by key, for diagnostics that are re-localized from their key
@@ -92,6 +94,7 @@ func ownershipKeyToMessage(key Key) *Message {
 		A_generator_s_parameter_cannot_have_type_0_Colon_the_generator_runs_after_its_caller_s_borrow_ends,
 		Field_0_is_at_different_places_in_the_shared_structs_of_this_union,
 		A_string_in_a_shared_struct_or_SharedArray_cannot_be_assigned_by_destructuring_or_as_a_loop_variable,
+		An_atomic_operation_takes_an_i32_field_of_a_shared_struct_named_by_a_string_literal_or_an_element_of_a_SharedArray_i32,
 	} {
 		if m.key == key {
 			return m

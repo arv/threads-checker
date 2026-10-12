@@ -19,12 +19,15 @@ import (
 // that representation from leaking:
 //
 //   - A shared struct with fields f0..f(n-1) is a header word (written by the runtime) and n 8-byte
-//     slots: field k is at byte offset 8 + 8*k. A field must be a number (stored as f64), a boolean
-//     (a byte, 0 or 1, at the start of its slot), a string (the address of its interned copy, 0 for
-//     "", as an i32), a shared struct or a SharedArray (stored as an address).
+//     slots: field k is at byte offset 8 + 8*k. A field must be a number (stored as f64), an `i32`
+//     (an i32 at the start of its slot), a `u8` or a boolean (a byte at the start of its slot; a
+//     boolean is 0 or 1), a string (the address of its interned copy, 0 for "", as an i32), a shared
+//     struct or a SharedArray (stored as an address).
 //   - A SharedArray<E> (the `SharedArray` interface declared in the module that `ownRuntime` names) is
-//     a 16-byte header followed by its elements; E must be a number, a boolean (one byte each), a
-//     string (an i32 each) or a shared struct (stored inline, header included).
+//     a 16-byte header followed by its elements; E must be a number, an `i32` or a string (an i32
+//     each), a `u8` or a boolean (a byte each), or a shared struct (stored inline, header included).
+//   - An atomic operation (`atomic.add(s, "count", 1)`) acts on an i32 field, named by a string
+//     literal, or on an element of a SharedArray<i32>.
 //   - A string field or element is assigned by `=`, `+=` or a logical assignment, which intern the
 //     string, and not by destructuring or as a loop variable.
 //   - A union of shared structs has the fields that are at the same place in every member, and
@@ -93,9 +96,7 @@ func (c *Checker) getOwnStructOfType(t *Type) *ownStructInfo {
 	return nil
 }
 
-// The layout of a `shared struct` declaration: its fields in declaration order, and which of them
-// are reference fields (a shared struct or a SharedArray, possibly with null or undefined), which are
-// booleans and which are strings.
+// The layout of a `shared struct` declaration: its fields in declaration order, and their kinds.
 func (c *Checker) getOwnStructOfDeclaration(s *ast.Symbol) *ownStructInfo {
 	if info, ok := c.ownLayout.structDecls[s]; ok {
 		return info
@@ -109,14 +110,11 @@ func (c *Checker) getOwnStructOfDeclaration(s *ast.Symbol) *ownStructInfo {
 	for _, member := range decl.Members() {
 		if ast.IsPropertySignatureDeclaration(member) && member.Name() != nil {
 			info.fields = append(info.fields, member.Name().Text())
-			isRef, isBool, isStr := false, false, false
+			kind := printer.OwnFieldF64
 			if symbol := c.getSymbolOfDeclaration(member); symbol != nil {
-				t := c.getTypeOfSymbol(symbol)
-				isRef, isBool, isStr = c.isOwnCellType(t), isOwnBooleanType(t), isOwnStringType(t)
+				kind = c.getOwnFieldKind(c.getTypeOfSymbol(symbol))
 			}
-			info.refs = append(info.refs, isRef)
-			info.bools = append(info.bools, isBool)
-			info.strs = append(info.strs, isStr)
+			info.kinds = append(info.kinds, kind)
 		}
 	}
 	return info
@@ -168,16 +166,62 @@ func isOwnStringType(t *Type) bool {
 	return t.flags&TypeFlagsStringLike != 0
 }
 
-// Reports whether a shared struct may have a field of type t: a number, a boolean, a string, or a
-// reference (a shared struct or a SharedArray, possibly with null or undefined).
+// The runtime's integer type t is, OwnFieldI32 for `i32` or OwnFieldU8 for `u8`, or OwnFieldNone: a
+// number with a phantom brand, `number & { readonly [int32Brand]?: never }`, recognized by the
+// brand's declaration in the runtime module.
+func (c *Checker) getOwnIntegerKind(t *Type) printer.OwnFieldKind {
+	if t == nil || t.flags&TypeFlagsIntersection == 0 || c.compilerOptions.OwnRuntime == "" {
+		return printer.OwnFieldNone
+	}
+	for _, member := range t.Types() {
+		if member.flags&TypeFlagsObject == 0 {
+			continue
+		}
+		for _, property := range c.getPropertiesOfType(member) {
+			d := property.ValueDeclaration
+			if d == nil || d.Name() == nil || !ast.IsComputedPropertyName(d.Name()) || !c.isOwnRuntimeFile(ast.GetSourceFileOfNode(d)) {
+				continue
+			}
+			if brand := d.Name().Expression(); ast.IsIdentifier(brand) {
+				switch brand.Text() {
+				case "int32Brand":
+					return printer.OwnFieldI32
+				case "uint8Brand":
+					return printer.OwnFieldU8
+				}
+			}
+		}
+	}
+	return printer.OwnFieldNone
+}
+
+// The kind of a field of type t: an f64 for a number (and for a type no field may have, which is
+// reported), an i32 or a u8, a boolean, a string, or a reference (a shared struct or a SharedArray).
+func (c *Checker) getOwnFieldKind(t *Type) printer.OwnFieldKind {
+	if kind := c.getOwnIntegerKind(t); kind != printer.OwnFieldNone {
+		return kind
+	}
+	switch {
+	case isOwnBooleanType(t):
+		return printer.OwnFieldBool
+	case isOwnStringType(t):
+		return printer.OwnFieldStr
+	case c.isOwnCellType(t):
+		return printer.OwnFieldRef
+	}
+	return printer.OwnFieldF64
+}
+
+// Reports whether a shared struct may have a field of type t: a number (or an i32 or a u8), a boolean,
+// a string, or a reference (a shared struct or a SharedArray, possibly with null or undefined).
 func (c *Checker) isOwnFieldType(t *Type) bool {
-	return t.flags&TypeFlagsNumber != 0 && t.flags&TypeFlagsUnion == 0 || isOwnBooleanType(t) || isOwnStringType(t) ||
-		len(c.ownNonNullishMembers(t)) == 1 && c.isOwnCellType(t)
+	return t.flags&TypeFlagsNumber != 0 && t.flags&TypeFlagsUnion == 0 || c.getOwnIntegerKind(t) != printer.OwnFieldNone ||
+		isOwnBooleanType(t) || isOwnStringType(t) || len(c.ownNonNullishMembers(t)) == 1 && c.isOwnCellType(t)
 }
 
 // Classifies a type for the layout emit: a shared struct (or a union of them), a SharedArray of
-// numbers, booleans or strings, or a SharedArray of a shared struct (looking through null and
-// undefined).
+// numbers, i32s, u8s, booleans or strings, or a SharedArray of a shared struct (looking through null
+// and undefined).
 func (c *Checker) getOwnCellType(t *Type) printer.OwnCellType {
 	if t == nil || c.compilerOptions.OwnRuntime == "" {
 		return printer.OwnCellType{}
@@ -185,7 +229,7 @@ func (c *Checker) getOwnCellType(t *Type) printer.OwnCellType {
 	members := c.ownNonNullishMembers(t)
 	if len(members) > 1 {
 		if s := c.getOwnStructOfUnion(t, members); s != nil {
-			return printer.OwnCellType{Kind: printer.OwnCellStruct, Fields: s.fields, Refs: s.refs, Bools: s.bools, Strs: s.strs}
+			return printer.OwnCellType{Kind: printer.OwnCellStruct, Fields: s.fields, Kinds: s.kinds}
 		}
 		return printer.OwnCellType{}
 	}
@@ -194,9 +238,15 @@ func (c *Checker) getOwnCellType(t *Type) printer.OwnCellType {
 	}
 	t = members[0]
 	if s := c.getOwnStructOfType(t); s != nil {
-		return printer.OwnCellType{Kind: printer.OwnCellStruct, Fields: s.fields, Refs: s.refs, Bools: s.bools, Strs: s.strs}
+		return printer.OwnCellType{Kind: printer.OwnCellStruct, Fields: s.fields, Kinds: s.kinds}
 	}
 	if element := c.getOwnSharedArrayElementType(t); element != nil {
+		switch c.getOwnIntegerKind(element) {
+		case printer.OwnFieldI32:
+			return printer.OwnCellType{Kind: printer.OwnCellArrayOfI32}
+		case printer.OwnFieldU8:
+			return printer.OwnCellType{Kind: printer.OwnCellArrayOfU8}
+		}
 		if element.flags&TypeFlagsNumber != 0 {
 			return printer.OwnCellType{Kind: printer.OwnCellArrayOfNumber}
 		}
@@ -207,7 +257,7 @@ func (c *Checker) getOwnCellType(t *Type) printer.OwnCellType {
 			return printer.OwnCellType{Kind: printer.OwnCellArrayOfString}
 		}
 		if s := c.getOwnStructOfType(element); s != nil {
-			return printer.OwnCellType{Kind: printer.OwnCellArrayOfStruct, Fields: s.fields, Refs: s.refs, Bools: s.bools, Strs: s.strs}
+			return printer.OwnCellType{Kind: printer.OwnCellArrayOfStruct, Fields: s.fields, Kinds: s.kinds}
 		}
 	}
 	return printer.OwnCellType{}
@@ -272,14 +322,15 @@ func (c *Checker) checkSharedStructLayout(node *ast.Node) {
 	}
 }
 
-// Checks the element type of a SharedArray type reference: numbers, booleans, strings or a shared
-// struct.
+// Checks the element type of a SharedArray type reference: numbers (or i32s or u8s), booleans,
+// strings or a shared struct.
 func (c *Checker) checkSharedArrayElementType(node *ast.Node, t *Type) {
 	if c.compilerOptions.OwnRuntime == "" || node.Flags&ast.NodeFlagsAmbient != 0 {
 		return
 	}
 	element := c.getOwnSharedArrayElementType(t)
-	if element == nil || element.flags&TypeFlagsNumber != 0 && element.flags&TypeFlagsUnion == 0 || isOwnBooleanType(element) || isOwnStringType(element) || c.getOwnStructOfType(element) != nil {
+	if element == nil || element.flags&TypeFlagsNumber != 0 && element.flags&TypeFlagsUnion == 0 || c.getOwnIntegerKind(element) != printer.OwnFieldNone ||
+		isOwnBooleanType(element) || isOwnStringType(element) || c.getOwnStructOfType(element) != nil {
 		return
 	}
 	c.error(node, diagnostics.The_elements_of_a_SharedArray_must_be_numbers_booleans_strings_or_a_shared_struct)
@@ -347,12 +398,11 @@ func (c *Checker) getOwnStructOfUnion(t *Type, members []*Type) *ownStructInfo {
 	for _, s := range structs[1:] {
 		n = min(n, len(s.fields))
 	}
-	first := structs[0]
-	info := &ownStructInfo{fields: slices.Clone(first.fields[:n]), refs: slices.Clone(first.refs[:n]), bools: slices.Clone(first.bools[:n]), strs: slices.Clone(first.strs[:n])}
+	info := &ownStructInfo{fields: slices.Clone(structs[0].fields[:n]), kinds: slices.Clone(structs[0].kinds[:n])}
 	for _, s := range structs[1:] {
 		for k := range n {
-			if s.fields[k] != info.fields[k] || s.refs[k] != info.refs[k] || s.bools[k] != info.bools[k] || s.strs[k] != info.strs[k] {
-				info.fields[k], info.refs[k], info.bools[k], info.strs[k] = "", false, false, false
+			if s.fields[k] != info.fields[k] || s.kinds[k] != info.kinds[k] {
+				info.fields[k], info.kinds[k] = "", printer.OwnFieldNone
 			}
 		}
 	}
@@ -618,14 +668,12 @@ func (c *Checker) computeOwnConversion(node *ast.Node, report bool) {
 			if k < 0 && report {
 				c.checkOwnStructUnionField(node, t)
 			}
-			if k >= 0 && cell.Strs[k] && report {
+			if cell.FieldKind(k) == printer.OwnFieldStr && report {
 				c.checkOwnStringTarget(node)
 			}
 			c.setOwnTarget(object, k >= 0)
-		case printer.OwnCellArrayOfNumber, printer.OwnCellArrayOfStruct, printer.OwnCellArrayOfBoolean, printer.OwnCellArrayOfString:
-			c.setOwnTarget(object, name == "length")
 		default:
-			c.setOwnTarget(object, false)
+			c.setOwnTarget(object, cell.Kind.IsArray() && name == "length")
 		}
 	case ast.KindElementAccessExpression:
 		object := node.Expression()

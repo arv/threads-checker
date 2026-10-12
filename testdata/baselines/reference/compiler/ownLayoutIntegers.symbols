@@ -1,0 +1,979 @@
+//// [tests/cases/compiler/ownLayoutIntegers.ts] ////
+
+=== threads.d.mts ===
+// Threads for JavaScript in plain TypeScript: own and shared values, shared structs, and channels.
+//
+// Code written against these types is ordinary TypeScript: tsc, editors, linters and formatters
+// accept it as it is. Two tools add what the types cannot say:
+//   - the ownership checker (`tsgo own check`, from the tsgo fork) runs in CI like a linter and
+//     proves the rules below: nothing is used after it is sent, and shared values never change;
+//   - the bundler plugin (vite-plugin-threads.mjs) compiles shared structs and SharedArrays to
+//     typed-array accesses on shared memory, counts their references, and registers the functions
+//     threads run.
+//
+// Every value a thread touches is one of three kinds:
+//   - owned, the default: an ordinary object only one thread can reach. `Sending<T>` moves it: the
+//     caller gives it up and the receiver owns it;
+//   - shared: `Shared<T>`, deeply immutable, so any number of threads may read it;
+//   - a cell: shared and mutable, but only through what synchronizes it (Barrier, Slots, Channel), or,
+//     for shared structs and SharedArrays, in place, ordered by one of those.
+
+declare const cellBrand: unique symbol;
+>cellBrand : Symbol(cellBrand, Decl(threads.d.mts, 17, 13))
+
+declare const fieldBrand: unique symbol;
+>fieldBrand : Symbol(fieldBrand, Decl(threads.d.mts, 18, 13))
+
+declare const int32Brand: unique symbol;
+>int32Brand : Symbol(int32Brand, Decl(threads.d.mts, 19, 13))
+
+declare const uint8Brand: unique symbol;
+>uint8Brand : Symbol(uint8Brand, Decl(threads.d.mts, 20, 13))
+
+declare const layoutBrand: unique symbol;
+>layoutBrand : Symbol(layoutBrand, Decl(threads.d.mts, 21, 13))
+
+/** A cell: shared and mutable. Any number of threads may hold the same one. */
+export interface Cell {
+>Cell : Symbol(Cell, Decl(threads.d.mts, 21, 41))
+
+  readonly [cellBrand]: true;
+>[cellBrand] : Symbol(Cell[cellBrand], Decl(threads.d.mts, 24, 23))
+>cellBrand : Symbol(cellBrand, Decl(threads.d.mts, 17, 13))
+}
+
+/**
+ * A value whose ownership moves, on a parameter or a result: the caller must not use it, or anything
+ * it reaches, afterwards. The ownership checker enforces this; to TypeScript it is just T.
+ */
+export type Sending<T> = T;
+>Sending : Symbol(Sending, Decl(threads.d.mts, 26, 1))
+>T : Symbol(T, Decl(threads.d.mts, 32, 20))
+>T : Symbol(T, Decl(threads.d.mts, 32, 20))
+
+/** A deeply immutable value, which any number of threads may read. To TypeScript it is deeply readonly. */
+export type Shared<T> = T extends Cell | ((...args: any[]) => any) ? T
+>Shared : Symbol(Shared, Decl(threads.d.mts, 32, 27))
+>T : Symbol(T, Decl(threads.d.mts, 35, 19))
+>T : Symbol(T, Decl(threads.d.mts, 35, 19))
+>Cell : Symbol(Cell, Decl(threads.d.mts, 21, 41))
+>args : Symbol(args, Decl(threads.d.mts, 35, 43))
+>T : Symbol(T, Decl(threads.d.mts, 35, 19))
+
+  : T extends object ? { readonly [K in keyof T]: Shared<T[K]> }
+>T : Symbol(T, Decl(threads.d.mts, 35, 19))
+>K : Symbol(K, Decl(threads.d.mts, 36, 35))
+>T : Symbol(T, Decl(threads.d.mts, 35, 19))
+>Shared : Symbol(Shared, Decl(threads.d.mts, 32, 27))
+>T : Symbol(T, Decl(threads.d.mts, 35, 19))
+>K : Symbol(K, Decl(threads.d.mts, 36, 35))
+
+  : T;
+>T : Symbol(T, Decl(threads.d.mts, 35, 19))
+
+/** Ends `x`'s lifetime: its value, and what it reaches, moves to the caller. At run time, `x` itself. */
+export declare function consume<T>(x: T): Sending<T>;
+>consume : Symbol(consume, Decl(threads.d.mts, 37, 6))
+>T : Symbol(T, Decl(threads.d.mts, 40, 32))
+>x : Symbol(x, Decl(threads.d.mts, 40, 35))
+>T : Symbol(T, Decl(threads.d.mts, 40, 32))
+>Sending : Symbol(Sending, Decl(threads.d.mts, 26, 1))
+>T : Symbol(T, Decl(threads.d.mts, 40, 32))
+
+/** Freezes a value the caller owns into a deeply immutable value every thread can read. */
+export declare function share<T>(value: Sending<T>): Shared<T>;
+>share : Symbol(share, Decl(threads.d.mts, 40, 53))
+>T : Symbol(T, Decl(threads.d.mts, 43, 30))
+>value : Symbol(value, Decl(threads.d.mts, 43, 33))
+>Sending : Symbol(Sending, Decl(threads.d.mts, 26, 1))
+>T : Symbol(T, Decl(threads.d.mts, 43, 30))
+>Shared : Symbol(Shared, Decl(threads.d.mts, 32, 27))
+>T : Symbol(T, Decl(threads.d.mts, 43, 30))
+
+// ---- shared structs ----
+
+/** A field of a shared struct, declared with `f64`, `i32`, `u8`, `bool`, `str` or `ref<T>()`. */
+export interface Field<T> {
+>Field : Symbol(Field, Decl(threads.d.mts, 43, 63))
+>T : Symbol(T, Decl(threads.d.mts, 48, 23))
+
+  readonly [fieldBrand]: T;
+>[fieldBrand] : Symbol(Field[fieldBrand], Decl(threads.d.mts, 48, 27))
+>fieldBrand : Symbol(fieldBrand, Decl(threads.d.mts, 18, 13))
+>T : Symbol(T, Decl(threads.d.mts, 48, 23))
+}
+/** A number field: an f64 in shared memory. */
+export declare const f64: Field<number>;
+>f64 : Symbol(f64, Decl(threads.d.mts, 52, 20))
+>Field : Symbol(Field, Decl(threads.d.mts, 43, 63))
+
+/**
+ * A 32-bit integer: a number, which the field or element it is stored in keeps as an Int32Array would
+ * (3.7 as 3, and 2 ** 31 as -(2 ** 31)). Any number may be stored in one. Atomic operations act on
+ * i32s (see `atomic`).
+ */
+export type i32 = number & { readonly [int32Brand]?: never };
+>i32 : Symbol(i32, Decl(threads.d.mts, 52, 40), Decl(threads.d.mts, 67, 20))
+>[int32Brand] : Symbol([int32Brand], Decl(threads.d.mts, 59, 28))
+>int32Brand : Symbol(int32Brand, Decl(threads.d.mts, 19, 13))
+
+/** An 8-bit unsigned integer: a number, kept as a Uint8Array would (256 as 0, and -1 as 255). */
+export type u8 = number & { readonly [uint8Brand]?: never };
+>u8 : Symbol(u8, Decl(threads.d.mts, 59, 61), Decl(threads.d.mts, 69, 20))
+>[uint8Brand] : Symbol([uint8Brand], Decl(threads.d.mts, 61, 27))
+>uint8Brand : Symbol(uint8Brand, Decl(threads.d.mts, 20, 13))
+
+/** The field of an integer, which a SharedArray also takes as its element type. */
+export interface IntegerField<T, K extends "i32" | "u8"> extends Field<T> {
+>IntegerField : Symbol(IntegerField, Decl(threads.d.mts, 61, 60))
+>T : Symbol(T, Decl(threads.d.mts, 63, 30))
+>K : Symbol(K, Decl(threads.d.mts, 63, 32))
+>Field : Symbol(Field, Decl(threads.d.mts, 43, 63))
+>T : Symbol(T, Decl(threads.d.mts, 63, 30))
+
+  readonly kind: K;
+>kind : Symbol(IntegerField.kind, Decl(threads.d.mts, 63, 75))
+>K : Symbol(K, Decl(threads.d.mts, 63, 32))
+}
+/** An i32 field: a 32-bit integer in shared memory, which atomic operations act on. */
+export declare const i32: IntegerField<i32, "i32">;
+>i32 : Symbol(i32, Decl(threads.d.mts, 52, 40), Decl(threads.d.mts, 67, 20))
+>IntegerField : Symbol(IntegerField, Decl(threads.d.mts, 61, 60))
+>i32 : Symbol(i32, Decl(threads.d.mts, 52, 40), Decl(threads.d.mts, 67, 20))
+
+/** A u8 field: a byte in shared memory. */
+export declare const u8: IntegerField<u8, "u8">;
+>u8 : Symbol(u8, Decl(threads.d.mts, 59, 61), Decl(threads.d.mts, 69, 20))
+>IntegerField : Symbol(IntegerField, Decl(threads.d.mts, 61, 60))
+>u8 : Symbol(u8, Decl(threads.d.mts, 59, 61), Decl(threads.d.mts, 69, 20))
+
+/** A boolean field: a byte in shared memory, 0 or 1. */
+export declare const bool: Field<boolean>;
+>bool : Symbol(bool, Decl(threads.d.mts, 71, 20))
+>Field : Symbol(Field, Decl(threads.d.mts, 43, 63))
+
+/**
+ * A string field: the address of the string's one copy in shared memory. Strings are interned, so
+ * each distinct string is stored once, and each thread decodes it once. They are never freed.
+ */
+export declare const str: Field<string>;
+>str : Symbol(str, Decl(threads.d.mts, 76, 20))
+>Field : Symbol(Field, Decl(threads.d.mts, 43, 63))
+
+/** A reference field: a shared struct or a SharedArray, or null. */
+export declare function ref<T>(): Field<T | null>;
+>ref : Symbol(ref, Decl(threads.d.mts, 76, 40))
+>T : Symbol(T, Decl(threads.d.mts, 78, 28))
+>Field : Symbol(Field, Decl(threads.d.mts, 43, 63))
+>T : Symbol(T, Decl(threads.d.mts, 78, 28))
+
+/** What `struct(...)` returns: `new S()` makes a zeroed struct in shared memory. */
+export interface StructType<T> {
+>StructType : Symbol(StructType, Decl(threads.d.mts, 78, 50))
+>T : Symbol(T, Decl(threads.d.mts, 81, 28))
+
+  new (): T & Cell;
+>T : Symbol(T, Decl(threads.d.mts, 81, 28))
+>Cell : Symbol(Cell, Decl(threads.d.mts, 21, 41))
+
+  readonly fields: readonly string[];
+>fields : Symbol(StructType.fields, Decl(threads.d.mts, 82, 19))
+}
+/** The value type of a struct type: `type Body = Struct<typeof Body>`. */
+export type Struct<S> = S extends StructType<infer T> ? T & Cell : never;
+>Struct : Symbol(Struct, Decl(threads.d.mts, 84, 1))
+>S : Symbol(S, Decl(threads.d.mts, 86, 19))
+>S : Symbol(S, Decl(threads.d.mts, 86, 19))
+>StructType : Symbol(StructType, Decl(threads.d.mts, 78, 50))
+>T : Symbol(T, Decl(threads.d.mts, 86, 50))
+>T : Symbol(T, Decl(threads.d.mts, 86, 50))
+>Cell : Symbol(Cell, Decl(threads.d.mts, 21, 41))
+
+/**
+ * Declares a shared struct: fields at fixed places in shared memory, which every thread reads and
+ * writes in place. Reads and writes are not ordered between threads: a Barrier or a Channel orders
+ * them.
+ *
+ *     const Body = struct({ x: f64, y: f64, m: f64 });
+ *     type Body = Struct<typeof Body>;
+ *
+ * A struct that refers to its own type is declared with an interface:
+ *
+ *     interface Node { value: number; next: Node | null }
+ *     const Node = struct<Node>({ value: f64, next: ref<Node>() });
+ */
+export declare function struct<F extends Record<string, Field<any>>>(
+>struct : Symbol(struct, Decl(threads.d.mts, 86, 73), Decl(threads.d.mts, 103, 85))
+>F : Symbol(F, Decl(threads.d.mts, 101, 31))
+>Record : Symbol(Record, Decl(lib.es5.d.ts, --, --))
+>Field : Symbol(Field, Decl(threads.d.mts, 43, 63))
+
+  fields: F,
+>fields : Symbol(fields, Decl(threads.d.mts, 101, 69))
+>F : Symbol(F, Decl(threads.d.mts, 101, 31))
+
+): StructType<{ -readonly [K in keyof F]: F[K] extends Field<infer V> ? V : never }>;
+>StructType : Symbol(StructType, Decl(threads.d.mts, 78, 50))
+>K : Symbol(K, Decl(threads.d.mts, 103, 27))
+>F : Symbol(F, Decl(threads.d.mts, 101, 31))
+>F : Symbol(F, Decl(threads.d.mts, 101, 31))
+>K : Symbol(K, Decl(threads.d.mts, 103, 27))
+>Field : Symbol(Field, Decl(threads.d.mts, 43, 63))
+>V : Symbol(V, Decl(threads.d.mts, 103, 66))
+>V : Symbol(V, Decl(threads.d.mts, 103, 66))
+
+export declare function struct<T>(fields: { [K in keyof T]-?: Field<T[K]> }): StructType<T>;
+>struct : Symbol(struct, Decl(threads.d.mts, 86, 73), Decl(threads.d.mts, 103, 85))
+>T : Symbol(T, Decl(threads.d.mts, 104, 31))
+>fields : Symbol(fields, Decl(threads.d.mts, 104, 34))
+>K : Symbol(K, Decl(threads.d.mts, 104, 45))
+>T : Symbol(T, Decl(threads.d.mts, 104, 31))
+>Field : Symbol(Field, Decl(threads.d.mts, 43, 63))
+>T : Symbol(T, Decl(threads.d.mts, 104, 31))
+>K : Symbol(K, Decl(threads.d.mts, 104, 45))
+>StructType : Symbol(StructType, Decl(threads.d.mts, 78, 50))
+>T : Symbol(T, Decl(threads.d.mts, 104, 31))
+
+/**
+ * A fixed-length array in shared memory: of numbers (`Number`), of i32s (`i32`), of bytes (`u8`), of
+ * booleans (`Boolean`, a byte each), of strings (`String`, interned as `str` fields are), or of shared
+ * structs stored inline. Every thread reads and writes the same elements, with no copying; a Barrier,
+ * a Channel or an atomic operation orders them.
+ */
+export interface SharedArray<T, L = ElementLayout<T>> extends Cell {
+>SharedArray : Symbol(SharedArray, Decl(threads.d.mts, 104, 92), Decl(threads.d.mts, 124, 20))
+>T : Symbol(T, Decl(threads.d.mts, 112, 29))
+>L : Symbol(L, Decl(threads.d.mts, 112, 31))
+>ElementLayout : Symbol(ElementLayout, Decl(threads.d.mts, 121, 1))
+>T : Symbol(T, Decl(threads.d.mts, 112, 29))
+>Cell : Symbol(Cell, Decl(threads.d.mts, 21, 41))
+
+  readonly length: number;
+>length : Symbol(SharedArray.length, Decl(threads.d.mts, 112, 68))
+
+  [index: number]: T;
+>index : Symbol(index, Decl(threads.d.mts, 114, 3))
+>T : Symbol(T, Decl(threads.d.mts, 112, 29))
+
+  /**
+   * Not there at run time: L keeps SharedArrays of numbers, i32s and u8s apart, whose elements
+   * TypeScript would otherwise let one stand for another, though they are stored differently. (A
+   * property of type ElementLayout<T> would not: TypeScript relates two SharedArrays by T alone.)
+   */
+  readonly [layoutBrand]?: L;
+>[layoutBrand] : Symbol(SharedArray[layoutBrand], Decl(threads.d.mts, 114, 21))
+>layoutBrand : Symbol(layoutBrand, Decl(threads.d.mts, 21, 13))
+>L : Symbol(L, Decl(threads.d.mts, 112, 31))
+}
+/** How a SharedArray of T stores its elements, as far as telling numbers, i32s and u8s apart goes. */
+type ElementLayout<T> = typeof int32Brand extends keyof T ? "i32" : typeof uint8Brand extends keyof T ? "u8" : "other";
+>ElementLayout : Symbol(ElementLayout, Decl(threads.d.mts, 121, 1))
+>T : Symbol(T, Decl(threads.d.mts, 123, 19))
+>int32Brand : Symbol(int32Brand, Decl(threads.d.mts, 19, 13))
+>T : Symbol(T, Decl(threads.d.mts, 123, 19))
+>uint8Brand : Symbol(uint8Brand, Decl(threads.d.mts, 20, 13))
+>T : Symbol(T, Decl(threads.d.mts, 123, 19))
+
+export declare const SharedArray: {
+>SharedArray : Symbol(SharedArray, Decl(threads.d.mts, 104, 92), Decl(threads.d.mts, 124, 20))
+
+  new (type: NumberConstructor, length: number): SharedArray<number>;
+>type : Symbol(type, Decl(threads.d.mts, 125, 7))
+>NumberConstructor : Symbol(NumberConstructor, Decl(lib.es5.d.ts, --, --), Decl(lib.es2015.core.d.ts, --, --))
+>length : Symbol(length, Decl(threads.d.mts, 125, 31))
+>SharedArray : Symbol(SharedArray, Decl(threads.d.mts, 104, 92), Decl(threads.d.mts, 124, 20))
+
+  new (type: BooleanConstructor, length: number): SharedArray<boolean>;
+>type : Symbol(type, Decl(threads.d.mts, 126, 7))
+>BooleanConstructor : Symbol(BooleanConstructor, Decl(lib.es5.d.ts, --, --))
+>length : Symbol(length, Decl(threads.d.mts, 126, 32))
+>SharedArray : Symbol(SharedArray, Decl(threads.d.mts, 104, 92), Decl(threads.d.mts, 124, 20))
+
+  new (type: StringConstructor, length: number): SharedArray<string>;
+>type : Symbol(type, Decl(threads.d.mts, 127, 7))
+>StringConstructor : Symbol(StringConstructor, Decl(lib.es5.d.ts, --, --), Decl(lib.es2015.core.d.ts, --, --))
+>length : Symbol(length, Decl(threads.d.mts, 127, 31))
+>SharedArray : Symbol(SharedArray, Decl(threads.d.mts, 104, 92), Decl(threads.d.mts, 124, 20))
+
+  new (type: IntegerField<i32, "i32">, length: number): SharedArray<i32>;
+>type : Symbol(type, Decl(threads.d.mts, 128, 7))
+>IntegerField : Symbol(IntegerField, Decl(threads.d.mts, 61, 60))
+>i32 : Symbol(i32, Decl(threads.d.mts, 52, 40), Decl(threads.d.mts, 67, 20))
+>length : Symbol(length, Decl(threads.d.mts, 128, 38))
+>SharedArray : Symbol(SharedArray, Decl(threads.d.mts, 104, 92), Decl(threads.d.mts, 124, 20))
+>i32 : Symbol(i32, Decl(threads.d.mts, 52, 40), Decl(threads.d.mts, 67, 20))
+
+  new (type: IntegerField<u8, "u8">, length: number): SharedArray<u8>;
+>type : Symbol(type, Decl(threads.d.mts, 129, 7))
+>IntegerField : Symbol(IntegerField, Decl(threads.d.mts, 61, 60))
+>u8 : Symbol(u8, Decl(threads.d.mts, 59, 61), Decl(threads.d.mts, 69, 20))
+>length : Symbol(length, Decl(threads.d.mts, 129, 36))
+>SharedArray : Symbol(SharedArray, Decl(threads.d.mts, 104, 92), Decl(threads.d.mts, 124, 20))
+>u8 : Symbol(u8, Decl(threads.d.mts, 59, 61), Decl(threads.d.mts, 69, 20))
+
+  new <T>(type: StructType<T>, length: number): SharedArray<T & Cell>;
+>T : Symbol(T, Decl(threads.d.mts, 130, 7))
+>type : Symbol(type, Decl(threads.d.mts, 130, 10))
+>StructType : Symbol(StructType, Decl(threads.d.mts, 78, 50))
+>T : Symbol(T, Decl(threads.d.mts, 130, 7))
+>length : Symbol(length, Decl(threads.d.mts, 130, 30))
+>SharedArray : Symbol(SharedArray, Decl(threads.d.mts, 104, 92), Decl(threads.d.mts, 124, 20))
+>T : Symbol(T, Decl(threads.d.mts, 130, 7))
+>Cell : Symbol(Cell, Decl(threads.d.mts, 21, 41))
+
+};
+
+// ---- atomic operations ----
+
+/** The fields of a struct type S that are i32s. */
+export type I32Fields<S> = { [K in keyof S]-?: typeof int32Brand extends keyof S[K] ? K : never }[keyof S];
+>I32Fields : Symbol(I32Fields, Decl(threads.d.mts, 131, 2))
+>S : Symbol(S, Decl(threads.d.mts, 136, 22))
+>K : Symbol(K, Decl(threads.d.mts, 136, 30))
+>S : Symbol(S, Decl(threads.d.mts, 136, 22))
+>int32Brand : Symbol(int32Brand, Decl(threads.d.mts, 19, 13))
+>S : Symbol(S, Decl(threads.d.mts, 136, 22))
+>K : Symbol(K, Decl(threads.d.mts, 136, 30))
+>K : Symbol(K, Decl(threads.d.mts, 136, 30))
+>S : Symbol(S, Decl(threads.d.mts, 136, 22))
+
+/** An atomic operation on an element of a SharedArray<i32>, or on an i32 field of a shared struct. */
+export interface AtomicOperation<A extends unknown[], R> {
+>AtomicOperation : Symbol(AtomicOperation, Decl(threads.d.mts, 136, 107))
+>A : Symbol(A, Decl(threads.d.mts, 139, 33))
+>R : Symbol(R, Decl(threads.d.mts, 139, 53))
+
+  (array: SharedArray<i32>, index: number, ...args: A): R;
+>array : Symbol(array, Decl(threads.d.mts, 140, 3))
+>SharedArray : Symbol(SharedArray, Decl(threads.d.mts, 104, 92), Decl(threads.d.mts, 124, 20))
+>i32 : Symbol(i32, Decl(threads.d.mts, 52, 40), Decl(threads.d.mts, 67, 20))
+>index : Symbol(index, Decl(threads.d.mts, 140, 27))
+>args : Symbol(args, Decl(threads.d.mts, 140, 42))
+>A : Symbol(A, Decl(threads.d.mts, 139, 33))
+>R : Symbol(R, Decl(threads.d.mts, 139, 53))
+
+  <S extends Cell>(struct: S, field: I32Fields<S>, ...args: A): R;
+>S : Symbol(S, Decl(threads.d.mts, 141, 3))
+>Cell : Symbol(Cell, Decl(threads.d.mts, 21, 41))
+>struct : Symbol(struct, Decl(threads.d.mts, 141, 19))
+>S : Symbol(S, Decl(threads.d.mts, 141, 3))
+>field : Symbol(field, Decl(threads.d.mts, 141, 29))
+>I32Fields : Symbol(I32Fields, Decl(threads.d.mts, 131, 2))
+>S : Symbol(S, Decl(threads.d.mts, 141, 3))
+>args : Symbol(args, Decl(threads.d.mts, 141, 50))
+>A : Symbol(A, Decl(threads.d.mts, 139, 33))
+>R : Symbol(R, Decl(threads.d.mts, 139, 53))
+}
+
+/**
+ * Atomic operations, which `Atomics` performs: on an element of a SharedArray<i32>, or on an i32 field
+ * of a shared struct, named by a string literal. Each is indivisible, and orders the reads and writes
+ * around it as a lock would. Compiled, a call is that `Atomics` call, on the i32 itself:
+ *
+ *     const Work = struct({ next: i32, done: i32 });
+ *     for (let i; (i = atomic.add(work, "next", 1)) < n; ) process(i);   // claims item i
+ */
+export interface Atomic {
+>Atomic : Symbol(Atomic, Decl(threads.d.mts, 142, 1))
+
+  /** The i32's value. */
+  readonly load: AtomicOperation<[], number>;
+>load : Symbol(Atomic.load, Decl(threads.d.mts, 152, 25))
+>AtomicOperation : Symbol(AtomicOperation, Decl(threads.d.mts, 136, 107))
+
+  /** Stores `value` (as an i32), and returns it. */
+  readonly store: AtomicOperation<[value: number], number>;
+>store : Symbol(Atomic.store, Decl(threads.d.mts, 154, 45))
+>AtomicOperation : Symbol(AtomicOperation, Decl(threads.d.mts, 136, 107))
+
+  /** Adds `value`, and returns the old value. */
+  readonly add: AtomicOperation<[value: number], number>;
+>add : Symbol(Atomic.add, Decl(threads.d.mts, 156, 59))
+>AtomicOperation : Symbol(AtomicOperation, Decl(threads.d.mts, 136, 107))
+
+  /** Subtracts `value`, and returns the old value. */
+  readonly sub: AtomicOperation<[value: number], number>;
+>sub : Symbol(Atomic.sub, Decl(threads.d.mts, 158, 57))
+>AtomicOperation : Symbol(AtomicOperation, Decl(threads.d.mts, 136, 107))
+
+  /** Stores the bitwise and of the i32 and `value`, and returns the old value. */
+  readonly and: AtomicOperation<[value: number], number>;
+>and : Symbol(Atomic.and, Decl(threads.d.mts, 160, 57))
+>AtomicOperation : Symbol(AtomicOperation, Decl(threads.d.mts, 136, 107))
+
+  /** Stores the bitwise or of the i32 and `value`, and returns the old value. */
+  readonly or: AtomicOperation<[value: number], number>;
+>or : Symbol(Atomic.or, Decl(threads.d.mts, 162, 57))
+>AtomicOperation : Symbol(AtomicOperation, Decl(threads.d.mts, 136, 107))
+
+  /** Stores the bitwise xor of the i32 and `value`, and returns the old value. */
+  readonly xor: AtomicOperation<[value: number], number>;
+>xor : Symbol(Atomic.xor, Decl(threads.d.mts, 164, 56))
+>AtomicOperation : Symbol(AtomicOperation, Decl(threads.d.mts, 136, 107))
+
+  /** Stores `value`, and returns the old value. */
+  readonly exchange: AtomicOperation<[value: number], number>;
+>exchange : Symbol(Atomic.exchange, Decl(threads.d.mts, 166, 57))
+>AtomicOperation : Symbol(AtomicOperation, Decl(threads.d.mts, 136, 107))
+
+  /** Stores `replacement` if the i32 is `expected`, and returns the old value either way. */
+  readonly compareExchange: AtomicOperation<[expected: number, replacement: number], number>;
+>compareExchange : Symbol(Atomic.compareExchange, Decl(threads.d.mts, 168, 62))
+>AtomicOperation : Symbol(AtomicOperation, Decl(threads.d.mts, 136, 107))
+
+  /**
+   * Waits while the i32 is `value`, until notify() wakes the thread or `timeout` ms pass. Not on a
+   * page's main thread, which must not block.
+   */
+  readonly wait: AtomicOperation<[value: number, timeout?: number], "ok" | "not-equal" | "timed-out">;
+>wait : Symbol(Atomic.wait, Decl(threads.d.mts, 170, 93))
+>AtomicOperation : Symbol(AtomicOperation, Decl(threads.d.mts, 136, 107))
+
+  /** Wakes up to `count` threads waiting on the i32 (all of them by default); returns how many it woke. */
+  readonly notify: AtomicOperation<[count?: number], number>;
+>notify : Symbol(Atomic.notify, Decl(threads.d.mts, 175, 102))
+>AtomicOperation : Symbol(AtomicOperation, Decl(threads.d.mts, 136, 107))
+}
+export declare const atomic: Atomic;
+>atomic : Symbol(atomic, Decl(threads.d.mts, 179, 20))
+>Atomic : Symbol(Atomic, Decl(threads.d.mts, 142, 1))
+
+// ---- threads ----
+
+/** A thread; joining it moves the thread's result back. */
+export interface Thread<R> extends Cell {
+>Thread : Symbol(Thread, Decl(threads.d.mts, 179, 36))
+>R : Symbol(R, Decl(threads.d.mts, 184, 24))
+>Cell : Symbol(Cell, Decl(threads.d.mts, 21, 41))
+
+  /** Waits for the thread, from a thread that may block (not a page's main thread). */
+  join(): Sending<R>;
+>join : Symbol(Thread.join, Decl(threads.d.mts, 184, 41))
+>Sending : Symbol(Sending, Decl(threads.d.mts, 26, 1))
+>R : Symbol(R, Decl(threads.d.mts, 184, 24))
+
+  /** Waits for the thread without blocking: for a page's main thread. */
+  joinAsync(): Promise<Sending<R>>;
+>joinAsync : Symbol(Thread.joinAsync, Decl(threads.d.mts, 186, 21))
+>Promise : Symbol(Promise, Decl(lib.es5.d.ts, --, --), Decl(lib.es2015.iterable.d.ts, --, --), Decl(lib.es2015.promise.d.ts, --, --), Decl(lib.es2015.symbol.wellknown.d.ts, --, --), Decl(lib.es2018.promise.d.ts, --, --))
+>Sending : Symbol(Sending, Decl(threads.d.mts, 26, 1))
+>R : Symbol(R, Decl(threads.d.mts, 184, 24))
+}
+
+/** Starts `f` on a thread. Every argument is sent: owned values move, shared values and cells are shared. */
+export declare function spawn<A extends unknown[], R>(f: (...args: A) => Sending<R>, ...args: Sending<A>): Thread<R>;
+>spawn : Symbol(spawn, Decl(threads.d.mts, 189, 1))
+>A : Symbol(A, Decl(threads.d.mts, 192, 30))
+>R : Symbol(R, Decl(threads.d.mts, 192, 50))
+>f : Symbol(f, Decl(threads.d.mts, 192, 54))
+>args : Symbol(args, Decl(threads.d.mts, 192, 58))
+>A : Symbol(A, Decl(threads.d.mts, 192, 30))
+>Sending : Symbol(Sending, Decl(threads.d.mts, 26, 1))
+>R : Symbol(R, Decl(threads.d.mts, 192, 50))
+>args : Symbol(args, Decl(threads.d.mts, 192, 84))
+>Sending : Symbol(Sending, Decl(threads.d.mts, 26, 1))
+>A : Symbol(A, Decl(threads.d.mts, 192, 30))
+>Thread : Symbol(Thread, Decl(threads.d.mts, 179, 36))
+>R : Symbol(R, Decl(threads.d.mts, 192, 50))
+
+/** Spawns threads that cannot outlive the scope. */
+export interface Scope extends Cell {
+>Scope : Symbol(Scope, Decl(threads.d.mts, 192, 117))
+>Cell : Symbol(Cell, Decl(threads.d.mts, 21, 41))
+
+  spawn<A extends unknown[], R>(f: (...args: A) => Sending<R>, ...args: Sending<A>): Thread<R>;
+>spawn : Symbol(Scope.spawn, Decl(threads.d.mts, 195, 37))
+>A : Symbol(A, Decl(threads.d.mts, 196, 8))
+>R : Symbol(R, Decl(threads.d.mts, 196, 28))
+>f : Symbol(f, Decl(threads.d.mts, 196, 32))
+>args : Symbol(args, Decl(threads.d.mts, 196, 36))
+>A : Symbol(A, Decl(threads.d.mts, 196, 8))
+>Sending : Symbol(Sending, Decl(threads.d.mts, 26, 1))
+>R : Symbol(R, Decl(threads.d.mts, 196, 28))
+>args : Symbol(args, Decl(threads.d.mts, 196, 62))
+>Sending : Symbol(Sending, Decl(threads.d.mts, 26, 1))
+>A : Symbol(A, Decl(threads.d.mts, 196, 8))
+>Thread : Symbol(Thread, Decl(threads.d.mts, 179, 36))
+>R : Symbol(R, Decl(threads.d.mts, 196, 28))
+}
+/** Runs `body` and joins every thread it spawned before returning. */
+export declare function scope<R>(body: (s: Scope) => R): R;
+>scope : Symbol(scope, Decl(threads.d.mts, 197, 1))
+>R : Symbol(R, Decl(threads.d.mts, 199, 30))
+>body : Symbol(body, Decl(threads.d.mts, 199, 33))
+>s : Symbol(s, Decl(threads.d.mts, 199, 40))
+>Scope : Symbol(Scope, Decl(threads.d.mts, 192, 117))
+>R : Symbol(R, Decl(threads.d.mts, 199, 30))
+>R : Symbol(R, Decl(threads.d.mts, 199, 30))
+
+/** Splits an owned array into `parts` owned, disjoint chunks of nearly equal size. Trusted. */
+export declare function partition<T>(items: Sending<T[]>, parts: number): Sending<T[]>[];
+>partition : Symbol(partition, Decl(threads.d.mts, 199, 59))
+>T : Symbol(T, Decl(threads.d.mts, 202, 34))
+>items : Symbol(items, Decl(threads.d.mts, 202, 37))
+>Sending : Symbol(Sending, Decl(threads.d.mts, 26, 1))
+>T : Symbol(T, Decl(threads.d.mts, 202, 34))
+>parts : Symbol(parts, Decl(threads.d.mts, 202, 57))
+>Sending : Symbol(Sending, Decl(threads.d.mts, 26, 1))
+>T : Symbol(T, Decl(threads.d.mts, 202, 34))
+
+/** Takes element `index` out of an array of owned values, so the caller owns it. Trusted. */
+export declare function take<T>(items: Sending<T>[], index: number): Sending<T>;
+>take : Symbol(take, Decl(threads.d.mts, 202, 89))
+>T : Symbol(T, Decl(threads.d.mts, 204, 29))
+>items : Symbol(items, Decl(threads.d.mts, 204, 32))
+>Sending : Symbol(Sending, Decl(threads.d.mts, 26, 1))
+>T : Symbol(T, Decl(threads.d.mts, 204, 29))
+>index : Symbol(index, Decl(threads.d.mts, 204, 52))
+>Sending : Symbol(Sending, Decl(threads.d.mts, 26, 1))
+>T : Symbol(T, Decl(threads.d.mts, 204, 29))
+
+/** A reusable barrier for a fixed number of threads. */
+export declare class Barrier implements Cell {
+>Barrier : Symbol(Barrier, Decl(threads.d.mts, 204, 80))
+>Cell : Symbol(Cell, Decl(threads.d.mts, 21, 41))
+
+  readonly [cellBrand]: true;
+>[cellBrand] : Symbol(Barrier[cellBrand], Decl(threads.d.mts, 207, 46))
+>cellBrand : Symbol(cellBrand, Decl(threads.d.mts, 17, 13))
+
+  constructor(threads: number);
+>threads : Symbol(threads, Decl(threads.d.mts, 209, 14))
+
+  /** Blocks until all threads have called `wait`. */
+  wait(): void;
+>wait : Symbol(Barrier.wait, Decl(threads.d.mts, 209, 31))
+}
+
+/** One slot per thread: a thread publishes a shared value into its slot, and everyone reads every slot. */
+export declare class Slots<T> implements Cell {
+>Slots : Symbol(Slots, Decl(threads.d.mts, 212, 1))
+>T : Symbol(T, Decl(threads.d.mts, 215, 27))
+>Cell : Symbol(Cell, Decl(threads.d.mts, 21, 41))
+
+  readonly [cellBrand]: true;
+>[cellBrand] : Symbol(Slots[cellBrand], Decl(threads.d.mts, 215, 47))
+>cellBrand : Symbol(cellBrand, Decl(threads.d.mts, 17, 13))
+
+  constructor(count: number);
+>count : Symbol(count, Decl(threads.d.mts, 217, 14))
+
+  readonly length: number;
+>length : Symbol(Slots.length, Decl(threads.d.mts, 217, 29))
+
+  set(index: number, value: Shared<T>): void;
+>set : Symbol(Slots.set, Decl(threads.d.mts, 218, 26))
+>index : Symbol(index, Decl(threads.d.mts, 219, 6))
+>value : Symbol(value, Decl(threads.d.mts, 219, 20))
+>Shared : Symbol(Shared, Decl(threads.d.mts, 32, 27))
+>T : Symbol(T, Decl(threads.d.mts, 215, 27))
+
+  get(index: number): Shared<T> | undefined;
+>get : Symbol(Slots.get, Decl(threads.d.mts, 219, 45))
+>index : Symbol(index, Decl(threads.d.mts, 220, 6))
+>Shared : Symbol(Shared, Decl(threads.d.mts, 32, 27))
+>T : Symbol(T, Decl(threads.d.mts, 215, 27))
+
+  /** The arrays in all slots, concatenated in slot order. */
+  flat(): Shared<T extends readonly (infer E)[] ? E[] : T[]>;
+>flat : Symbol(Slots.flat, Decl(threads.d.mts, 220, 44))
+>Shared : Symbol(Shared, Decl(threads.d.mts, 32, 27))
+>T : Symbol(T, Decl(threads.d.mts, 215, 27))
+>E : Symbol(E, Decl(threads.d.mts, 222, 42))
+>E : Symbol(E, Decl(threads.d.mts, 222, 42))
+>T : Symbol(T, Decl(threads.d.mts, 215, 27))
+}
+
+// ---- goroutines and channels ----
+
+/** A channel: values move through it from thread to thread, in order. */
+export declare class Channel<T> implements Cell {
+>Channel : Symbol(Channel, Decl(threads.d.mts, 223, 1))
+>T : Symbol(T, Decl(threads.d.mts, 228, 29))
+>Cell : Symbol(Cell, Decl(threads.d.mts, 21, 41))
+
+  readonly [cellBrand]: true;
+>[cellBrand] : Symbol(Channel[cellBrand], Decl(threads.d.mts, 228, 49))
+>cellBrand : Symbol(cellBrand, Decl(threads.d.mts, 17, 13))
+
+  /** Holds up to `capacity` values; 0, the default, is unbuffered. */
+  constructor(capacity?: number);
+>capacity : Symbol(capacity, Decl(threads.d.mts, 231, 14))
+
+  /** Moves `value` in: waits while the channel is full, or, unbuffered, until a receiver takes it. */
+  send(value: Sending<T>): void;
+>send : Symbol(Channel.send, Decl(threads.d.mts, 231, 33))
+>value : Symbol(value, Decl(threads.d.mts, 233, 7))
+>Sending : Symbol(Sending, Decl(threads.d.mts, 26, 1))
+>T : Symbol(T, Decl(threads.d.mts, 228, 29))
+
+  /** The next value, which the caller now owns; waits while empty. Undefined once closed and empty. */
+  recv(): Sending<T> | undefined;
+>recv : Symbol(Channel.recv, Decl(threads.d.mts, 233, 32))
+>Sending : Symbol(Sending, Decl(threads.d.mts, 26, 1))
+>T : Symbol(T, Decl(threads.d.mts, 228, 29))
+
+  /** No more sends. Receivers still get what is left. */
+  close(): void;
+>close : Symbol(Channel.close, Decl(threads.d.mts, 235, 33))
+
+  [Symbol.iterator](): Iterator<T>;
+>[Symbol.iterator] : Symbol(Channel[Symbol.iterator], Decl(threads.d.mts, 237, 16))
+>Symbol.iterator : Symbol(SymbolConstructor.iterator, Decl(lib.es2015.iterable.d.ts, --, --))
+>Symbol : Symbol(Symbol, Decl(lib.es5.d.ts, --, --), Decl(lib.es2015.symbol.d.ts, --, --), Decl(lib.es2015.symbol.wellknown.d.ts, --, --), Decl(lib.es2019.symbol.d.ts, --, --))
+>iterator : Symbol(SymbolConstructor.iterator, Decl(lib.es2015.iterable.d.ts, --, --))
+>Iterator : Symbol(Iterator, Decl(lib.es2015.iterable.d.ts, --, --))
+>T : Symbol(T, Decl(threads.d.mts, 228, 29))
+}
+/** Starts `f` on a thread of its own, a goroutine. Nothing waits for it. */
+export declare function go<A extends unknown[]>(f: (...args: A) => void, ...args: Sending<A>): void;
+>go : Symbol(go, Decl(threads.d.mts, 239, 1))
+>A : Symbol(A, Decl(threads.d.mts, 241, 27))
+>f : Symbol(f, Decl(threads.d.mts, 241, 48))
+>args : Symbol(args, Decl(threads.d.mts, 241, 52))
+>A : Symbol(A, Decl(threads.d.mts, 241, 27))
+>args : Symbol(args, Decl(threads.d.mts, 241, 72))
+>Sending : Symbol(Sending, Decl(threads.d.mts, 26, 1))
+>A : Symbol(A, Decl(threads.d.mts, 241, 27))
+
+/** Waits until one of the channels has a value or is closed: its index and the value (undefined if closed). */
+export declare function select<T>(...channels: Channel<T>[]): [index: number, value: T | undefined];
+>select : Symbol(select, Decl(threads.d.mts, 241, 100))
+>T : Symbol(T, Decl(threads.d.mts, 243, 31))
+>channels : Symbol(channels, Decl(threads.d.mts, 243, 34))
+>Channel : Symbol(Channel, Decl(threads.d.mts, 223, 1))
+>T : Symbol(T, Decl(threads.d.mts, 243, 31))
+>T : Symbol(T, Decl(threads.d.mts, 243, 31))
+
+/** Prints a line, synchronously, from any thread. */
+export declare function log(...args: unknown[]): void;
+>log : Symbol(log, Decl(threads.d.mts, 243, 100))
+>args : Symbol(args, Decl(threads.d.mts, 246, 28))
+
+/** Shared memory in use, and shared structs and SharedArrays allocated and freed. */
+export declare function heapStats(): { heapBytes: number; allocated: number; freed: number; pending: number };
+>heapStats : Symbol(heapStats, Decl(threads.d.mts, 246, 54))
+>heapBytes : Symbol(heapBytes, Decl(threads.d.mts, 248, 38))
+>allocated : Symbol(allocated, Decl(threads.d.mts, 248, 57))
+>freed : Symbol(freed, Decl(threads.d.mts, 248, 76))
+>pending : Symbol(pending, Decl(threads.d.mts, 248, 91))
+
+=== integers.mts ===
+import { atomic, f64, i32, ref, SharedArray, struct, u8, type Struct } from "./threads.mjs";
+>atomic : Symbol(atomic, Decl(integers.mts, 0, 8))
+>f64 : Symbol(f64, Decl(integers.mts, 0, 16))
+>i32 : Symbol(i32, Decl(integers.mts, 0, 21))
+>ref : Symbol(ref, Decl(integers.mts, 0, 26))
+>SharedArray : Symbol(SharedArray, Decl(integers.mts, 0, 31))
+>struct : Symbol(struct, Decl(integers.mts, 0, 44))
+>u8 : Symbol(u8, Decl(integers.mts, 0, 52))
+>Struct : Symbol(Struct, Decl(integers.mts, 0, 56))
+
+interface Node { value: i32; level: u8; next: Node | null; weight: number }
+>Node : Symbol(Node, Decl(integers.mts, 0, 92), Decl(integers.mts, 3, 5))
+>value : Symbol(Node.value, Decl(integers.mts, 2, 16))
+>i32 : Symbol(i32, Decl(integers.mts, 0, 21))
+>level : Symbol(Node.level, Decl(integers.mts, 2, 28))
+>u8 : Symbol(u8, Decl(integers.mts, 0, 52))
+>next : Symbol(Node.next, Decl(integers.mts, 2, 39))
+>Node : Symbol(Node, Decl(integers.mts, 0, 92), Decl(integers.mts, 3, 5))
+>weight : Symbol(Node.weight, Decl(integers.mts, 2, 58))
+
+const Node = struct<Node>({ value: i32, level: u8, next: ref<Node>(), weight: f64 });
+>Node : Symbol(Node, Decl(integers.mts, 0, 92), Decl(integers.mts, 3, 5))
+>struct : Symbol(struct, Decl(integers.mts, 0, 44))
+>Node : Symbol(Node, Decl(integers.mts, 0, 92), Decl(integers.mts, 3, 5))
+>value : Symbol(value, Decl(integers.mts, 3, 27))
+>i32 : Symbol(i32, Decl(integers.mts, 0, 21))
+>level : Symbol(level, Decl(integers.mts, 3, 39))
+>u8 : Symbol(u8, Decl(integers.mts, 0, 52))
+>next : Symbol(next, Decl(integers.mts, 3, 50))
+>ref : Symbol(ref, Decl(integers.mts, 0, 26))
+>Node : Symbol(Node, Decl(integers.mts, 0, 92), Decl(integers.mts, 3, 5))
+>weight : Symbol(weight, Decl(integers.mts, 3, 69))
+>f64 : Symbol(f64, Decl(integers.mts, 0, 16))
+
+const Work = struct({ next: i32, done: i32, flags: u8 });
+>Work : Symbol(Work, Decl(integers.mts, 4, 5), Decl(integers.mts, 4, 57))
+>struct : Symbol(struct, Decl(integers.mts, 0, 44))
+>next : Symbol(next, Decl(integers.mts, 4, 21))
+>i32 : Symbol(i32, Decl(integers.mts, 0, 21))
+>done : Symbol(done, Decl(integers.mts, 4, 32))
+>i32 : Symbol(i32, Decl(integers.mts, 0, 21))
+>flags : Symbol(flags, Decl(integers.mts, 4, 43))
+>u8 : Symbol(u8, Decl(integers.mts, 0, 52))
+
+type Work = Struct<typeof Work>;
+>Work : Symbol(Work, Decl(integers.mts, 4, 5), Decl(integers.mts, 4, 57))
+>Struct : Symbol(Struct, Decl(integers.mts, 0, 56))
+>Work : Symbol(Work, Decl(integers.mts, 4, 5), Decl(integers.mts, 4, 57))
+
+const Pixel = struct({ x: i32, gray: u8 });
+>Pixel : Symbol(Pixel, Decl(integers.mts, 6, 5), Decl(integers.mts, 6, 43))
+>struct : Symbol(struct, Decl(integers.mts, 0, 44))
+>x : Symbol(x, Decl(integers.mts, 6, 22))
+>i32 : Symbol(i32, Decl(integers.mts, 0, 21))
+>gray : Symbol(gray, Decl(integers.mts, 6, 30))
+>u8 : Symbol(u8, Decl(integers.mts, 0, 52))
+
+type Pixel = Struct<typeof Pixel>;
+>Pixel : Symbol(Pixel, Decl(integers.mts, 6, 5), Decl(integers.mts, 6, 43))
+>Struct : Symbol(Struct, Decl(integers.mts, 0, 56))
+>Pixel : Symbol(Pixel, Decl(integers.mts, 6, 5), Decl(integers.mts, 6, 43))
+
+export function fields(n: Node): number {
+>fields : Symbol(fields, Decl(integers.mts, 7, 34))
+>n : Symbol(n, Decl(integers.mts, 9, 23))
+>Node : Symbol(Node, Decl(integers.mts, 0, 92), Decl(integers.mts, 3, 5))
+
+    n.value = 3.7;                                  // stored as 3
+>n.value : Symbol(Node.value, Decl(integers.mts, 2, 16))
+>n : Symbol(n, Decl(integers.mts, 9, 23))
+>value : Symbol(Node.value, Decl(integers.mts, 2, 16))
+
+    n.value += 2;
+>n.value : Symbol(Node.value, Decl(integers.mts, 2, 16))
+>n : Symbol(n, Decl(integers.mts, 9, 23))
+>value : Symbol(Node.value, Decl(integers.mts, 2, 16))
+
+    n.level = 300;                                  // stored as 44
+>n.level : Symbol(Node.level, Decl(integers.mts, 2, 28))
+>n : Symbol(n, Decl(integers.mts, 9, 23))
+>level : Symbol(Node.level, Decl(integers.mts, 2, 28))
+
+    n.level++;
+>n.level : Symbol(Node.level, Decl(integers.mts, 2, 28))
+>n : Symbol(n, Decl(integers.mts, 9, 23))
+>level : Symbol(Node.level, Decl(integers.mts, 2, 28))
+
+    if (n.next) n.next.value = n.value;
+>n.next : Symbol(Node.next, Decl(integers.mts, 2, 39))
+>n : Symbol(n, Decl(integers.mts, 9, 23))
+>next : Symbol(Node.next, Decl(integers.mts, 2, 39))
+>n.next.value : Symbol(Node.value, Decl(integers.mts, 2, 16))
+>n.next : Symbol(Node.next, Decl(integers.mts, 2, 39))
+>n : Symbol(n, Decl(integers.mts, 9, 23))
+>next : Symbol(Node.next, Decl(integers.mts, 2, 39))
+>value : Symbol(Node.value, Decl(integers.mts, 2, 16))
+>n.value : Symbol(Node.value, Decl(integers.mts, 2, 16))
+>n : Symbol(n, Decl(integers.mts, 9, 23))
+>value : Symbol(Node.value, Decl(integers.mts, 2, 16))
+
+    return n.value * 2 + n.level + n.weight;
+>n.value : Symbol(Node.value, Decl(integers.mts, 2, 16))
+>n : Symbol(n, Decl(integers.mts, 9, 23))
+>value : Symbol(Node.value, Decl(integers.mts, 2, 16))
+>n.level : Symbol(Node.level, Decl(integers.mts, 2, 28))
+>n : Symbol(n, Decl(integers.mts, 9, 23))
+>level : Symbol(Node.level, Decl(integers.mts, 2, 28))
+>n.weight : Symbol(Node.weight, Decl(integers.mts, 2, 58))
+>n : Symbol(n, Decl(integers.mts, 9, 23))
+>weight : Symbol(Node.weight, Decl(integers.mts, 2, 58))
+}
+
+// Claims items from a shared counter until there are none left.
+export function claim(work: Work, pixels: SharedArray<u8>, counts: SharedArray<i32>, n: number): number {
+>claim : Symbol(claim, Decl(integers.mts, 16, 1))
+>work : Symbol(work, Decl(integers.mts, 19, 22))
+>Work : Symbol(Work, Decl(integers.mts, 4, 5), Decl(integers.mts, 4, 57))
+>pixels : Symbol(pixels, Decl(integers.mts, 19, 33))
+>SharedArray : Symbol(SharedArray, Decl(integers.mts, 0, 31))
+>u8 : Symbol(u8, Decl(integers.mts, 0, 52))
+>counts : Symbol(counts, Decl(integers.mts, 19, 58))
+>SharedArray : Symbol(SharedArray, Decl(integers.mts, 0, 31))
+>i32 : Symbol(i32, Decl(integers.mts, 0, 21))
+>n : Symbol(n, Decl(integers.mts, 19, 84))
+
+    let claimed = 0;
+>claimed : Symbol(claimed, Decl(integers.mts, 20, 7))
+
+    for (let i; (i = atomic.add(work, "next", 1)) < n; claimed++) {
+>i : Symbol(i, Decl(integers.mts, 21, 12))
+>i : Symbol(i, Decl(integers.mts, 21, 12))
+>atomic.add : Symbol(Atomic.add, Decl(threads.d.mts, 156, 59))
+>atomic : Symbol(atomic, Decl(integers.mts, 0, 8))
+>add : Symbol(Atomic.add, Decl(threads.d.mts, 156, 59))
+>work : Symbol(work, Decl(integers.mts, 19, 22))
+>n : Symbol(n, Decl(integers.mts, 19, 84))
+>claimed : Symbol(claimed, Decl(integers.mts, 20, 7))
+
+        pixels[i] = i & 255;
+>pixels : Symbol(pixels, Decl(integers.mts, 19, 33))
+>i : Symbol(i, Decl(integers.mts, 21, 12))
+>i : Symbol(i, Decl(integers.mts, 21, 12))
+
+        atomic.add(counts, i % counts.length, 1);
+>atomic.add : Symbol(Atomic.add, Decl(threads.d.mts, 156, 59))
+>atomic : Symbol(atomic, Decl(integers.mts, 0, 8))
+>add : Symbol(Atomic.add, Decl(threads.d.mts, 156, 59))
+>counts : Symbol(counts, Decl(integers.mts, 19, 58))
+>i : Symbol(i, Decl(integers.mts, 21, 12))
+>counts.length : Symbol(SharedArray.length, Decl(threads.d.mts, 112, 68))
+>counts : Symbol(counts, Decl(integers.mts, 19, 58))
+>length : Symbol(SharedArray.length, Decl(threads.d.mts, 112, 68))
+    }
+    atomic.or(work, "done", 1);
+>atomic.or : Symbol(Atomic.or, Decl(threads.d.mts, 162, 57))
+>atomic : Symbol(atomic, Decl(integers.mts, 0, 8))
+>or : Symbol(Atomic.or, Decl(threads.d.mts, 162, 57))
+>work : Symbol(work, Decl(integers.mts, 19, 22))
+
+    atomic.notify(work, "done");
+>atomic.notify : Symbol(Atomic.notify, Decl(threads.d.mts, 175, 102))
+>atomic : Symbol(atomic, Decl(integers.mts, 0, 8))
+>notify : Symbol(Atomic.notify, Decl(threads.d.mts, 175, 102))
+>work : Symbol(work, Decl(integers.mts, 19, 22))
+
+    return claimed;
+>claimed : Symbol(claimed, Decl(integers.mts, 20, 7))
+}
+
+export function waitFor(work: Work): number {
+>waitFor : Symbol(waitFor, Decl(integers.mts, 28, 1))
+>work : Symbol(work, Decl(integers.mts, 30, 24))
+>Work : Symbol(Work, Decl(integers.mts, 4, 5), Decl(integers.mts, 4, 57))
+
+    while (atomic.load(work, "done") === 0) atomic.wait(work, "done", 0, 10);
+>atomic.load : Symbol(Atomic.load, Decl(threads.d.mts, 152, 25))
+>atomic : Symbol(atomic, Decl(integers.mts, 0, 8))
+>load : Symbol(Atomic.load, Decl(threads.d.mts, 152, 25))
+>work : Symbol(work, Decl(integers.mts, 30, 24))
+>atomic.wait : Symbol(Atomic.wait, Decl(threads.d.mts, 170, 93))
+>atomic : Symbol(atomic, Decl(integers.mts, 0, 8))
+>wait : Symbol(Atomic.wait, Decl(threads.d.mts, 170, 93))
+>work : Symbol(work, Decl(integers.mts, 30, 24))
+
+    atomic.store(work, "next", 0);
+>atomic.store : Symbol(Atomic.store, Decl(threads.d.mts, 154, 45))
+>atomic : Symbol(atomic, Decl(integers.mts, 0, 8))
+>store : Symbol(Atomic.store, Decl(threads.d.mts, 154, 45))
+>work : Symbol(work, Decl(integers.mts, 30, 24))
+
+    return atomic.compareExchange(work, "next", 0, 1) + atomic.exchange(work, "done", 0) + atomic.and(work, "next", 3) + atomic.xor(work, "next", 1);
+>atomic.compareExchange : Symbol(Atomic.compareExchange, Decl(threads.d.mts, 168, 62))
+>atomic : Symbol(atomic, Decl(integers.mts, 0, 8))
+>compareExchange : Symbol(Atomic.compareExchange, Decl(threads.d.mts, 168, 62))
+>work : Symbol(work, Decl(integers.mts, 30, 24))
+>atomic.exchange : Symbol(Atomic.exchange, Decl(threads.d.mts, 166, 57))
+>atomic : Symbol(atomic, Decl(integers.mts, 0, 8))
+>exchange : Symbol(Atomic.exchange, Decl(threads.d.mts, 166, 57))
+>work : Symbol(work, Decl(integers.mts, 30, 24))
+>atomic.and : Symbol(Atomic.and, Decl(threads.d.mts, 160, 57))
+>atomic : Symbol(atomic, Decl(integers.mts, 0, 8))
+>and : Symbol(Atomic.and, Decl(threads.d.mts, 160, 57))
+>work : Symbol(work, Decl(integers.mts, 30, 24))
+>atomic.xor : Symbol(Atomic.xor, Decl(threads.d.mts, 164, 56))
+>atomic : Symbol(atomic, Decl(integers.mts, 0, 8))
+>xor : Symbol(Atomic.xor, Decl(threads.d.mts, 164, 56))
+>work : Symbol(work, Decl(integers.mts, 30, 24))
+}
+
+export function arrays(n: number, image: SharedArray<Pixel>): number {
+>arrays : Symbol(arrays, Decl(integers.mts, 34, 1))
+>n : Symbol(n, Decl(integers.mts, 36, 23))
+>image : Symbol(image, Decl(integers.mts, 36, 33))
+>SharedArray : Symbol(SharedArray, Decl(integers.mts, 0, 31))
+>Pixel : Symbol(Pixel, Decl(integers.mts, 6, 5), Decl(integers.mts, 6, 43))
+
+    const ints = new SharedArray(i32, n), bytes = new SharedArray(u8, n);
+>ints : Symbol(ints, Decl(integers.mts, 37, 9))
+>SharedArray : Symbol(SharedArray, Decl(integers.mts, 0, 31))
+>i32 : Symbol(i32, Decl(integers.mts, 0, 21))
+>n : Symbol(n, Decl(integers.mts, 36, 23))
+>bytes : Symbol(bytes, Decl(integers.mts, 37, 41))
+>SharedArray : Symbol(SharedArray, Decl(integers.mts, 0, 31))
+>u8 : Symbol(u8, Decl(integers.mts, 0, 52))
+>n : Symbol(n, Decl(integers.mts, 36, 23))
+
+    for (let i = 0; i < ints.length; i++) ints[i] = i * 3;          // in bounds: no check
+>i : Symbol(i, Decl(integers.mts, 38, 12))
+>i : Symbol(i, Decl(integers.mts, 38, 12))
+>ints.length : Symbol(SharedArray.length, Decl(threads.d.mts, 112, 68))
+>ints : Symbol(ints, Decl(integers.mts, 37, 9))
+>length : Symbol(SharedArray.length, Decl(threads.d.mts, 112, 68))
+>i : Symbol(i, Decl(integers.mts, 38, 12))
+>ints : Symbol(ints, Decl(integers.mts, 37, 9))
+>i : Symbol(i, Decl(integers.mts, 38, 12))
+>i : Symbol(i, Decl(integers.mts, 38, 12))
+
+    for (let i = 0; i < bytes.length; i++) bytes[i] = ints[i];      // bytes in bounds, ints checked
+>i : Symbol(i, Decl(integers.mts, 39, 12))
+>i : Symbol(i, Decl(integers.mts, 39, 12))
+>bytes.length : Symbol(SharedArray.length, Decl(threads.d.mts, 112, 68))
+>bytes : Symbol(bytes, Decl(integers.mts, 37, 41))
+>length : Symbol(SharedArray.length, Decl(threads.d.mts, 112, 68))
+>i : Symbol(i, Decl(integers.mts, 39, 12))
+>bytes : Symbol(bytes, Decl(integers.mts, 37, 41))
+>i : Symbol(i, Decl(integers.mts, 39, 12))
+>ints : Symbol(ints, Decl(integers.mts, 37, 9))
+>i : Symbol(i, Decl(integers.mts, 39, 12))
+
+    ints[n - 1]++;
+>ints : Symbol(ints, Decl(integers.mts, 37, 9))
+>n : Symbol(n, Decl(integers.mts, 36, 23))
+
+    image[0].gray = 255;
+>image[0].gray : Symbol(gray, Decl(integers.mts, 6, 30))
+>image : Symbol(image, Decl(integers.mts, 36, 33))
+>gray : Symbol(gray, Decl(integers.mts, 6, 30))
+
+    return ints[n - 1] + bytes[0] + atomic.sub(ints, 0, 1) + image[0].gray;
+>ints : Symbol(ints, Decl(integers.mts, 37, 9))
+>n : Symbol(n, Decl(integers.mts, 36, 23))
+>bytes : Symbol(bytes, Decl(integers.mts, 37, 41))
+>atomic.sub : Symbol(Atomic.sub, Decl(threads.d.mts, 158, 57))
+>atomic : Symbol(atomic, Decl(integers.mts, 0, 8))
+>sub : Symbol(Atomic.sub, Decl(threads.d.mts, 158, 57))
+>ints : Symbol(ints, Decl(integers.mts, 37, 9))
+>image[0].gray : Symbol(gray, Decl(integers.mts, 6, 30))
+>image : Symbol(image, Decl(integers.mts, 36, 33))
+>gray : Symbol(gray, Decl(integers.mts, 6, 30))
+}
+
+=== syntax.mts ===
+// The syntax's shared structs take the integer types as well.
+import { type i32, type u8 } from "./threads.mjs";
+>i32 : Symbol(i32, Decl(syntax.mts, 1, 8))
+>u8 : Symbol(u8, Decl(syntax.mts, 1, 18))
+
+shared struct Color { r: u8; g: u8; b: u8; count: i32 }
+>Color : Symbol(Color, Decl(syntax.mts, 1, 50))
+>r : Symbol(Color.r, Decl(syntax.mts, 2, 21))
+>u8 : Symbol(u8, Decl(syntax.mts, 1, 18))
+>g : Symbol(Color.g, Decl(syntax.mts, 2, 28))
+>u8 : Symbol(u8, Decl(syntax.mts, 1, 18))
+>b : Symbol(Color.b, Decl(syntax.mts, 2, 35))
+>u8 : Symbol(u8, Decl(syntax.mts, 1, 18))
+>count : Symbol(Color.count, Decl(syntax.mts, 2, 42))
+>i32 : Symbol(i32, Decl(syntax.mts, 1, 8))
+
+export function brighten(c: Color): number {
+>brighten : Symbol(brighten, Decl(syntax.mts, 2, 55))
+>c : Symbol(c, Decl(syntax.mts, 3, 25))
+>Color : Symbol(Color, Decl(syntax.mts, 1, 50))
+
+    c.r += 10;
+>c.r : Symbol(Color.r, Decl(syntax.mts, 2, 21))
+>c : Symbol(c, Decl(syntax.mts, 3, 25))
+>r : Symbol(Color.r, Decl(syntax.mts, 2, 21))
+
+    c.count++;
+>c.count : Symbol(Color.count, Decl(syntax.mts, 2, 42))
+>c : Symbol(c, Decl(syntax.mts, 3, 25))
+>count : Symbol(Color.count, Decl(syntax.mts, 2, 42))
+
+    return c.r + c.g + c.b + c.count;
+>c.r : Symbol(Color.r, Decl(syntax.mts, 2, 21))
+>c : Symbol(c, Decl(syntax.mts, 3, 25))
+>r : Symbol(Color.r, Decl(syntax.mts, 2, 21))
+>c.g : Symbol(Color.g, Decl(syntax.mts, 2, 28))
+>c : Symbol(c, Decl(syntax.mts, 3, 25))
+>g : Symbol(Color.g, Decl(syntax.mts, 2, 28))
+>c.b : Symbol(Color.b, Decl(syntax.mts, 2, 35))
+>c : Symbol(c, Decl(syntax.mts, 3, 25))
+>b : Symbol(Color.b, Decl(syntax.mts, 2, 35))
+>c.count : Symbol(Color.count, Decl(syntax.mts, 2, 42))
+>c : Symbol(c, Decl(syntax.mts, 3, 25))
+>count : Symbol(Color.count, Decl(syntax.mts, 2, 42))
+}
+

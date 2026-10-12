@@ -662,7 +662,7 @@ func (c *Checker) isOwnReferenceField(access *ast.Node) bool {
 		return false
 	}
 	k := slices.Index(cell.Fields, access.Name().Text())
-	return k >= 0 && cell.Refs[k]
+	return cell.FieldKind(k) == printer.OwnFieldRef
 }
 
 // Reports whether an argument is a counted value that the callee takes a count of, which the emit
@@ -835,6 +835,9 @@ func (c *Checker) checkOwnRefCounts(file *ast.SourceFile) {
 		case ast.KindCallExpression:
 			if c.getOwnCallMarker(node) == "struct" {
 				c.checkOwnStructCall(node)
+			}
+			if atomic, ok := c.getOwnAtomicCall(node); atomic != nil && !ok {
+				c.error(node, diagnostics.An_atomic_operation_takes_an_i32_field_of_a_shared_struct_named_by_a_string_literal_or_an_element_of_a_SharedArray_i32)
 			}
 			// A runtime function that returns addresses in an ordinary array or tuple (`select` on
 			// channels of counted values): nothing could count them.

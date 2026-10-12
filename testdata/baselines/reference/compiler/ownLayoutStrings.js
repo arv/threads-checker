@@ -210,7 +210,7 @@ export function finish(t: Task): string {
 //// [strings.mjs]
 import { __F64, __I32, __OOB, __intern, __newSharedArray, __register, __release, __sharedStruct, __str } from "./threads.mjs";
 import { f64, ref, SharedArray, str, struct } from "./threads.mjs";
-const Person = __sharedStruct("Person", ["name", "age", "next", "city"], [2], [], [0, 3]);
+const Person = __sharedStruct("Person", ["name", "age", "next", "city"], [2], "sfrs");
 export function greet(p) {
     var _a, _b;
     __I32[(p >> 2) + 2] = __intern("Ada"); // its value is not used: no temporary
@@ -247,7 +247,7 @@ __register(import.meta.url, { greet, defaults, labels });
 //// [syntax.mjs]
 import { __I32, __intern, __register, __sharedStruct, __str } from "./threads.mjs";
 // The syntax's shared structs take string fields as well, string literal types included.
-const Task = __sharedStruct("Task", ["id", "state", "title"], [], [], [1, 2]);
+const Task = __sharedStruct("Task", ["id", "state", "title"], [], "fss");
 export function finish(t) {
     __I32[(t >> 2) + 4] = __intern("done");
     return __str(__I32[(t >> 2) + 6]) + ": " + __str(__I32[(t >> 2) + 4]);

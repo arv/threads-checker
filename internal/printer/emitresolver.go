@@ -85,19 +85,60 @@ const (
 	OwnCellArrayOfStruct              // a SharedArray<S> for a shared struct S: S's slots inline after the header
 	OwnCellArrayOfBoolean             // a SharedArray<boolean>: one byte per element (0 or 1) after a 16-byte header
 	OwnCellArrayOfString              // a SharedArray<string>: an i32 per element (an interned string's address, 0 for "") after a 16-byte header
+	OwnCellArrayOfI32                 // a SharedArray<i32>: an i32 per element after a 16-byte header
+	OwnCellArrayOfU8                  // a SharedArray<u8>: a byte per element after a 16-byte header
 )
 
 // Reports whether a layout is a SharedArray's.
 func (k OwnCellKind) IsArray() bool {
-	return k == OwnCellArrayOfNumber || k == OwnCellArrayOfStruct || k == OwnCellArrayOfBoolean || k == OwnCellArrayOfString
+	return k >= OwnCellArrayOfNumber
 }
+
+// How a shared struct's field holds its value in its 8-byte slot. The kinds are the letters of the
+// string the emit gives the runtime (see OwnCellType.KindLetters).
+type OwnFieldKind byte
+
+const (
+	OwnFieldNone OwnFieldKind = 0   // in a union of structs, a slot whose fields differ
+	OwnFieldF64  OwnFieldKind = 'f' // a number: an f64
+	OwnFieldRef  OwnFieldKind = 'r' // a shared struct or a SharedArray (or null): its address in an i32, 0 for null
+	OwnFieldBool OwnFieldKind = 'b' // a boolean: a byte, 0 or 1, at the start of the slot
+	OwnFieldStr  OwnFieldKind = 's' // a string: an interned string's address in an i32, 0 for ""
+	OwnFieldI32  OwnFieldKind = 'i' // an i32 (the runtime's `i32`)
+	OwnFieldU8   OwnFieldKind = 'u' // a u8 (the runtime's `u8`): a byte at the start of the slot
+)
 
 type OwnCellType struct {
 	Kind   OwnCellKind
-	Fields []string // the struct's fields in slot order (for OwnCellArrayOfStruct, the element struct's; for a union of structs, "" where they differ)
-	Refs   []bool   // per field: a reference field (an i32 address, 0 for null) rather than an f64
-	Bools  []bool   // per field: a boolean field (a byte, 0 or 1, at the start of its slot) rather than an f64
-	Strs   []bool   // per field: a string field (an interned string's address in an i32, 0 for "") rather than an f64
+	Fields []string       // the struct's fields in slot order (for OwnCellArrayOfStruct, the element struct's; for a union of structs, "" where they differ)
+	Kinds  []OwnFieldKind // per field
+}
+
+// The kind of field k (OwnFieldNone if there is no such field).
+func (t OwnCellType) FieldKind(k int) OwnFieldKind {
+	if k < 0 || k >= len(t.Kinds) {
+		return OwnFieldNone
+	}
+	return t.Kinds[k]
+}
+
+// The fields' kinds as a string of their letters, if any is other than a number or a reference
+// (which the runtime tells apart by the reference fields' indexes alone), and "" otherwise.
+func (t OwnCellType) KindLetters() string {
+	for _, kind := range t.Kinds {
+		if kind != OwnFieldF64 && kind != OwnFieldRef {
+			return string(t.Kinds)
+		}
+	}
+	return ""
+}
+
+// An atomic operation of the plain API (`atomic.add(s, "count", 1)` or `atomic.add(a, i, 1)`): the
+// `Atomics` function it is, and what it acts on: i32 field Field of a shared struct, or (Field -1)
+// an element of a SharedArray<i32>.
+type OwnAtomicCall struct {
+	Op    string
+	Field int
 }
 
 // How the emit converts an expression between the raw address of a struct or SharedArray and the
@@ -168,6 +209,7 @@ type EmitResolver interface {
 	IsOwnQuiescentLoop(loop *ast.Node) bool
 	IsOwnRefArgument(argument *ast.Node) bool
 	GetOwnStructCall(call *ast.Node) *OwnStructCall
+	GetOwnAtomicCall(call *ast.Node) *OwnAtomicCall
 	IsOwnConsumeCall(call *ast.Node) bool
 
 	// JSX Emit

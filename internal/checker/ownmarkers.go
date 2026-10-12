@@ -1,9 +1,12 @@
 package checker
 
 import (
+	"slices"
+
 	"github.com/microsoft/typescript-go/internal/ast"
 	"github.com/microsoft/typescript-go/internal/core"
 	"github.com/microsoft/typescript-go/internal/diagnostics"
+	"github.com/microsoft/typescript-go/internal/printer"
 )
 
 // The plain TypeScript API of the own/shared threads extension (only with `--ownRuntime`).
@@ -21,8 +24,14 @@ import (
 //	                            shared struct S { a: number; next: T | null } (emitted as
 //	                            `__sharedStruct("S", ["a", "next"], [1])`): its fields in the order of
 //	                            the object literal, `f64` a number field and `ref<T>()` a reference
-//	                            field. Its values have type `Struct<typeof S>` (the fields & Cell) or,
-//	                            with an interface, I (& Cell, | null).
+//	                            field (and `bool`, `str`, `i32` and `u8`, see OwnFieldKind). Its values
+//	                            have type `Struct<typeof S>` (the fields & Cell) or, with an interface,
+//	                            I (& Cell, | null).
+//	i32, u8                     integer types: `number & { readonly [int32Brand]?: never }`, a number
+//	                            with a phantom brand, which plain numbers are assignable to
+//	atomic.add(s, "count", 1)   Atomics.add on i32 field `count` of a shared struct, or on an element of
+//	atomic.add(a, i, 1)         a SharedArray<i32> (and load, store, sub, and, or, xor, exchange,
+//	                            compareExchange, wait, notify)
 //
 // A marker is recognized by its declaration: an export of the runtime module, by name.
 
@@ -88,6 +97,42 @@ func (c *Checker) getOwnCallMarker(call *ast.Node) string {
 	return ""
 }
 
+// The operations of the runtime's `atomic`, which are those of `Atomics` by the same names.
+var ownAtomicOperations = []string{"load", "store", "add", "sub", "and", "or", "xor", "exchange", "compareExchange", "wait", "notify"}
+
+// The atomic operation a call is: (nil, true) if it is not one, (the operation, true) if it acts on
+// an i32 field of a shared struct named by a string literal, or on an element of a SharedArray<i32>,
+// which the emit lowers to `Atomics`, and (the operation, false) if it acts on anything else, which is
+// an error: there is nothing to lower it to.
+func (c *Checker) getOwnAtomicCall(call *ast.Node) (*printer.OwnAtomicCall, bool) {
+	if c.compilerOptions.OwnRuntime == "" || call == nil || !ast.IsCallExpression(call) {
+		return nil, true
+	}
+	callee := ast.SkipParentheses(call.Expression())
+	if !ast.IsPropertyAccessExpression(callee) || !slices.Contains(ownAtomicOperations, callee.Name().Text()) ||
+		c.getOwnRuntimeExportName(c.getSymbolAtLocation(callee.Expression(), true /*ignoreErrors*/)) != "atomic" {
+		return nil, true
+	}
+	atomic := &printer.OwnAtomicCall{Op: callee.Name().Text(), Field: -1}
+	args := call.Arguments()
+	if len(args) < 2 {
+		return atomic, false
+	}
+	switch cell := c.getOwnCellType(c.getTypeOfExpression(args[0])); cell.Kind {
+	case printer.OwnCellArrayOfI32:
+		return atomic, true
+	case printer.OwnCellStruct:
+		if key := ast.SkipParentheses(args[1]); ast.IsStringLiteral(key) || ast.IsNoSubstitutionTemplateLiteral(key) {
+			k := slices.Index(cell.Fields, key.Text())
+			if cell.FieldKind(k) == printer.OwnFieldI32 {
+				atomic.Field = k
+				return atomic, true
+			}
+		}
+	}
+	return atomic, false
+}
+
 // Reports whether an expression is `consume(x)`.
 func (c *Checker) isOwnConsumeCall(expr *ast.Node) bool {
 	return ast.IsCallExpression(expr) && len(expr.Arguments()) == 1 && c.getOwnCallMarker(expr) == "consume"
@@ -118,13 +163,13 @@ func (c *Checker) getOwnRuntimeType(name string) *Type {
 
 // Reports whether a type is a cell of the plain API: assignable to the runtime's `Cell` (Barrier,
 // Slots, Channel, Thread, Scope, SharedArray, a struct's values), or a struct type or a field marker
-// (immutable). Its values are shared, with no region.
+// (immutable, `IntegerField` included). Its values are shared, with no region.
 func (c *Checker) isOwnCellBranded(t *Type) bool {
 	if c.compilerOptions.OwnRuntime == "" || t == nil || t.flags&(TypeFlagsAnyOrUnknown|TypeFlagsNever|TypeFlagsPrimitive) != 0 {
 		return false
 	}
 	if t.flags&TypeFlagsObject != 0 {
-		if target := t.Target(); target != nil && target.symbol != nil && (target.symbol.Name == "StructType" || target.symbol.Name == "Field") &&
+		if target := t.Target(); target != nil && target.symbol != nil && (target.symbol.Name == "StructType" || target.symbol.Name == "Field" || target.symbol.Name == "IntegerField") &&
 			c.getOwnRuntimeExportName(target.symbol) != "" {
 			return true
 		}
@@ -135,14 +180,12 @@ func (c *Checker) isOwnCellBranded(t *Type) bool {
 
 // Shared structs declared with `struct({...})`
 
-// A shared struct: its name, fields in slot order, and which fields are references.
+// A shared struct: its name, fields in slot order, and how each holds its value.
 type ownStructInfo struct {
 	decl   *ast.Node // the `shared struct` declaration, or the `struct(...)` call
 	name   string
 	fields []string
-	refs   []bool // per field: a shared struct or a SharedArray (an address)
-	bools  []bool // per field: a boolean (a byte)
-	strs   []bool // per field: a string (an interned string's address)
+	kinds  []printer.OwnFieldKind
 }
 
 // The `struct(...)` calls of the program's source files, by the type of their structs' values
@@ -183,8 +226,7 @@ func (c *Checker) getOwnStructTypeOfCall(call *ast.Node) *Type {
 }
 
 // The layout of the struct a `struct(...)` call declares: its fields in the order of the object
-// literal, numbers (`f64`), booleans (`bool`), strings (`str`) and references (`ref<T>()`) by their
-// type.
+// literal, and their kinds by their types (see getOwnFieldKind).
 func (c *Checker) getOwnStructOfCall(call *ast.Node) *ownStructInfo {
 	if info, ok := c.ownLayout.structCalls[call]; ok {
 		return info
@@ -205,15 +247,12 @@ func (c *Checker) getOwnStructOfCall(call *ast.Node) *ownStructInfo {
 				continue // reported by checkOwnStructCall
 			}
 			field := name.Text()
-			isRef, isBool, isStr := false, false, false
+			kind := printer.OwnFieldF64
 			if symbol := c.getPropertyOfType(t, field); symbol != nil {
-				ft := c.getTypeOfSymbol(symbol)
-				isRef, isBool, isStr = c.isOwnCellType(ft), isOwnBooleanType(ft), isOwnStringType(ft)
+				kind = c.getOwnFieldKind(c.getTypeOfSymbol(symbol))
 			}
 			info.fields = append(info.fields, field)
-			info.refs = append(info.refs, isRef)
-			info.bools = append(info.bools, isBool)
-			info.strs = append(info.strs, isStr)
+			info.kinds = append(info.kinds, kind)
 		}
 	}
 	c.ownLayout.structCalls[call] = info
