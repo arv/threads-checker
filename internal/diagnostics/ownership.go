@@ -61,6 +61,10 @@ var Field_0_is_at_different_places_in_the_shared_structs_of_this_union = &Messag
 
 var An_atomic_operation_takes_an_i32_field_of_a_shared_struct_named_by_a_string_literal_or_an_element_of_a_SharedArray_i32 = &Message{code: 96028, category: CategoryError, key: "An_atomic_operation_takes_an_i32_field_of_a_shared_struct_named_by_a_string_literal_or_an_element_of_a_SharedArray_i32_96028", text: "An atomic operation takes an i32 field of a shared struct, named by a string literal, or an element of a SharedArray<i32>."}
 
+var X_0_blocks_its_thread_and_with_it_every_async_function_waiting_on_the_same_worker_Colon_in_an_async_function_use_1 = &Message{code: 96030, category: CategoryError, key: "X_0_blocks_its_thread_and_with_it_every_async_function_waiting_on_the_same_worker_Colon_in_an_async_function_use_1_96030", text: "'{0}' blocks its thread, and with it every async function waiting on the same worker: in an async function, use '{1}'."}
+
+var X_0_blocks_its_thread_and_with_it_every_async_function_waiting_on_the_same_worker_which_an_async_function_must_not_do = &Message{code: 96031, category: CategoryError, key: "X_0_blocks_its_thread_and_with_it_every_async_function_waiting_on_the_same_worker_which_an_async_function_must_not_do_96031", text: "'{0}' blocks its thread, and with it every async function waiting on the same worker, which an async function must not do."}
+
 var This_value_may_not_be_an_integer_which_0_would_truncate_silently_Colon_convert_it_explicitly_as_with_Math_round_Math_trunc_or_0 = &Message{code: 96029, category: CategoryError, key: "This_value_may_not_be_an_integer_which_0_would_truncate_silently_Colon_convert_it_explicitly_as_with_Math_round_Math_trunc_or_0_96029", text: "This value may not be an integer, which {0} would truncate silently: convert it explicitly, as with Math.round(), Math.trunc() or | 0."}
 
 var A_string_or_a_channel_in_a_shared_struct_or_SharedArray_cannot_be_assigned_by_destructuring_or_as_a_loop_variable = &Message{code: 96027, category: CategoryError, key: "A_string_or_a_channel_in_a_shared_struct_or_SharedArray_cannot_be_assigned_by_destructuring_or_as_a_loop_variable_96027", text: "A string or a channel in a shared struct or SharedArray cannot be assigned by destructuring or as a loop variable."}
@@ -98,6 +102,8 @@ func ownershipKeyToMessage(key Key) *Message {
 		A_string_or_a_channel_in_a_shared_struct_or_SharedArray_cannot_be_assigned_by_destructuring_or_as_a_loop_variable,
 		An_atomic_operation_takes_an_i32_field_of_a_shared_struct_named_by_a_string_literal_or_an_element_of_a_SharedArray_i32,
 		This_value_may_not_be_an_integer_which_0_would_truncate_silently_Colon_convert_it_explicitly_as_with_Math_round_Math_trunc_or_0,
+		X_0_blocks_its_thread_and_with_it_every_async_function_waiting_on_the_same_worker_Colon_in_an_async_function_use_1,
+		X_0_blocks_its_thread_and_with_it_every_async_function_waiting_on_the_same_worker_which_an_async_function_must_not_do,
 	} {
 		if m.key == key {
 			return m

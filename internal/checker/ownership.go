@@ -914,8 +914,15 @@ func (f *ownFunction) eval(node *ast.Node, s *ownState) ownValue {
 	case ast.KindRegularExpressionLiteral:
 		return ownRegionValue(a.newRegion())
 	case ast.KindParenthesizedExpression, ast.KindNonNullExpression, ast.KindAsExpression, ast.KindSatisfiesExpression,
-		ast.KindTypeAssertionExpression, ast.KindPartiallyEmittedExpression, ast.KindAwaitExpression:
+		ast.KindTypeAssertionExpression, ast.KindPartiallyEmittedExpression:
 		return f.eval(node.Expression(), s)
+	case ast.KindAwaitExpression:
+		// What a promise resolves to is in the promise's region, unless it is a primitive.
+		v := f.eval(node.Expression(), s)
+		if a.isPrimitiveOrSharedStructType(a.c.getTypeOfExpression(node)) {
+			return ownSharedValue
+		}
+		return v
 	case ast.KindConsumeExpression:
 		return f.evalConsume(node, node.Expression(), s)
 	case ast.KindTemplateExpression:
@@ -1941,7 +1948,7 @@ func (a *ownAnalyzer) returnKind(decl *ast.Node) ownReturnKind {
 	if decl == nil || decl.FunctionLikeData() == nil {
 		return ownReturnsOrdinary
 	}
-	t := decl.Type()
+	t := a.unwrapPromiseTypeNode(decl.Type())
 	switch {
 	case t == nil:
 		return ownReturnsOrdinary
@@ -1956,9 +1963,20 @@ func (a *ownAnalyzer) returnKind(decl *ast.Node) ownReturnKind {
 	return ownReturnsOrdinary
 }
 
+// The X of a result type `Promise<X>`, which an async function's returns resolve; any other type itself.
+// A result `Promise<sending T>` hands over ownership as `sending T` does (`recvAsync()`, `joinAsync()`).
+func (a *ownAnalyzer) unwrapPromiseTypeNode(t *ast.Node) *ast.Node {
+	if r := a.resolveTypeNode(t); r != nil && ast.IsTypeReferenceNode(r) && len(r.TypeArguments()) == 1 {
+		if name := r.AsTypeReferenceNode().TypeName; ast.IsIdentifier(name) && name.Text() == "Promise" {
+			return r.TypeArguments()[0]
+		}
+	}
+	return t
+}
+
 func (a *ownAnalyzer) returnsSending(fn *ast.Node) bool {
 	if t := fn.Type(); t != nil {
-		return a.isSendingTypeNode(t)
+		return a.isSendingTypeNode(a.unwrapPromiseTypeNode(t))
 	}
 	if ast.IsFunctionExpressionOrArrowFunction(fn) || ast.IsObjectLiteralMethod(fn) {
 		if sig := a.c.getContextualSignatureForFunctionLikeDeclaration(fn); sig != nil {

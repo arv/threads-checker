@@ -819,6 +819,11 @@ func (c *Checker) checkOwnRefCounts(file *ast.SourceFile) {
 				}
 			}
 		case ast.KindForOfStatement, ast.KindForInStatement:
+			if ast.IsForOfStatement(node) && node.AsForInOrOfStatement().AwaitModifier == nil &&
+				c.getOwnChannelElementType(c.getTypeOfExpression(node.Expression())) != nil &&
+				ast.GetFunctionFlags(ast.GetContainingFunction(node))&ast.FunctionFlagsAsync != 0 {
+				c.reportOwnBlocking(node.Expression(), "for...of", "for await")
+			}
 			init := node.AsForInOrOfStatement().Initializer
 			var t *Type
 			if ast.IsVariableDeclarationList(init) {
@@ -839,10 +844,13 @@ func (c *Checker) checkOwnRefCounts(file *ast.SourceFile) {
 			if atomic, ok := c.getOwnAtomicCall(node); atomic != nil && !ok {
 				c.error(node, diagnostics.An_atomic_operation_takes_an_i32_field_of_a_shared_struct_named_by_a_string_literal_or_an_element_of_a_SharedArray_i32)
 			}
+			if name, instead, ok := c.getOwnBlockingCall(node); ok && ast.GetFunctionFlags(ast.GetContainingFunction(node))&ast.FunctionFlagsAsync != 0 {
+				c.reportOwnBlocking(node, name, instead)
+			}
 			// A runtime function that returns addresses in an ordinary array or tuple (`select` on
-			// channels of counted values): nothing could count them.
+			// channels of counted values, and `selectAsync`'s promise of one): nothing could count them.
 			if signature := c.getResolvedSignature(node, nil, CheckModeNormal); signature != nil && signature.declaration != nil && isOwnAmbientDeclaration(signature.declaration) {
-				if element := c.getOwnCountedElementType(c.getTypeOfExpression(node)); element != nil {
+				if element := c.getOwnCountedElementType(c.getAwaitedType(c.getTypeOfExpression(node))); element != nil {
 					c.error(node, diagnostics.A_value_of_type_0_cannot_be_stored_in_an_ordinary_array_or_object_Colon_reference_counting_cannot_see_it_there_Use_a_SharedArray_or_a_shared_struct_field_or_a_place_typed_unknown_which_holds_a_handle, c.typeToString(element, nil))
 				}
 			}
@@ -850,6 +858,15 @@ func (c *Checker) checkOwnRefCounts(file *ast.SourceFile) {
 		return node.ForEachChild(visit)
 	}
 	file.AsNode().ForEachChild(visit)
+}
+
+// Reports a blocking call in an async function: it would stop every async function on its worker.
+func (c *Checker) reportOwnBlocking(node *ast.Node, name string, instead string) {
+	if instead != "" {
+		c.error(node, diagnostics.X_0_blocks_its_thread_and_with_it_every_async_function_waiting_on_the_same_worker_Colon_in_an_async_function_use_1, name, instead)
+	} else {
+		c.error(node, diagnostics.X_0_blocks_its_thread_and_with_it_every_async_function_waiting_on_the_same_worker_which_an_async_function_must_not_do, name)
+	}
 }
 
 // A counted element type of an array or tuple type, if any.

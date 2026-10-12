@@ -133,6 +133,39 @@ func (c *Checker) getOwnAtomicCall(call *ast.Node) (*printer.OwnAtomicCall, bool
 	return atomic, false
 }
 
+// The runtime's calls that block their thread, by declaring class and name, and what an async
+// function calls instead ("" for none).
+var ownBlockingCalls = map[string]string{
+	"Channel.send": "sendAsync", "Channel.recv": "recvAsync", "ChannelCell.send": "sendAsync", "ChannelCell.recv": "recvAsync",
+	"Thread.join": "joinAsync", "Barrier.wait": "waitAsync", "select": "selectAsync", "scope": "",
+}
+
+// A call of the runtime's that blocks its thread: its name, what an async function calls instead (""
+// for none), and whether it is one.
+func (c *Checker) getOwnBlockingCall(call *ast.Node) (string, string, bool) {
+	if c.compilerOptions.OwnRuntime == "" || !ast.IsCallExpression(call) {
+		return "", "", false
+	}
+	if atomic, _ := c.getOwnAtomicCall(call); atomic != nil {
+		return "atomic." + atomic.Op, "", atomic.Op == "wait"
+	}
+	signature := c.getResolvedSignature(call, nil, CheckModeNormal)
+	if signature == nil || signature.declaration == nil || !c.isOwnRuntimeFile(ast.GetSourceFileOfNode(signature.declaration)) {
+		return "", "", false
+	}
+	decl := signature.declaration
+	name := decl.Name()
+	if name == nil || !ast.IsIdentifier(name) {
+		return "", "", false
+	}
+	key := name.Text()
+	if (ast.IsMethodDeclaration(decl) || ast.IsMethodSignatureDeclaration(decl)) && decl.Parent != nil && decl.Parent.Name() != nil {
+		key = decl.Parent.Name().Text() + "." + key
+	}
+	instead, ok := ownBlockingCalls[key]
+	return name.Text(), instead, ok
+}
+
 // Reports whether an expression is `consume(x)`.
 func (c *Checker) isOwnConsumeCall(expr *ast.Node) bool {
 	return ast.IsCallExpression(expr) && len(expr.Arguments()) == 1 && c.getOwnCallMarker(expr) == "consume"
