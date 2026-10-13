@@ -197,7 +197,7 @@ export function spawned() {
 
 
 //// [await.mjs]
-import { __F64, __I32, __OOB, __newSharedArray, register as __register, __release, __retain } from "./threads.mjs";
+import { F64 as __F64, I32 as __I32, newSharedArray as __newSharedArray, outOfBounds as __outOfBounds, register as __register, release as __release, retain as __retain } from "./threads.mjs";
 import { SharedArray, spawn } from "./threads.mjs";
 import { run } from "./browser.mjs";
 function fill(n) {
@@ -227,7 +227,7 @@ export async function results(thread) {
                 try {
                     __I32[(((_a = await run(fill, 8))) + 4) >> 2]; // an owned temporary, released
                     __release(_a);
-                    return (_d = __I32[(a + 4) >> 2] + __I32[(b + 4) >> 2] + __I32[(c + 4) >> 2] + __I32[(d + 4) >> 2] + (_c = ((_b = await run(fill, 2))), (0 >>> 0) === 0 && 0 < __I32[(_c + 4) >> 2] ? __F64[((_c + 16) >> 3) + 0] : __OOB[0]), __release(_b), _d);
+                    return (_d = __I32[(a + 4) >> 2] + __I32[(b + 4) >> 2] + __I32[(c + 4) >> 2] + __I32[(d + 4) >> 2] + (_c = ((_b = await run(fill, 2))), (0 >>> 0) === 0 && 0 < __I32[(_c + 4) >> 2] ? __F64[((_c + 16) >> 3) + 0] : __outOfBounds[0]), __release(_b), _d);
                 }
                 finally {
                     __release(d);

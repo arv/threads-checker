@@ -157,7 +157,7 @@ export function main(threadCounts: readonly number[]) {
 
 
 //// [nbody.mjs]
-import { __F64, __hold, __newStruct, __ref, register as __register, __release, __sharedStruct } from "./own.mjs";
+import { F64 as __F64, capture as __capture, countedRef as __countedRef, newStruct as __newStruct, register as __register, release as __release, sharedStruct as __sharedStruct } from "./own.mjs";
 // The n-body example as an ES module for the own.mjs runtime. With `ownRuntime` set, the compiler
 // imports the runtime helpers this module needs and registers its top-level functions, so that
 // spawned threads can find `worker` by name.
@@ -217,11 +217,11 @@ function worker(t, mine, board, barrier, progress) {
 function simulate(threads) {
     const board = new Slots(threads), barrier = new Barrier(threads), progress = __newStruct(Progress);
     try {
-        return scope(__hold(s => {
+        return scope(__capture(s => {
             const parts = partition(makeBodies(), threads);
             const ts = [];
             for (let t = 0; t < threads; t++)
-                ts.push(s.spawn(worker, t, take(parts, t), board, barrier, __ref(progress)));
+                ts.push(s.spawn(worker, t, take(parts, t), board, barrier, __countedRef(progress)));
             return energy(ts.flatMap(th => th.join()));
         }, progress));
     }

@@ -311,7 +311,7 @@ export function brighten(c: Color): number {
 
 
 //// [integers.mjs]
-import { __F64, __I32, __OOB, __U8, __newSharedArray, register as __register, __release, __sharedStruct } from "./threads.mjs";
+import { F64 as __F64, I32 as __I32, U8 as __U8, newSharedArray as __newSharedArray, outOfBounds as __outOfBounds, register as __register, release as __release, sharedStruct as __sharedStruct } from "./threads.mjs";
 import { atomic, f64, i32, ref, SharedArray, struct, u8 } from "./threads.mjs";
 const Node = __sharedStruct("Node", ["value", "level", "next", "weight"], [2], "iurf");
 const Work = __sharedStruct("Work", ["next", "done", "flags"], [], "iiu");
@@ -330,8 +330,8 @@ export function claim(work, pixels, counts, n) {
     var _a;
     let claimed = 0;
     for (let i; (i = Atomics.add(__I32, (work >> 2) + 2, 1)) < n; claimed++) {
-        __U8[pixels + 16 + ((i >>> 0) === i && i < __I32[(pixels + 4) >> 2] ? i : __OOB[i])] = i & 255;
-        _a = i % __I32[(counts + 4) >> 2], Atomics.add(__I32, ((counts + 16) >> 2) + ((_a >>> 0) === _a && _a < __I32[(counts + 4) >> 2] ? _a : __OOB[_a]), 1);
+        __U8[pixels + 16 + ((i >>> 0) === i && i < __I32[(pixels + 4) >> 2] ? i : __outOfBounds[i])] = i & 255;
+        _a = i % __I32[(counts + 4) >> 2], Atomics.add(__I32, ((counts + 16) >> 2) + ((_a >>> 0) === _a && _a < __I32[(counts + 4) >> 2] ? _a : __outOfBounds[_a]), 1);
     }
     Atomics.or(__I32, (work >> 2) + 4, 1);
     Atomics.notify(__I32, (work >> 2) + 4);
@@ -350,10 +350,10 @@ export function arrays(n, image) {
         for (let i = 0; i < __I32[(ints + 4) >> 2]; i++)
             __I32[((ints + 16) >> 2) + i] = i * 3; // in bounds: no check
         for (let i = 0; i < __I32[(bytes + 4) >> 2]; i++)
-            __U8[bytes + 16 + i] = (i >>> 0) === i && i < __I32[(ints + 4) >> 2] ? __I32[((ints + 16) >> 2) + i] : __OOB[i]; // bytes in bounds, ints checked
-        __I32[_a = n - 1, ((ints + 16) >> 2) + ((_a >>> 0) === _a && _a < __I32[(ints + 4) >> 2] ? _a : __OOB[_a])]++;
-        __U8[((0 >>> 0) === 0 && 0 < __I32[(image + 4) >> 2] ? image + 16 + 0 * 24 : __OOB[0]) + 16] = 255;
-        return (_b = n - 1, (_b >>> 0) === _b && _b < __I32[(ints + 4) >> 2] ? __I32[((ints + 16) >> 2) + _b] : __OOB[_b]) + ((0 >>> 0) === 0 && 0 < __I32[(bytes + 4) >> 2] ? __U8[bytes + 16 + 0] : __OOB[0]) + Atomics.sub(__I32, ((ints + 16) >> 2) + ((0 >>> 0) === 0 && 0 < __I32[(ints + 4) >> 2] ? 0 : __OOB[0]), 1) + __U8[((0 >>> 0) === 0 && 0 < __I32[(image + 4) >> 2] ? image + 16 + 0 * 24 : __OOB[0]) + 16];
+            __U8[bytes + 16 + i] = (i >>> 0) === i && i < __I32[(ints + 4) >> 2] ? __I32[((ints + 16) >> 2) + i] : __outOfBounds[i]; // bytes in bounds, ints checked
+        __I32[_a = n - 1, ((ints + 16) >> 2) + ((_a >>> 0) === _a && _a < __I32[(ints + 4) >> 2] ? _a : __outOfBounds[_a])]++;
+        __U8[((0 >>> 0) === 0 && 0 < __I32[(image + 4) >> 2] ? image + 16 + 0 * 24 : __outOfBounds[0]) + 16] = 255;
+        return (_b = n - 1, (_b >>> 0) === _b && _b < __I32[(ints + 4) >> 2] ? __I32[((ints + 16) >> 2) + _b] : __outOfBounds[_b]) + ((0 >>> 0) === 0 && 0 < __I32[(bytes + 4) >> 2] ? __U8[bytes + 16 + 0] : __outOfBounds[0]) + Atomics.sub(__I32, ((ints + 16) >> 2) + ((0 >>> 0) === 0 && 0 < __I32[(ints + 4) >> 2] ? 0 : __outOfBounds[0]), 1) + __U8[((0 >>> 0) === 0 && 0 < __I32[(image + 4) >> 2] ? image + 16 + 0 * 24 : __outOfBounds[0]) + 16];
     }
     finally {
         __release(bytes);
@@ -362,7 +362,7 @@ export function arrays(n, image) {
 }
 __register(import.meta.url, { fields, claim, waitFor, arrays });
 //// [syntax.mjs]
-import { __I32, __U8, register as __register, __sharedStruct } from "./threads.mjs";
+import { I32 as __I32, U8 as __U8, register as __register, sharedStruct as __sharedStruct } from "./threads.mjs";
 const Color = __sharedStruct("Color", ["r", "g", "b", "count"], [], "uuui");
 export function brighten(c) {
     __U8[c + 8] += 10;

@@ -416,7 +416,7 @@ var __disposeResources = (this && this.__disposeResources) || (function (Suppres
     var e = new Error(message);
     return e.name = "SuppressedError", e.error = error, e.suppressed = suppressed, e;
 });
-import { __F64, __I32, __box, __cellAddress, __newStruct, __quiescent, __ref, register as __register, __release, __retain, __sharedStruct } from "./threads.mjs";
+import { F64 as __F64, I32 as __I32, box as __box, cellAddress as __cellAddress, countedRef as __countedRef, newStruct as __newStruct, quiescent as __quiescent, register as __register, release as __release, retain as __retain, sharedStruct as __sharedStruct } from "./threads.mjs";
 import { Channel, go, i32, ref, selectAsync, spawn, struct } from "./threads.mjs";
 const Db = __sharedStruct("Db", ["done"], [], "c");
 const Replica = __sharedStruct("Replica", ["txid", "changed", "db"], [2], "icr");
@@ -475,7 +475,7 @@ const Node = __sharedStruct("Node", ["value", "next"], [1]);
 async function nodes(input, output) {
     for await (const n of input) {
         try {
-            await output.sendAsync(__ref(n));
+            await output.sendAsync(__countedRef(n));
         }
         finally {
             __release(n);
@@ -514,7 +514,7 @@ export async function main(l, c) {
     go(relay, copies, orders);
     const r = __newStruct(Replica), out = new Channel(1);
     try {
-        go(waiter, __ref(r), 3, new Channel(), out);
+        go(waiter, __countedRef(r), 3, new Channel(), out);
         go(nodes, new Channel(), new Channel());
         return await out.recvAsync();
     }

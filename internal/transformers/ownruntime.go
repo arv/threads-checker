@@ -14,7 +14,7 @@ import (
 // With `ownRuntime` set to a module specifier, every ES module that uses the extension's syntax
 // imports the runtime helpers it needs from that module:
 //
-//	import { register as __register, __sharedStruct } from "./own.mjs";
+//	import { register as __register, sharedStruct as __sharedStruct } from "./own.mjs";
 //
 // `__sharedStruct` builds the runtime value of a `shared struct` declaration (or of a `struct({...})`
 // call of the plain API), and `__register` is called at the end of every module that uses the
@@ -23,14 +23,15 @@ import (
 //
 //	__register(import.meta.url, { worker, simulate, main });
 //
-// The runtime exports that one as `register`, part of its API (a program whose types are only
-// erased calls it itself), and the import renames it.
+// The runtime exports each helper under its name without the underscores (`register`, part of its
+// API, which a program whose types are only erased calls itself; `sharedStruct`, `retain`, ...),
+// and the import renames it to the helper's name.
 //
 // The typed layouts of shared structs and SharedArrays use more helpers (`__F64`, `__I32`, `__U8`,
-// `__newStruct`, `__newSharedArray`, `__OOB`, `__box`, `__unbox`, `__storeStr` and `__str` for strings,
-// and `__cellAddress` for channels), and so does their reference
-// counting (`__retain`, `__release`, `__store`, `__ref`, `__moved`, `__quiescent`, `__hold`; see
-// tstransforms/ownlayout.go). The import lists exactly the helpers the emitted module references.
+// `__newStruct`, `__newSharedArray`, `__outOfBounds`, `__box`, `__unbox`, `__storeStr` and `__strAt`
+// for strings, and `__cellAddress` for channels, locks and conditions), and so does their reference
+// counting (`__retain`, `__release`, `__store`, `__countedRef`, `__moved`, `__quiescent`,
+// `__capture`; see tstransforms/ownlayout.go). The import lists exactly the helpers the emitted module references.
 //
 // The helpers are referenced through helper names, so a file that declares its own `__register`
 // gets `import { register as __register_1 }` instead of a conflict.
@@ -41,24 +42,21 @@ const (
 	OwnRuntimeF64Helper            = "__F64"
 	OwnRuntimeI32Helper            = "__I32"
 	OwnRuntimeU8Helper             = "__U8"
-	OwnRuntimeStrHelper            = "__str"
+	OwnRuntimeStrHelper            = "__strAt"
 	OwnRuntimeCellAddressHelper    = "__cellAddress"
 	OwnRuntimeNewStructHelper      = "__newStruct"
 	OwnRuntimeNewSharedArrayHelper = "__newSharedArray"
-	OwnRuntimeOutOfBoundsHelper    = "__OOB"
+	OwnRuntimeOutOfBoundsHelper    = "__outOfBounds"
 	OwnRuntimeBoxHelper            = "__box"
 	OwnRuntimeUnboxHelper          = "__unbox"
 	OwnRuntimeRetainHelper         = "__retain"
 	OwnRuntimeReleaseHelper        = "__release"
 	OwnRuntimeStoreHelper          = "__store"
 	OwnRuntimeStoreStrHelper       = "__storeStr"
-	OwnRuntimeRefHelper            = "__ref"
+	OwnRuntimeRefHelper            = "__countedRef"
 	OwnRuntimeMovedHelper          = "__moved"
 	OwnRuntimeQuiescentHelper      = "__quiescent"
-	OwnRuntimeHoldHelper           = "__hold"
-
-	// What the runtime exports OwnRuntimeRegisterHelper as.
-	ownRuntimeRegisterExport = "register"
+	OwnRuntimeHoldHelper           = "__capture"
 )
 
 var ownRuntimeHelpers = []string{ // sorted
@@ -166,17 +164,11 @@ func CreateOwnRuntimeStatements(emitContext *printer.EmitContext, options *core.
 	// `using`'s, as if tslib provided them.)
 	emitContext.AddEmitFlags(original.AsNode(), printer.EFOwnRuntimeHelpers)
 	specifiers := core.Map(helpers, func(name string) *ast.Node {
-		exported := name
-		if name == OwnRuntimeRegisterHelper {
-			exported = ownRuntimeRegisterExport
-		}
+		exported := strings.TrimPrefix(name, "__") // what the runtime exports it as
 		if !printer.IsFileLevelUniqueName(original, name, nil /*hasGlobalName*/) {
 			return f.NewImportSpecifier(false /*isTypeOnly*/, f.NewIdentifier(exported), f.NewUnscopedHelperName(name))
 		}
-		if exported != name {
-			return f.NewImportSpecifier(false /*isTypeOnly*/, f.NewIdentifier(exported), f.NewIdentifier(name))
-		}
-		return f.NewImportSpecifier(false /*isTypeOnly*/, nil /*propertyName*/, f.NewIdentifier(name))
+		return f.NewImportSpecifier(false /*isTypeOnly*/, f.NewIdentifier(exported), f.NewIdentifier(name))
 	})
 	importDeclaration = f.NewImportDeclaration(
 		nil, /*modifiers*/

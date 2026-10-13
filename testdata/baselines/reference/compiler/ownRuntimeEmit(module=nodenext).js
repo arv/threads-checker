@@ -48,7 +48,7 @@ function scriptFunction() { send([1]); }
 
 
 //// [main.mjs]
-import { __newStruct, register as __register, __sharedStruct } from "./own.mjs";
+import { newStruct as __newStruct, register as __register, sharedStruct as __sharedStruct } from "./own.mjs";
 import { share } from "./own.mjs";
 export const Point = __sharedStruct("Point", ["x", "y"], []);
 const Local = __sharedStruct("Local", ["n"], []);
@@ -65,7 +65,7 @@ var NS;
 function outer() { function nested() { } return nested; }
 __register(import.meta.url, { exported, notExported, overloaded, main, outer });
 //// [structOnly.mjs]
-import { __sharedStruct } from "./own.mjs";
+import { sharedStruct as __sharedStruct } from "./own.mjs";
 export const Only = __sharedStruct("Only", ["v"], []);
 //// [functionsOnly.mjs]
 import { register as __register } from "./own.mjs";
@@ -75,7 +75,7 @@ __register(import.meta.url, { f, g });
 //// [plain.mjs]
 export function plain() { return 1; }
 //// [collision.mjs]
-import { register as __register_1, __sharedStruct as __sharedStruct_1 } from "./own.mjs";
+import { register as __register_1, sharedStruct as __sharedStruct_1 } from "./own.mjs";
 export function __register(x) { return x; }
 export const S = __sharedStruct_1("S", ["v"], []);
 function __sharedStruct() { }

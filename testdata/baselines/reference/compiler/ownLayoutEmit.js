@@ -120,7 +120,7 @@ export function allocate(n: number) {
 
 
 //// [layout.mjs]
-import { __F64, __I32, __OOB, __newSharedArray, __newStruct, register as __register, __release, __retain, __sharedStruct } from "./own.mjs";
+import { F64 as __F64, I32 as __I32, newSharedArray as __newSharedArray, newStruct as __newStruct, outOfBounds as __outOfBounds, register as __register, release as __release, retain as __retain, sharedStruct as __sharedStruct } from "./own.mjs";
 import { SharedArray } from "./own.mjs";
 export const Vec = __sharedStruct("Vec", ["x", "y", "z"], []);
 export const Particle = __sharedStruct("Particle", ["pos", "mass", "trail"], [0, 2]);
@@ -136,10 +136,10 @@ export function fields(v, p) {
 }
 export function elements(vs, i) {
     var _a, _b, _c, _d;
-    const v = (i >>> 0) === i && i < __I32[(vs + 4) >> 2] ? vs + 16 + i * 32 : __OOB[i]; // element address, bounds-checked
-    __F64[(((i >>> 0) === i && i < __I32[(vs + 4) >> 2] ? vs + 16 + i * 32 : __OOB[i]) >> 3) + 1] = __F64[((_a = i + 1, (_a >>> 0) === _a && _a < __I32[(vs + 4) >> 2] ? vs + 16 + _a * 32 : __OOB[_a]) >> 3) + 2]; // chains; index not simple: temporary
+    const v = (i >>> 0) === i && i < __I32[(vs + 4) >> 2] ? vs + 16 + i * 32 : __outOfBounds[i]; // element address, bounds-checked
+    __F64[(((i >>> 0) === i && i < __I32[(vs + 4) >> 2] ? vs + 16 + i * 32 : __outOfBounds[i]) >> 3) + 1] = __F64[((_a = i + 1, (_a >>> 0) === _a && _a < __I32[(vs + 4) >> 2] ? vs + 16 + _a * 32 : __outOfBounds[_a]) >> 3) + 2]; // chains; index not simple: temporary
     const n = __I32[(vs + 4) >> 2]; // header word
-    const w = (_d = __retain((_b = __retain(arrays()), _c = pick(), (_c >>> 0) === _c && _c < __I32[(_b + 4) >> 2] ? _b + 16 + _c * 32 : __OOB[_c])), __release(_b), _d); // array and index not simple: temporaries
+    const w = (_d = __retain((_b = __retain(arrays()), _c = pick(), (_c >>> 0) === _c && _c < __I32[(_b + 4) >> 2] ? _b + 16 + _c * 32 : __outOfBounds[_c])), __release(_b), _d); // array and index not simple: temporaries
     try {
         return n + __F64[(w >> 3) + 3] + __F64[(v >> 3) + 1];
     }
@@ -149,12 +149,12 @@ export function elements(vs, i) {
 }
 export function numbers(a, p, i) {
     var _a, _b;
-    const first = (0 >>> 0) === 0 && 0 < __I32[(a + 4) >> 2] ? __F64[((a + 16) >> 3) + 0] : __OOB[0]; // read
-    __F64[((a + 16) >> 3) + ((i >>> 0) === i && i < __I32[(a + 4) >> 2] ? i : __OOB[i])] = first * 2; // write
-    __F64[_a = i + 1, ((a + 16) >> 3) + ((_a >>> 0) === _a && _a < __I32[(a + 4) >> 2] ? _a : __OOB[_a])] += 3; // compound assignment, index not simple
-    __F64[((a + 16) >> 3) + ((i >>> 0) === i && i < __I32[(a + 4) >> 2] ? i : __OOB[i])]++;
-    __F64[_b = __I32[(p >> 2) + 6], ((_b + 16) >> 3) + ((i >>> 0) === i && i < __I32[(_b + 4) >> 2] ? i : __OOB[i])] = __I32[(a + 4) >> 2]; // array from a field: temporary
-    return (i >>> 0) === i && i < __I32[(a + 4) >> 2] ? __F64[((a + 16) >> 3) + i] : __OOB[i];
+    const first = (0 >>> 0) === 0 && 0 < __I32[(a + 4) >> 2] ? __F64[((a + 16) >> 3) + 0] : __outOfBounds[0]; // read
+    __F64[((a + 16) >> 3) + ((i >>> 0) === i && i < __I32[(a + 4) >> 2] ? i : __outOfBounds[i])] = first * 2; // write
+    __F64[_a = i + 1, ((a + 16) >> 3) + ((_a >>> 0) === _a && _a < __I32[(a + 4) >> 2] ? _a : __outOfBounds[_a])] += 3; // compound assignment, index not simple
+    __F64[((a + 16) >> 3) + ((i >>> 0) === i && i < __I32[(a + 4) >> 2] ? i : __outOfBounds[i])]++;
+    __F64[_b = __I32[(p >> 2) + 6], ((_b + 16) >> 3) + ((i >>> 0) === i && i < __I32[(_b + 4) >> 2] ? i : __outOfBounds[i])] = __I32[(a + 4) >> 2]; // array from a field: temporary
+    return (i >>> 0) === i && i < __I32[(a + 4) >> 2] ? __F64[((a + 16) >> 3) + i] : __outOfBounds[i];
 }
 export function allocate(n) {
     var _a;
@@ -164,7 +164,7 @@ export function allocate(n) {
         try {
             const ns = __newSharedArray(8, n);
             try {
-                __F64[((ns + 16) >> 3) + ((0 >>> 0) === 0 && 0 < __I32[(ns + 4) >> 2] ? 0 : __OOB[0])] = __F64[(v >> 3) + 1];
+                __F64[((ns + 16) >> 3) + ((0 >>> 0) === 0 && 0 < __I32[(ns + 4) >> 2] ? 0 : __outOfBounds[0])] = __F64[(v >> 3) + 1];
                 return (_a = vs, vs = 0, _a);
             }
             finally {

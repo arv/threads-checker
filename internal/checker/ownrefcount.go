@@ -28,7 +28,7 @@ import (
 //   - A function returns +1. A call is owned only when its signature's own (uninstantiated) return type
 //     is counted and it is declared in a source file: a generic or ambient function does not follow
 //     the convention, so its result is an unstable borrow (retained where it is kept: at worst a leak).
-//   - A closure holds what it captures (`__hold`), so a captured counted variable cannot be reassigned.
+//   - A closure holds what it captures (`__capture`), so a captured counted variable cannot be reassigned.
 //     A method or a class cannot hold what it captures, so it cannot capture a counted local.
 //   - A loop that reads or stores a reference field ends each iteration at a quiescent point.
 //   - A raw address cannot be stored where counting cannot see it: in an ordinary array or object, a
@@ -666,7 +666,7 @@ func (c *Checker) isOwnReferenceField(access *ast.Node) bool {
 }
 
 // Reports whether an argument is a counted value that the callee takes a count of, which the emit
-// passes as `__ref(E)`: a `sending` parameter of a runtime (ambient) function, other than a share-like
+// passes as `__countedRef(E)`: a `sending` parameter of a runtime (ambient) function, other than a share-like
 // one. That is a thread's arguments (`spawn`, `go`), which the thread releases when its function
 // returns, and a channel's `send`, whose message carries the count to the receiver.
 func (c *Checker) isOwnRefArgument(arg *ast.Node) bool {

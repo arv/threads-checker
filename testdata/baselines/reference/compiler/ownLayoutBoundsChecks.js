@@ -122,7 +122,7 @@ export function reassigned(a: SharedArray<number>, b: SharedArray<number>) {
 
 
 //// [bounds.mjs]
-import { __F64, __I32, __OOB, __hold, __newSharedArray, register as __register, __release, __retain, __sharedStruct } from "./own.mjs";
+import { F64 as __F64, I32 as __I32, capture as __capture, newSharedArray as __newSharedArray, outOfBounds as __outOfBounds, register as __register, release as __release, retain as __retain, sharedStruct as __sharedStruct } from "./own.mjs";
 import { SharedArray } from "./own.mjs";
 export const P = __sharedStruct("P", ["x", "y"], []);
 const START = 1;
@@ -153,32 +153,32 @@ export function eliminated(a, ps) {
 export function kept(a, b, lo) {
     let sum = 0;
     for (let i = lo; i < __I32[(a + 4) >> 2]; i++)
-        sum += (i >>> 0) === i && i < __I32[(a + 4) >> 2] ? __F64[((a + 16) >> 3) + i] : __OOB[i]; // init not a literal
+        sum += (i >>> 0) === i && i < __I32[(a + 4) >> 2] ? __F64[((a + 16) >> 3) + i] : __outOfBounds[i]; // init not a literal
     for (let i = -1; i < __I32[(a + 4) >> 2]; i++)
-        sum += (i >>> 0) === i && i < __I32[(a + 4) >> 2] ? __F64[((a + 16) >> 3) + i] : __OOB[i]; // negative init
+        sum += (i >>> 0) === i && i < __I32[(a + 4) >> 2] ? __F64[((a + 16) >> 3) + i] : __outOfBounds[i]; // negative init
     for (let i = 0; i < __I32[(b + 4) >> 2]; i++)
-        sum += (i >>> 0) === i && i < __I32[(a + 4) >> 2] ? __F64[((a + 16) >> 3) + i] : __OOB[i]; // bound from another array
+        sum += (i >>> 0) === i && i < __I32[(a + 4) >> 2] ? __F64[((a + 16) >> 3) + i] : __outOfBounds[i]; // bound from another array
     for (let i = 0; i < __I32[(a + 4) >> 2]; i++) {
         i = 5;
-        sum += (i >>> 0) === i && i < __I32[(a + 4) >> 2] ? __F64[((a + 16) >> 3) + i] : __OOB[i];
+        sum += (i >>> 0) === i && i < __I32[(a + 4) >> 2] ? __F64[((a + 16) >> 3) + i] : __outOfBounds[i];
     } // i assigned in the body
     for (let i = 0; i < __I32[(a + 4) >> 2]; i++) {
         const f = () => { i++; };
         f();
-        sum += (i >>> 0) === i && i < __I32[(a + 4) >> 2] ? __F64[((a + 16) >> 3) + i] : __OOB[i];
+        sum += (i >>> 0) === i && i < __I32[(a + 4) >> 2] ? __F64[((a + 16) >> 3) + i] : __outOfBounds[i];
     } // i written in a closure
     for (let i = 0; i < __I32[(a + 4) >> 2]; i += 2)
-        sum += (i >>> 0) === i && i < __I32[(a + 4) >> 2] ? __F64[((a + 16) >> 3) + i] : __OOB[i]; // update by 2
+        sum += (i >>> 0) === i && i < __I32[(a + 4) >> 2] ? __F64[((a + 16) >> 3) + i] : __outOfBounds[i]; // update by 2
     let m = __I32[(a + 4) >> 2];
     m = 100;
     for (let i = 0; i < m; i++)
-        sum += (i >>> 0) === i && i < __I32[(a + 4) >> 2] ? __F64[((a + 16) >> 3) + i] : __OOB[i]; // bound is a reassigned let
+        sum += (i >>> 0) === i && i < __I32[(a + 4) >> 2] ? __F64[((a + 16) >> 3) + i] : __outOfBounds[i]; // bound is a reassigned let
     for (let i = 0; i <= __I32[(a + 4) >> 2]; i++)
-        sum += (i >>> 0) === i && i < __I32[(a + 4) >> 2] ? __F64[((a + 16) >> 3) + i] : __OOB[i]; // <= instead of <
+        sum += (i >>> 0) === i && i < __I32[(a + 4) >> 2] ? __F64[((a + 16) >> 3) + i] : __outOfBounds[i]; // <= instead of <
     for (var i = 0; i < __I32[(a + 4) >> 2]; i++)
-        sum += (i >>> 0) === i && i < __I32[(a + 4) >> 2] ? __F64[((a + 16) >> 3) + i] : __OOB[i]; // var, not let
+        sum += (i >>> 0) === i && i < __I32[(a + 4) >> 2] ? __F64[((a + 16) >> 3) + i] : __outOfBounds[i]; // var, not let
     for (let k = 0; k < __I32[(a + 4) >> 2]; k++)
-        [0].forEach(__hold(() => { sum += (k >>> 0) === k && k < __I32[(a + 4) >> 2] ? __F64[((a + 16) >> 3) + k] : __OOB[k]; }, a)); // inside a closure
+        [0].forEach(__capture(() => { sum += (k >>> 0) === k && k < __I32[(a + 4) >> 2] ? __F64[((a + 16) >> 3) + k] : __outOfBounds[k]; }, a)); // inside a closure
     return sum;
 }
 export function reassigned(a, b) {
@@ -187,7 +187,7 @@ export function reassigned(a, b) {
     try {
         let sum = 0;
         for (let i = 0; i < __I32[(c + 4) >> 2]; i++)
-            sum += (i >>> 0) === i && i < __I32[(c + 4) >> 2] ? __F64[((c + 16) >> 3) + i] : __OOB[i]; // c is reassigned below
+            sum += (i >>> 0) === i && i < __I32[(c + 4) >> 2] ? __F64[((c + 16) >> 3) + i] : __outOfBounds[i]; // c is reassigned below
         _a = c, c = __retain(b), __release(_a);
         for (let i = 0; i < __I32[(a + 4) >> 2]; i++)
             __F64[((a + 16) >> 3) + i] = sum; // a itself is never assigned: eliminated

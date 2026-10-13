@@ -238,7 +238,7 @@ export function consumeAll() {
 
 
 //// [markers.mjs]
-import { __F64, __I32, __hold, __newSharedArray, __newStruct, __quiescent, __ref, register as __register, __release, __retain, __sharedStruct, __store } from "./threads.mjs";
+import { F64 as __F64, I32 as __I32, capture as __capture, countedRef as __countedRef, newSharedArray as __newSharedArray, newStruct as __newStruct, quiescent as __quiescent, register as __register, release as __release, retain as __retain, sharedStruct as __sharedStruct, store as __store } from "./threads.mjs";
 import { Barrier, Channel, consume, f64, go, ref, scope, share, SharedArray, spawn, struct } from "./threads.mjs";
 // A struct with an object type: `Struct<typeof Body>` is its values' type.
 const Body = __sharedStruct("Body", ["x", "y", "m"], []);
@@ -283,9 +283,9 @@ function step(lo, bodies, barrier, box) {
 export function simulate(threads) {
     const bodies = __newSharedArray(Body, 100), barrier = new Barrier(threads), box = __newStruct(Box);
     try {
-        scope(__hold(s => {
+        scope(__capture(s => {
             for (let t = 0; t < threads; t++)
-                s.spawn(step, t, __ref(bodies), barrier, __ref(box));
+                s.spawn(step, t, __countedRef(bodies), barrier, __countedRef(box));
         }, bodies, box));
         return energy(bodies);
     }
@@ -311,7 +311,7 @@ export function owned() {
 function produce(out) {
     var _a;
     for (let k = 0; k < 4; k++) {
-        out.send(__ref(_a = __newSharedArray(8, 16)));
+        out.send(__countedRef(_a = __newSharedArray(8, 16)));
         __release(_a);
     }
     out.close();

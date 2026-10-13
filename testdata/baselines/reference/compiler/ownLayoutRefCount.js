@@ -190,7 +190,7 @@ export function threads(box: Box) {
 
 
 //// [list.mjs]
-import { __F64, __I32, __box, __hold, __newStruct, __quiescent, __ref, register as __register, __release, __retain, __sharedStruct, __store } from "./own.mjs";
+import { F64 as __F64, I32 as __I32, box as __box, capture as __capture, countedRef as __countedRef, newStruct as __newStruct, quiescent as __quiescent, register as __register, release as __release, retain as __retain, sharedStruct as __sharedStruct, store as __store } from "./own.mjs";
 import { log, scope } from "./own.mjs";
 export const Node = __sharedStruct("Node", ["value", "next"], [1]);
 export const Box = __sharedStruct("Box", ["item"], [0]);
@@ -372,11 +372,11 @@ export function threads(box) {
     const list = makeList(3);
     function total() { return sum(list); }
     try {
-        __hold(total, list);
-        scope(__hold(s => {
+        __capture(total, list);
+        scope(__capture(s => {
             var _a;
-            s.spawn(sum, __ref(list));
-            s.spawn(stores, __ref(box), __ref(_a = created(4)));
+            s.spawn(sum, __countedRef(list));
+            s.spawn(stores, __countedRef(box), __countedRef(_a = created(4)));
             __release(_a);
         }, list, box));
         return total;

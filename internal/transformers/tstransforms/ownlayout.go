@@ -31,24 +31,24 @@ import (
 //	e.fk (boolean field, write) __U8[E + 8 + 8 * k]
 //	e.fk (i32 field)            __I32[(E >> 2) + 2 + 2 * k]
 //	e.fk (u8 field)             __U8[E + 8 + 8 * k]
-//	e.fk (string field, read)   __str(__I32[(E >> 2) + 2 + 2 * k])
+//	e.fk (string field, read)   __strAt(__I32[(E >> 2) + 2 + 2 * k])
 //	e.fk (channel field, read)  __box(__I32[(E >> 2) + 2 + 2 * k])
 //	e.fk = V (channel field)    __I32[(E >> 2) + 2 + 2 * k] = __cellAddress(V)
-//	e.fk = V (string field)     __I32[(E >> 2) + 2 + 2 * k] = __intern(V)
+//	e.fk = V (string field)     __storeStr((E >> 2) + 2 + 2 * k, V)
 //	e.fk (reference field)      __I32[(E >> 2) + 2 + 2 * k]              (2 + 2 * k folded; 0 for null)
 //	e.fk = V (reference field)  __store((E >> 2) + 2 + 2 * k, V)
 //	a.length                    __I32[(A + 4) >> 2]
-//	a[i]  (struct elements)     CHECK ? A + 16 + I * size : __OOB[I]
-//	a[i]  (number, read)        CHECK ? __F64[((A + 16) >> 3) + I] : __OOB[I]
-//	a[i]  (number, write)       __F64[((A + 16) >> 3) + (CHECK ? I : __OOB[I])]
-//	a[i]  (boolean, read)       CHECK ? __U8[A + 16 + I] !== 0 : __OOB[I]
-//	a[i]  (boolean, write)      __U8[A + 16 + (CHECK ? I : __OOB[I])]
-//	a[i]  (string, read)        CHECK ? __str(__I32[((A + 16) >> 2) + I]) : __OOB[I]
-//	a[i] = V (string)           __I32[((A + 16) >> 2) + (CHECK ? I : __OOB[I])] = __intern(V)
-//	a[i]  (i32)                 CHECK ? __I32[((A + 16) >> 2) + I] : __OOB[I], written as a number's
-//	a[i]  (u8)                  CHECK ? __U8[A + 16 + I] : __OOB[I], written as a boolean's
+//	a[i]  (struct elements)     CHECK ? A + 16 + I * size : __outOfBounds[I]
+//	a[i]  (number, read)        CHECK ? __F64[((A + 16) >> 3) + I] : __outOfBounds[I]
+//	a[i]  (number, write)       __F64[((A + 16) >> 3) + (CHECK ? I : __outOfBounds[I])]
+//	a[i]  (boolean, read)       CHECK ? __U8[A + 16 + I] !== 0 : __outOfBounds[I]
+//	a[i]  (boolean, write)      __U8[A + 16 + (CHECK ? I : __outOfBounds[I])]
+//	a[i]  (string, read)        CHECK ? __strAt(__I32[((A + 16) >> 2) + I]) : __outOfBounds[I]
+//	a[i] = V (string)           __storeStr(((A + 16) >> 2) + (CHECK ? I : __outOfBounds[I]), V)
+//	a[i]  (i32)                 CHECK ? __I32[((A + 16) >> 2) + I] : __outOfBounds[I], written as a number's
+//	a[i]  (u8)                  CHECK ? __U8[A + 16 + I] : __outOfBounds[I], written as a boolean's
 //	atomic.add(s, "fk", V)      Atomics.add(__I32, (S >> 2) + 2 + 2 * k, V)  (and the other operations)
-//	atomic.add(a, i, V)         Atomics.add(__I32, ((A + 16) >> 2) + (CHECK ? I : __OOB[I]), V)
+//	atomic.add(a, i, V)         Atomics.add(__I32, ((A + 16) >> 2) + (CHECK ? I : __outOfBounds[I]), V)
 //	CHECK                       (I >>> 0) === I && I < __I32[(A + 4) >> 2]
 //
 // A boolean is stored as a byte, 0 or 1: a write stores the boolean itself (a typed array converts
@@ -56,13 +56,14 @@ import (
 // its value is a boolean too, and an assignment target that is not an assignment's left side (a
 // destructuring pattern, a for-of's head) is the plain byte.
 //
-// A string is interned (`__intern`, 0 for ""), and its address stored as an i32; a read looks it up
-// (`__str`). An assignment whose value is used keeps the string: `(__I32[I] = __intern(_v = V), _v)`.
-// `e.fk += V` is `__I32[_i] = __intern(__str(__I32[_i]) + V)`, `e.fk ||= V` is `__str(__I32[_i]) ||
-// (__I32[_i] = __intern(V))`, and `e.fk ??= V` only reads (a string is never null). The checker
+// A string is interned and counted, and its address stored as an i32 (0 for ""): `__storeStr(I, V)`
+// counts V's string, gives back the old one's count, and returns V, so an assignment's value is the
+// string. A read looks it up (`__strAt`). `e.fk += V` is `__storeStr(_i, __strAt(__I32[_i]) + V)`,
+// `e.fk ||= V` is `__strAt(__I32[_i]) || __storeStr(_i, V)`, and `e.fk ??= V` only reads (a string is
+// never null). The checker
 // reports a string field or element assigned by destructuring or as a loop variable.
 //
-// A and I are copied to temporaries when they are not simple. The failure path reads `__OOB[I]`, a
+// A and I are copied to temporaries when they are not simple. The failure path reads `__outOfBounds[I]`, a
 // Proxy that throws, rather than calling a function: a call, even one that is never taken, keeps
 // V8's TurboFan from optimizing the loops these accesses sit in. Where the checker proves that I is
 // an integer in [0, A.length) (see "Bounds-check elimination" in checker/ownlayout.go: I counts up
@@ -88,9 +89,9 @@ import (
 // `const x = E; try { ...rest of the block } finally { __release(x) }`, and its reassignment retains
 // the new value before releasing the old (`_t = x, x = E', __release(_t)`). An owned parameter is
 // retained on entry. A counted argument that the callee takes a count of (a thread's argument for
-// `spawn` or `go`, a channel's `send`) is `__ref(E)`; a received value is owned (a for-of variable
+// `spawn` or `go`, a channel's `send`) is `__countedRef(E)`; a received value is owned (a for-of variable
 // over a channel is released when its iteration ends). A closure that captures counted variables is
-// `__hold(fn, x, ...)`, and a loop that reads or stores a reference field ends each iteration (and
+// `__capture(fn, x, ...)`, and a loop that reads or stores a reference field ends each iteration (and
 // each `continue`) with `__quiescent()`.
 type OwnLayoutTransformer struct {
 	transformers.Transformer
@@ -661,7 +662,7 @@ func (tx *OwnLayoutTransformer) visitBlock(node *ast.Node) *ast.Node {
 
 // Visits a block's statements: the statements after a declaration of owned locals are wrapped in
 // `try { ... } finally { __release(x) }`, and a nested function declaration that captures counted
-// variables is held (`__hold(f, x)`) as soon as they are declared.
+// variables is held (`__capture(f, x)`) as soon as they are declared.
 func (tx *OwnLayoutTransformer) visitStatements(statements []*ast.Node) []*ast.Node {
 	holds := tx.holdStatements(statements)
 	type level struct {
@@ -731,7 +732,7 @@ func (tx *OwnLayoutTransformer) ownedLocalsOfList(list *ast.Node) []*ast.Node {
 	return owned
 }
 
-// The `__hold(f, x, ...)` statements for the function declarations among statements that capture
+// The `__capture(f, x, ...)` statements for the function declarations among statements that capture
 // counted variables, by the index of the statement they follow (-1: the start): after the last of
 // those variables declared among the statements.
 func (tx *OwnLayoutTransformer) holdStatements(statements []*ast.Node) map[int][]*ast.Node {
@@ -887,7 +888,7 @@ func ownContinueTarget(node *ast.Node) *ast.Node {
 }
 
 // An arrow function or function expression; one that captures counted variables is held:
-// `__hold(fn, x, ...)`.
+// `__capture(fn, x, ...)`.
 func (tx *OwnLayoutTransformer) visitClosure(node *ast.Node) *ast.Node {
 	tx.pushFrame(nil /*fence*/)
 	result := tx.Visitor().VisitEachChild(node)
@@ -991,7 +992,7 @@ func (tx *OwnLayoutTransformer) sharedStruct(structCall *printer.OwnStructCall) 
 }
 
 // `atomic.add(s, "f", V)` as `Atomics.add(__I32, (S >> 2) + 2 + 2 * k, V)`, and `atomic.add(a, I, V)`
-// as `Atomics.add(__I32, ((A + 16) >> 2) + (CHECK ? I : __OOB[I]), V)`.
+// as `Atomics.add(__I32, ((A + 16) >> 2) + (CHECK ? I : __outOfBounds[I]), V)`.
 func (tx *OwnLayoutTransformer) lowerAtomic(n *ast.CallExpression, atomic *printer.OwnAtomicCall) *ast.Node {
 	args := n.Arguments.Nodes
 	rest := args[2:]
@@ -1028,7 +1029,7 @@ func (tx *OwnLayoutTransformer) visitExpressionOf(name *ast.Node) *ast.Node {
 	return tx.visitExpression(clone, ownAtOnce)
 }
 
-// The arguments of a call: a counted argument of `spawn` is `__ref(E)`; an unstable borrow is retained
+// The arguments of a call: a counted argument of `spawn` is `__countedRef(E)`; an unstable borrow is retained
 // around the call.
 func (tx *OwnLayoutTransformer) visitArguments(args *ast.NodeList, conditional bool) *ast.NodeList {
 	if args == nil {
@@ -1169,7 +1170,7 @@ func (tx *OwnLayoutTransformer) lowerLocalAssignment(node *ast.Node, x *ast.Node
 }
 
 // An assignment to a string field or element, or a channel field, whose value is converted as it is
-// stored and read (see "A string is interned" above): `__I32[I] = __intern(V)` and `__str(__I32[I])`,
+// stored and read (see "A string is interned" above): `__I32[I] = __intern(V)` and `__strAt(__I32[I])`,
 // or `__I32[I] = __cellAddress(V)` and `__box(__I32[I])`. nil if the target is not one after all.
 func (tx *OwnLayoutTransformer) lowerConvertedAssignment(node *ast.Node, left *ast.Node, ctx ownContext, kind printer.OwnFieldKind) *ast.Node {
 	n := node.AsBinaryExpression()
@@ -1445,7 +1446,7 @@ func (tx *OwnLayoutTransformer) elementAccess(kind printer.OwnCellKind) (view fu
 	return nil, nil, nil
 }
 
-// A string's address, looked up where it is read: __str(W).
+// A string's address, looked up where it is read: __strAt(W).
 func (tx *OwnLayoutTransformer) readString(word *ast.Node, isRead bool) *ast.Node {
 	if isRead {
 		return tx.call(transformers.OwnRuntimeStrHelper, word)
@@ -1551,7 +1552,7 @@ func (tx *OwnLayoutTransformer) length(a *ast.Node) *ast.Node {
 	return tx.i32(tx.binary(tx.paren(tx.add(a, tx.number(4))), ast.KindGreaterThanGreaterThanToken, tx.number(2)))
 }
 
-// __OOB[I]: throws a RangeError naming the index, without a call.
+// __outOfBounds[I]: throws a RangeError naming the index, without a call.
 func (tx *OwnLayoutTransformer) oob(i *ast.Node) *ast.Node {
 	return tx.Factory().NewElementAccessExpression(tx.helper(transformers.OwnRuntimeOutOfBoundsHelper), nil /*questionDotToken*/, tx.dup(i), ast.NodeFlagsNone)
 }

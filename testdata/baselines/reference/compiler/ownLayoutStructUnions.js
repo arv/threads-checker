@@ -88,7 +88,7 @@ export function references(r: R | R2) {
 
 
 //// [same.mjs]
-import { __F64, __I32, __newStruct, register as __register, __release, __retain, __sharedStruct, __store } from "./threads.mjs";
+import { F64 as __F64, I32 as __I32, newStruct as __newStruct, register as __register, release as __release, retain as __retain, sharedStruct as __sharedStruct, store as __store } from "./threads.mjs";
 import { f64, log, ref, struct } from "./threads.mjs";
 const A = __sharedStruct("A", ["u"], []);
 const A2 = __sharedStruct("A2", ["u"], []);

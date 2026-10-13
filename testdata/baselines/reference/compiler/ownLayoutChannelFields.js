@@ -350,7 +350,7 @@ export function post(m: Mailbox, text: string) {
 
 
 //// [replica.mjs]
-import { __I32, __box, __cellAddress, __newStruct, __quiescent, register as __register, __release, __retain, __sharedStruct, __store } from "./threads.mjs";
+import { I32 as __I32, box as __box, cellAddress as __cellAddress, newStruct as __newStruct, quiescent as __quiescent, register as __register, release as __release, retain as __retain, sharedStruct as __sharedStruct, store as __store } from "./threads.mjs";
 import { Channel, i32, ref, select, struct } from "./threads.mjs";
 const Db = __sharedStruct("Db", ["open", "done"], [], "ic");
 const Replica = __sharedStruct("Replica", ["txid", "changed", "db"], [2], "icr");
@@ -450,7 +450,7 @@ var __disposeResources = (this && this.__disposeResources) || (function (Suppres
     var e = new Error(message);
     return e.name = "SuppressedError", e.error = error, e.suppressed = suppressed, e;
 });
-import { __I32, __box, __cellAddress, __newStruct, register as __register, __release, __sharedStruct } from "./threads.mjs";
+import { I32 as __I32, box as __box, cellAddress as __cellAddress, newStruct as __newStruct, register as __register, release as __release, sharedStruct as __sharedStruct } from "./threads.mjs";
 // A Lock and a Condition last as long as the program, as a channel does: a struct holds them the same
 // way. A barrier for n threads:
 import { Condition, i32, Lock, ref, struct } from "./threads.mjs";
@@ -494,7 +494,7 @@ export function wait(b) {
 }
 __register(import.meta.url, { barrier, wait });
 //// [syntax.mjs]
-import { __F64, __I32, __box, __cellAddress, register as __register, __sharedStruct } from "./threads.mjs";
+import { F64 as __F64, I32 as __I32, box as __box, cellAddress as __cellAddress, register as __register, sharedStruct as __sharedStruct } from "./threads.mjs";
 // The syntax's shared structs take channel fields as well.
 import { Channel } from "./threads.mjs";
 const Mailbox = __sharedStruct("Mailbox", ["count", "inbox"], [], "fc");

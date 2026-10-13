@@ -155,7 +155,7 @@ export function pipeline(blocks: number) {
 
 
 //// [channels.mjs]
-import { __F64, __I32, __OOB, __newSharedArray, __newStruct, __ref, register as __register, __release, __sharedStruct } from "./own.mjs";
+import { F64 as __F64, I32 as __I32, countedRef as __countedRef, newSharedArray as __newSharedArray, newStruct as __newStruct, outOfBounds as __outOfBounds, register as __register, release as __release, sharedStruct as __sharedStruct } from "./own.mjs";
 import { SharedArray } from "./own.mjs";
 import { Channel, go } from "./chan.mjs";
 export const Node = __sharedStruct("Node", ["value", "next"], [1]);
@@ -165,11 +165,11 @@ export function sends(ch, box, mine) {
     var _a;
     const n = __newStruct(Node);
     try {
-        ch.send(__ref(n)); // an owned local
-        ch.send(__ref(_a = __newStruct(Node))); // an owned temporary, released after the statement
+        ch.send(__countedRef(n)); // an owned local
+        ch.send(__countedRef(_a = __newStruct(Node))); // an owned temporary, released after the statement
         __release(_a);
-        ch.send(__ref(__I32[(box >> 2) + 2])); // a reference field: retained by `__ref` at once
-        ch.send(__ref(mine)); // a parameter declared `sending`
+        ch.send(__countedRef(__I32[(box >> 2) + 2])); // a reference field: retained by `__ref` at once
+        ch.send(__countedRef(mine)); // a parameter declared `sending`
     }
     finally {
         __release(n);
@@ -177,15 +177,15 @@ export function sends(ch, box, mine) {
 }
 // A thread's arguments share a counted value: the same array goes to every thread.
 export function threads(ch, arr) {
-    go(worker, __ref(arr), ch);
-    go(worker, __ref(arr), ch);
+    go(worker, __countedRef(arr), ch);
+    go(worker, __countedRef(arr), ch);
     return __I32[(arr + 4) >> 2];
 }
 // A for-of over a channel owns each value it receives, until the iteration ends.
 function worker(arr, ch) {
     for (const n of ch) {
         try {
-            __F64[((arr + 16) >> 3) + ((0 >>> 0) === 0 && 0 < __I32[(arr + 4) >> 2] ? 0 : __OOB[0])] += __F64[(n >> 3) + 1];
+            __F64[((arr + 16) >> 3) + ((0 >>> 0) === 0 && 0 < __I32[(arr + 4) >> 2] ? 0 : __outOfBounds[0])] += __F64[(n >> 3) + 1];
         }
         finally {
             __release(n);
@@ -218,8 +218,8 @@ export function receives(ch) {
 export function stage(input, output) {
     for (const block of input) {
         try {
-            __F64[((block + 16) >> 3) + ((0 >>> 0) === 0 && 0 < __I32[(block + 4) >> 2] ? 0 : __OOB[0])]++;
-            output.send(__ref(block));
+            __F64[((block + 16) >> 3) + ((0 >>> 0) === 0 && 0 < __I32[(block + 4) >> 2] ? 0 : __outOfBounds[0])]++;
+            output.send(__countedRef(block));
         }
         finally {
             __release(block);
@@ -233,7 +233,7 @@ export function pipeline(blocks) {
     for (let k = 0; k < blocks; k++) {
         const block = __newSharedArray(8, 16);
         try {
-            input.send(__ref(block));
+            input.send(__countedRef(block));
         }
         finally {
             __release(block);
@@ -243,7 +243,7 @@ export function pipeline(blocks) {
     let total = 0;
     for (const block of output) {
         try {
-            total += (0 >>> 0) === 0 && 0 < __I32[(block + 4) >> 2] ? __F64[((block + 16) >> 3) + 0] : __OOB[0];
+            total += (0 >>> 0) === 0 && 0 < __I32[(block + 4) >> 2] ? __F64[((block + 16) >> 3) + 0] : __outOfBounds[0];
         }
         finally {
             __release(block);

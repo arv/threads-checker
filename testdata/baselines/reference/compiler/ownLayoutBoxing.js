@@ -138,7 +138,7 @@ export function angleBracket(u: unknown) {
 
 
 //// [boxing.mjs]
-import { __F64, __box, register as __register, __release, __retain, __sharedStruct, __unbox } from "./own.mjs";
+import { F64 as __F64, box as __box, register as __register, release as __release, retain as __retain, sharedStruct as __sharedStruct, unbox as __unbox } from "./own.mjs";
 import { log } from "./own.mjs";
 export const Vec = __sharedStruct("Vec", ["x", "y"], []);
 export function roundTrip(v) {
@@ -190,7 +190,7 @@ export function returnsVec(u) {
 }
 __register(import.meta.url, { roundTrip, boxed, unboxed, isVec, returns, returnsVec });
 //// [assertion.js]
-import { __F64, __unbox } from "./own.mjs";
+import { F64 as __F64, unbox as __unbox } from "./own.mjs";
 export function angleBracket(u) {
     return __F64[(__unbox(u) >> 3) + 1]; // unbox (angle-bracket assertion)
 }

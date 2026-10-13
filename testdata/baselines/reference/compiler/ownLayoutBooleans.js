@@ -216,7 +216,7 @@ export function toggle(f: Flags): boolean {
 
 
 //// [booleans.mjs]
-import { __F64, __I32, __OOB, __U8, __newSharedArray, register as __register, __release, __sharedStruct } from "./threads.mjs";
+import { F64 as __F64, I32 as __I32, U8 as __U8, newSharedArray as __newSharedArray, outOfBounds as __outOfBounds, register as __register, release as __release, sharedStruct as __sharedStruct } from "./threads.mjs";
 import { bool, f64, ref, SharedArray, struct } from "./threads.mjs";
 const Task = __sharedStruct("Task", ["id", "done", "next", "urgent"], [2], "fbrb");
 export function finish(t) {
@@ -250,9 +250,9 @@ export function sieve(n) {
                 continue; // in bounds: no check
             primes++;
             for (let j = i * i; j < n; j += i)
-                __U8[composite + 16 + ((j >>> 0) === j && j < __I32[(composite + 4) >> 2] ? j : __OOB[j])] = true;
+                __U8[composite + 16 + ((j >>> 0) === j && j < __I32[(composite + 4) >> 2] ? j : __outOfBounds[j])] = true;
         }
-        _b = (_a = n - 1, composite + 16 + ((_a >>> 0) === _a && _a < __I32[(composite + 4) >> 2] ? _a : __OOB[_a])), __U8[_b] !== 0 || (__U8[_b] = (0 >>> 0) === 0 && 0 < __I32[(composite + 4) >> 2] ? __U8[composite + 16 + 0] !== 0 : __OOB[0]);
+        _b = (_a = n - 1, composite + 16 + ((_a >>> 0) === _a && _a < __I32[(composite + 4) >> 2] ? _a : __outOfBounds[_a])), __U8[_b] !== 0 || (__U8[_b] = (0 >>> 0) === 0 && 0 < __I32[(composite + 4) >> 2] ? __U8[composite + 16 + 0] !== 0 : __outOfBounds[0]);
         return primes + __I32[(composite + 4) >> 2];
     }
     finally {
@@ -261,7 +261,7 @@ export function sieve(n) {
 }
 __register(import.meta.url, { finish, mark, assign, sieve });
 //// [syntax.mjs]
-import { __F64, __U8, register as __register, __sharedStruct } from "./threads.mjs";
+import { F64 as __F64, U8 as __U8, register as __register, sharedStruct as __sharedStruct } from "./threads.mjs";
 // The syntax's shared structs take boolean fields as well.
 const Flags = __sharedStruct("Flags", ["count", "on", "off"], [], "fbb");
 export function toggle(f) {
