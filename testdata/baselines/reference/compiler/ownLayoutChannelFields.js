@@ -303,7 +303,7 @@ export function post(m: Mailbox, text: string) {
 
 
 //// [replica.mjs]
-import { __I32, __box, __cellAddress, __newStruct, __quiescent, __register, __release, __retain, __sharedStruct, __store } from "./threads.mjs";
+import { __I32, __box, __cellAddress, __newStruct, __quiescent, register as __register, __release, __retain, __sharedStruct, __store } from "./threads.mjs";
 import { Channel, i32, ref, select, struct } from "./threads.mjs";
 const Db = __sharedStruct("Db", ["open", "done"], [], "ic");
 const Replica = __sharedStruct("Replica", ["txid", "changed", "db"], [2], "icr");
@@ -351,7 +351,7 @@ export function open() {
 }
 __register(import.meta.url, { waitForPos, advance, open });
 //// [syntax.mjs]
-import { __F64, __I32, __box, __cellAddress, __register, __sharedStruct } from "./threads.mjs";
+import { __F64, __I32, __box, __cellAddress, register as __register, __sharedStruct } from "./threads.mjs";
 // The syntax's shared structs take channel fields as well.
 import { Channel } from "./threads.mjs";
 const Mailbox = __sharedStruct("Mailbox", ["count", "inbox"], [], "fc");

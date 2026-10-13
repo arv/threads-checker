@@ -357,7 +357,7 @@ export async function main(b: Barrier) {
 
 
 //// [replica.mjs]
-import { __F64, __I32, __box, __cellAddress, __newStruct, __quiescent, __ref, __register, __release, __retain, __sharedStruct } from "./threads.mjs";
+import { __F64, __I32, __box, __cellAddress, __newStruct, __quiescent, __ref, register as __register, __release, __retain, __sharedStruct } from "./threads.mjs";
 import { Channel, go, i32, ref, selectAsync, spawn, struct } from "./threads.mjs";
 const Db = __sharedStruct("Db", ["done"], [], "c");
 const Replica = __sharedStruct("Replica", ["txid", "changed", "db"], [2], "icr");

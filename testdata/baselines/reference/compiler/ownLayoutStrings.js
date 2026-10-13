@@ -208,7 +208,7 @@ export function finish(t: Task): string {
 
 
 //// [strings.mjs]
-import { __F64, __I32, __OOB, __newSharedArray, __register, __release, __sharedStruct, __storeStr, __str } from "./threads.mjs";
+import { __F64, __I32, __OOB, __newSharedArray, register as __register, __release, __sharedStruct, __storeStr, __str } from "./threads.mjs";
 import { f64, ref, SharedArray, str, struct } from "./threads.mjs";
 const Person = __sharedStruct("Person", ["name", "age", "next", "city"], [2], "sfrs");
 export function greet(p) {
@@ -245,7 +245,7 @@ export function labels(n) {
 }
 __register(import.meta.url, { greet, defaults, labels });
 //// [syntax.mjs]
-import { __I32, __register, __sharedStruct, __storeStr, __str } from "./threads.mjs";
+import { __I32, register as __register, __sharedStruct, __storeStr, __str } from "./threads.mjs";
 // The syntax's shared structs take string fields as well, string literal types included.
 const Task = __sharedStruct("Task", ["id", "state", "title"], [], "fss");
 export function finish(t) {

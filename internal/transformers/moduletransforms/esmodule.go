@@ -65,7 +65,7 @@ func (tx *ESModuleTransformer) visitSourceFile(node *ast.SourceFile) *ast.Node {
 	tx.EmitContext().AddEmitHelper(result.AsNode(), tx.EmitContext().ReadEmitHelpers()...)
 
 	externalHelpersImportDeclaration := createExternalHelpersImportDeclarationIfNeeded(tx.EmitContext(), result, tx.compilerOptions, tx.getEmitModuleFormatOfFile(node), false /*hasExportStarsToExportValues*/, false /*hasImportStar*/, false /*hasImportDefault*/)
-	// own/shared threads extension: `import { __register, ... } from "<ownRuntime>"` at the top and
+	// own/shared threads extension: `import { register as __register, ... } from "<ownRuntime>"` at the top and
 	// `__register(import.meta.url, { ... })` at the end.
 	var ownRuntimeImport, ownRuntimeRegistration *ast.Statement
 	if transformers.UsesOwnRuntime(tx.EmitContext(), tx.compilerOptions, node, tx.getEmitModuleFormatOfFile) {

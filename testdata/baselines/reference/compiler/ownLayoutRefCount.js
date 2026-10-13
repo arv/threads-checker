@@ -190,7 +190,7 @@ export function threads(box: Box) {
 
 
 //// [list.mjs]
-import { __F64, __I32, __box, __hold, __newStruct, __quiescent, __ref, __register, __release, __retain, __sharedStruct, __store } from "./own.mjs";
+import { __F64, __I32, __box, __hold, __newStruct, __quiescent, __ref, register as __register, __release, __retain, __sharedStruct, __store } from "./own.mjs";
 import { log, scope } from "./own.mjs";
 export const Node = __sharedStruct("Node", ["value", "next"], [1]);
 export const Box = __sharedStruct("Box", ["item"], [0]);

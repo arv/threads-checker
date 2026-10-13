@@ -14,7 +14,7 @@ import (
 // With `ownRuntime` set to a module specifier, every ES module that uses the extension's syntax
 // imports the runtime helpers it needs from that module:
 //
-//	import { __register, __sharedStruct } from "./own.mjs";
+//	import { register as __register, __sharedStruct } from "./own.mjs";
 //
 // `__sharedStruct` builds the runtime value of a `shared struct` declaration (or of a `struct({...})`
 // call of the plain API), and `__register` is called at the end of every module that uses the
@@ -23,6 +23,9 @@ import (
 //
 //	__register(import.meta.url, { worker, simulate, main });
 //
+// The runtime exports that one as `register`, part of its API (a program whose types are only
+// erased calls it itself), and the import renames it.
+//
 // The typed layouts of shared structs and SharedArrays use more helpers (`__F64`, `__I32`, `__U8`,
 // `__newStruct`, `__newSharedArray`, `__OOB`, `__box`, `__unbox`, `__storeStr` and `__str` for strings,
 // and `__cellAddress` for channels), and so does their reference
@@ -30,7 +33,7 @@ import (
 // tstransforms/ownlayout.go). The import lists exactly the helpers the emitted module references.
 //
 // The helpers are referenced through helper names, so a file that declares its own `__register`
-// gets `import { __register as __register_1 }` instead of a conflict.
+// gets `import { register as __register_1 }` instead of a conflict.
 
 const (
 	OwnRuntimeSharedStructHelper   = "__sharedStruct"
@@ -53,6 +56,9 @@ const (
 	OwnRuntimeMovedHelper          = "__moved"
 	OwnRuntimeQuiescentHelper      = "__quiescent"
 	OwnRuntimeHoldHelper           = "__hold"
+
+	// What the runtime exports OwnRuntimeRegisterHelper as.
+	ownRuntimeRegisterExport = "register"
 )
 
 var ownRuntimeHelpers = []string{ // sorted
@@ -158,10 +164,17 @@ func CreateOwnRuntimeStatements(emitContext *printer.EmitContext, options *core.
 	// Helper references print as unique names (`__register_1`) if the file uses the name itself.
 	emitContext.AddEmitFlags(original.AsNode(), printer.EFExternalHelpers)
 	specifiers := core.Map(helpers, func(name string) *ast.Node {
-		if printer.IsFileLevelUniqueName(original, name, nil /*hasGlobalName*/) {
-			return f.NewImportSpecifier(false /*isTypeOnly*/, nil /*propertyName*/, f.NewIdentifier(name))
+		exported := name
+		if name == OwnRuntimeRegisterHelper {
+			exported = ownRuntimeRegisterExport
 		}
-		return f.NewImportSpecifier(false /*isTypeOnly*/, f.NewIdentifier(name), f.NewUnscopedHelperName(name))
+		if !printer.IsFileLevelUniqueName(original, name, nil /*hasGlobalName*/) {
+			return f.NewImportSpecifier(false /*isTypeOnly*/, f.NewIdentifier(exported), f.NewUnscopedHelperName(name))
+		}
+		if exported != name {
+			return f.NewImportSpecifier(false /*isTypeOnly*/, f.NewIdentifier(exported), f.NewIdentifier(name))
+		}
+		return f.NewImportSpecifier(false /*isTypeOnly*/, nil /*propertyName*/, f.NewIdentifier(name))
 	})
 	importDeclaration = f.NewImportDeclaration(
 		nil, /*modifiers*/

@@ -122,7 +122,7 @@ export function reassigned(a: SharedArray<number>, b: SharedArray<number>) {
 
 
 //// [bounds.mjs]
-import { __F64, __I32, __OOB, __hold, __newSharedArray, __register, __release, __retain, __sharedStruct } from "./own.mjs";
+import { __F64, __I32, __OOB, __hold, __newSharedArray, register as __register, __release, __retain, __sharedStruct } from "./own.mjs";
 import { SharedArray } from "./own.mjs";
 export const P = __sharedStruct("P", ["x", "y"], []);
 const START = 1;

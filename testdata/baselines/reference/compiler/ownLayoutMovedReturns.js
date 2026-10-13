@@ -31,7 +31,7 @@ export function count(counts: SharedMap<string, Count>, word: string) {
 
 
 //// [main.mjs]
-import { __F64, __moved, __newStruct, __ref, __register, __release, __sharedStruct } from "./own.mjs";
+import { __F64, __moved, __newStruct, __ref, register as __register, __release, __sharedStruct } from "./own.mjs";
 import { peek } from "./own.mjs";
 const Count = __sharedStruct("Count", ["n"], []);
 export function count(counts, word) {

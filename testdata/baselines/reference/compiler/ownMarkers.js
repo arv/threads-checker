@@ -238,7 +238,7 @@ export function consumeAll() {
 
 
 //// [markers.mjs]
-import { __F64, __I32, __hold, __newSharedArray, __newStruct, __quiescent, __ref, __register, __release, __retain, __sharedStruct, __store } from "./threads.mjs";
+import { __F64, __I32, __hold, __newSharedArray, __newStruct, __quiescent, __ref, register as __register, __release, __retain, __sharedStruct, __store } from "./threads.mjs";
 import { Barrier, Channel, consume, f64, go, ref, scope, share, SharedArray, spawn, struct } from "./threads.mjs";
 // A struct with an object type: `Struct<typeof Body>` is its values' type.
 const Body = __sharedStruct("Body", ["x", "y", "m"], []);

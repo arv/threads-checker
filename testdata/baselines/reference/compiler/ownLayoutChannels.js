@@ -155,7 +155,7 @@ export function pipeline(blocks: number) {
 
 
 //// [channels.mjs]
-import { __F64, __I32, __OOB, __newSharedArray, __newStruct, __ref, __register, __release, __sharedStruct } from "./own.mjs";
+import { __F64, __I32, __OOB, __newSharedArray, __newStruct, __ref, register as __register, __release, __sharedStruct } from "./own.mjs";
 import { SharedArray } from "./own.mjs";
 import { Channel, go } from "./chan.mjs";
 export const Node = __sharedStruct("Node", ["value", "next"], [1]);

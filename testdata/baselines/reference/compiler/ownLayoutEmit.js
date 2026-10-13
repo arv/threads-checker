@@ -120,7 +120,7 @@ export function allocate(n: number) {
 
 
 //// [layout.mjs]
-import { __F64, __I32, __OOB, __newSharedArray, __newStruct, __register, __release, __retain, __sharedStruct } from "./own.mjs";
+import { __F64, __I32, __OOB, __newSharedArray, __newStruct, register as __register, __release, __retain, __sharedStruct } from "./own.mjs";
 import { SharedArray } from "./own.mjs";
 export const Vec = __sharedStruct("Vec", ["x", "y", "z"], []);
 export const Particle = __sharedStruct("Particle", ["pos", "mass", "trail"], [0, 2]);

@@ -197,7 +197,7 @@ export function spawned() {
 
 
 //// [await.mjs]
-import { __F64, __I32, __OOB, __newSharedArray, __register, __release, __retain } from "./threads.mjs";
+import { __F64, __I32, __OOB, __newSharedArray, register as __register, __release, __retain } from "./threads.mjs";
 import { SharedArray, spawn } from "./threads.mjs";
 import { run } from "./browser.mjs";
 function fill(n) {

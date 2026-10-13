@@ -216,7 +216,7 @@ export function toggle(f: Flags): boolean {
 
 
 //// [booleans.mjs]
-import { __F64, __I32, __OOB, __U8, __newSharedArray, __register, __release, __sharedStruct } from "./threads.mjs";
+import { __F64, __I32, __OOB, __U8, __newSharedArray, register as __register, __release, __sharedStruct } from "./threads.mjs";
 import { bool, f64, ref, SharedArray, struct } from "./threads.mjs";
 const Task = __sharedStruct("Task", ["id", "done", "next", "urgent"], [2], "fbrb");
 export function finish(t) {
@@ -261,7 +261,7 @@ export function sieve(n) {
 }
 __register(import.meta.url, { finish, mark, assign, sieve });
 //// [syntax.mjs]
-import { __F64, __U8, __register, __sharedStruct } from "./threads.mjs";
+import { __F64, __U8, register as __register, __sharedStruct } from "./threads.mjs";
 // The syntax's shared structs take boolean fields as well.
 const Flags = __sharedStruct("Flags", ["count", "on", "off"], [], "fbb");
 export function toggle(f) {

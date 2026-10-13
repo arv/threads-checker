@@ -138,7 +138,7 @@ export function angleBracket(u: unknown) {
 
 
 //// [boxing.mjs]
-import { __F64, __box, __register, __release, __retain, __sharedStruct, __unbox } from "./own.mjs";
+import { __F64, __box, register as __register, __release, __retain, __sharedStruct, __unbox } from "./own.mjs";
 import { log } from "./own.mjs";
 export const Vec = __sharedStruct("Vec", ["x", "y"], []);
 export function roundTrip(v) {

@@ -311,7 +311,7 @@ export function brighten(c: Color): number {
 
 
 //// [integers.mjs]
-import { __F64, __I32, __OOB, __U8, __newSharedArray, __register, __release, __sharedStruct } from "./threads.mjs";
+import { __F64, __I32, __OOB, __U8, __newSharedArray, register as __register, __release, __sharedStruct } from "./threads.mjs";
 import { atomic, f64, i32, ref, SharedArray, struct, u8 } from "./threads.mjs";
 const Node = __sharedStruct("Node", ["value", "level", "next", "weight"], [2], "iurf");
 const Work = __sharedStruct("Work", ["next", "done", "flags"], [], "iiu");
@@ -362,7 +362,7 @@ export function arrays(n, image) {
 }
 __register(import.meta.url, { fields, claim, waitFor, arrays });
 //// [syntax.mjs]
-import { __I32, __U8, __register, __sharedStruct } from "./threads.mjs";
+import { __I32, __U8, register as __register, __sharedStruct } from "./threads.mjs";
 const Color = __sharedStruct("Color", ["r", "g", "b", "count"], [], "uuui");
 export function brighten(c) {
     __U8[c + 8] += 10;
