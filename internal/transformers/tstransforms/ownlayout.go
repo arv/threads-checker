@@ -1183,15 +1183,21 @@ func (tx *OwnLayoutTransformer) lowerConvertedAssignment(node *ast.Node, left *a
 	if operator != ast.KindEqualsToken {
 		index = tx.copiable(index, &temps) // read and written
 	}
-	readHelper, storeHelper := transformers.OwnRuntimeStrHelper, transformers.OwnRuntimeInternHelper
+	readHelper := transformers.OwnRuntimeStrHelper
 	if kind == printer.OwnFieldChan {
-		readHelper, storeHelper = transformers.OwnRuntimeBoxHelper, transformers.OwnRuntimeCellAddressHelper
+		readHelper = transformers.OwnRuntimeBoxHelper
 	}
 	read := func() *ast.Node {
 		return tx.call(readHelper, tx.i32(tx.dup(index)))
 	}
-	// __I32[I] = __intern(V), or (__I32[I] = __intern(_v = V), _v) where its value is used
+	// A string: __storeStr(I, V), which counts the new string, gives back the old one's count, and
+	// returns V. A channel: __I32[I] = __cellAddress(V), or (__I32[I] = __cellAddress(_v = V), _v)
+	// where its value is used.
+	storeHelper := transformers.OwnRuntimeCellAddressHelper
 	store := func(value *ast.Node) *ast.Node {
+		if kind == printer.OwnFieldStr {
+			return tx.call(transformers.OwnRuntimeStoreStrHelper, tx.dup(index), value)
+		}
 		if ctx == ownDiscard {
 			return tx.Factory().NewAssignmentExpression(tx.i32(tx.dup(index)), tx.call(storeHelper, value))
 		}

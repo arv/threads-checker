@@ -24,7 +24,7 @@ import (
 //	__register(import.meta.url, { worker, simulate, main });
 //
 // The typed layouts of shared structs and SharedArrays use more helpers (`__F64`, `__I32`, `__U8`,
-// `__newStruct`, `__newSharedArray`, `__OOB`, `__box`, `__unbox`, `__intern` and `__str` for strings,
+// `__newStruct`, `__newSharedArray`, `__OOB`, `__box`, `__unbox`, `__storeStr` and `__str` for strings,
 // and `__cellAddress` for channels), and so does their reference
 // counting (`__retain`, `__release`, `__store`, `__ref`, `__moved`, `__quiescent`, `__hold`; see
 // tstransforms/ownlayout.go). The import lists exactly the helpers the emitted module references.
@@ -38,7 +38,6 @@ const (
 	OwnRuntimeF64Helper            = "__F64"
 	OwnRuntimeI32Helper            = "__I32"
 	OwnRuntimeU8Helper             = "__U8"
-	OwnRuntimeInternHelper         = "__intern"
 	OwnRuntimeStrHelper            = "__str"
 	OwnRuntimeCellAddressHelper    = "__cellAddress"
 	OwnRuntimeNewStructHelper      = "__newStruct"
@@ -49,6 +48,7 @@ const (
 	OwnRuntimeRetainHelper         = "__retain"
 	OwnRuntimeReleaseHelper        = "__release"
 	OwnRuntimeStoreHelper          = "__store"
+	OwnRuntimeStoreStrHelper       = "__storeStr"
 	OwnRuntimeRefHelper            = "__ref"
 	OwnRuntimeMovedHelper          = "__moved"
 	OwnRuntimeQuiescentHelper      = "__quiescent"
@@ -63,7 +63,6 @@ var ownRuntimeHelpers = []string{ // sorted
 	OwnRuntimeBoxHelper,
 	OwnRuntimeCellAddressHelper,
 	OwnRuntimeHoldHelper,
-	OwnRuntimeInternHelper,
 	OwnRuntimeMovedHelper,
 	OwnRuntimeNewSharedArrayHelper,
 	OwnRuntimeNewStructHelper,
@@ -74,6 +73,7 @@ var ownRuntimeHelpers = []string{ // sorted
 	OwnRuntimeRetainHelper,
 	OwnRuntimeSharedStructHelper,
 	OwnRuntimeStoreHelper,
+	OwnRuntimeStoreStrHelper,
 	OwnRuntimeStrHelper,
 	OwnRuntimeUnboxHelper,
 }

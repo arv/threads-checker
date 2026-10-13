@@ -208,23 +208,23 @@ export function finish(t: Task): string {
 
 
 //// [strings.mjs]
-import { __F64, __I32, __OOB, __intern, __newSharedArray, __register, __release, __sharedStruct, __str } from "./threads.mjs";
+import { __F64, __I32, __OOB, __newSharedArray, __register, __release, __sharedStruct, __storeStr, __str } from "./threads.mjs";
 import { f64, ref, SharedArray, str, struct } from "./threads.mjs";
 const Person = __sharedStruct("Person", ["name", "age", "next", "city"], [2], "sfrs");
 export function greet(p) {
-    var _a, _b;
-    __I32[(p >> 2) + 2] = __intern("Ada"); // its value is not used: no temporary
-    const said = ((__I32[(p >> 2) + 8] = __intern(_a = "London"), _a)); // used: the string, not its address
+    var _a;
+    __storeStr((p >> 2) + 2, "Ada"); // its value is not used: no temporary
+    const said = (__storeStr((p >> 2) + 8, "London")); // used: the string, not its address
     if (__I32[(p >> 2) + 6] && __str(__I32[(__I32[(p >> 2) + 6] >> 2) + 2]) === "")
-        __I32[(__I32[(p >> 2) + 6] >> 2) + 2] = __intern(__str(__I32[(p >> 2) + 2]));
-    _b = (p >> 2) + 2, __I32[_b] = __intern(__str(__I32[_b]) + "!");
+        __storeStr((__I32[(p >> 2) + 6] >> 2) + 2, __str(__I32[(p >> 2) + 2]));
+    _a = (p >> 2) + 2, __storeStr(_a, __str(__I32[_a]) + "!");
     return `${__str(__I32[(p >> 2) + 2])} from ${said}, ${__F64[(p >> 3) + 2]}`;
 }
 export function defaults(p, city) {
-    var _a, _b, _c, _d, _e;
-    const a = (_a = (p >> 2) + 8, __str(__I32[_a]) || ((__I32[_a] = __intern(_b = city), _b)));
-    const b = (_c = (p >> 2) + 2, __str(__I32[_c]) && ((__I32[_c] = __intern(_d = __str(__I32[(p >> 2) + 2]).toUpperCase()), _d)));
-    _e = (p >> 2) + 8, __str(__I32[_e]); // a string is never null: only read
+    var _a, _b, _c;
+    const a = (_a = (p >> 2) + 8, __str(__I32[_a]) || (__storeStr(_a, city)));
+    const b = (_b = (p >> 2) + 2, __str(__I32[_b]) && (__storeStr(_b, __str(__I32[(p >> 2) + 2]).toUpperCase())));
+    _c = (p >> 2) + 8, __str(__I32[_c]); // a string is never null: only read
     return a + b;
 }
 export function labels(n) {
@@ -232,8 +232,8 @@ export function labels(n) {
     const names = __newSharedArray(4, n);
     try {
         for (let i = 0; i < __I32[(names + 4) >> 2]; i++)
-            __I32[((names + 16) >> 2) + i] = __intern(i % 2 ? "odd" : "even"); // in bounds: no check
-        _b = (_a = n - 1, ((names + 16) >> 2) + ((_a >>> 0) === _a && _a < __I32[(names + 4) >> 2] ? _a : __OOB[_a])), __I32[_b] = __intern(__str(__I32[_b]) + "?");
+            __storeStr(((names + 16) >> 2) + i, i % 2 ? "odd" : "even"); // in bounds: no check
+        _b = (_a = n - 1, ((names + 16) >> 2) + ((_a >>> 0) === _a && _a < __I32[(names + 4) >> 2] ? _a : __OOB[_a])), __storeStr(_b, __str(__I32[_b]) + "?");
         let chars = 0;
         for (let i = 0; i < n; i++)
             chars += ((i >>> 0) === i && i < __I32[(names + 4) >> 2] ? __str(__I32[((names + 16) >> 2) + i]) : __OOB[i]).length;
@@ -245,11 +245,11 @@ export function labels(n) {
 }
 __register(import.meta.url, { greet, defaults, labels });
 //// [syntax.mjs]
-import { __I32, __intern, __register, __sharedStruct, __str } from "./threads.mjs";
+import { __I32, __register, __sharedStruct, __storeStr, __str } from "./threads.mjs";
 // The syntax's shared structs take string fields as well, string literal types included.
 const Task = __sharedStruct("Task", ["id", "state", "title"], [], "fss");
 export function finish(t) {
-    __I32[(t >> 2) + 4] = __intern("done");
+    __storeStr((t >> 2) + 4, "done");
     return __str(__I32[(t >> 2) + 6]) + ": " + __str(__I32[(t >> 2) + 4]);
 }
 __register(import.meta.url, { finish });
