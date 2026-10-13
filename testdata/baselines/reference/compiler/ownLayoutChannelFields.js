@@ -1,6 +1,7 @@
 //// [tests/cases/compiler/ownLayoutChannelFields.ts] ////
 
 //// [threads.d.mts]
+/// <reference lib="esnext.disposable" />
 // Threads for JavaScript in plain TypeScript: own and shared values, shared structs, and channels.
 //
 // Code written against these types is ordinary TypeScript: tsc, editors, linters and formatters
@@ -231,6 +232,24 @@ export declare class Slots<T> implements Cell {
   flat(): Shared<T extends readonly (infer E)[] ? E[] : T[]>;
 }
 
+/** A lock: one thread at a time holds it, to change what several threads share. */
+export declare class Lock implements Cell {
+  readonly [cellBrand]: true;
+  constructor();
+  /** Blocks until this thread holds the lock; disposing what it returns releases it (`using`). */
+  hold(): Disposable;
+}
+
+/** A condition: threads holding a lock wait on it until another thread notifies them. */
+export declare class Condition implements Cell {
+  readonly [cellBrand]: true;
+  constructor();
+  /** Releases `lock`, which this thread holds, blocks until notified, and holds `lock` again. */
+  wait(lock: Lock): void;
+  /** Wakes every thread that waits. */
+  notifyAll(): void;
+}
+
 // ---- goroutines and channels ----
 
 /** A channel: values move through it from thread to thread, in order. */
@@ -292,6 +311,34 @@ export function open(): Replica {
     return same === db ? r : r;
 }
 
+//// [barrier.mts]
+// A Lock and a Condition last as long as the program, as a channel does: a struct holds them the same
+// way. A barrier for n threads:
+import { Condition, i32, Lock, ref, struct } from "./threads.mjs";
+
+interface Barrier { n: i32; waiting: i32; round: i32; lock: Lock | null; changed: Condition | null }
+const Barrier = struct<Barrier>({ n: i32, waiting: i32, round: i32, lock: ref<Lock>(), changed: ref<Condition>() });
+
+export function barrier(n: i32): Barrier {
+    const b = new Barrier();
+    b.n = n;
+    b.lock = new Lock();
+    b.changed = new Condition();
+    return b;
+}
+
+// returns once all n threads have called it
+export function wait(b: Barrier) {
+    const lock = b.lock!, changed = b.changed!;
+    using _ = lock.hold();
+    const round = b.round;
+    if (++b.waiting === b.n) {
+        b.waiting = 0;
+        b.round = round + 1;
+        changed.notifyAll();
+    } else while (b.round === round) changed.wait(lock);
+}
+
 //// [syntax.mts]
 // The syntax's shared structs take channel fields as well.
 import { Channel } from "./threads.mjs";
@@ -350,6 +397,102 @@ export function open() {
     }
 }
 __register(import.meta.url, { waitForPos, advance, open });
+//// [barrier.mjs]
+var __addDisposableResource = (this && this.__addDisposableResource) || function (env, value, async) {
+    if (value !== null && value !== void 0) {
+        if (typeof value !== "object" && typeof value !== "function") throw new TypeError("Object expected.");
+        var dispose, inner;
+        if (async) {
+            if (!Symbol.asyncDispose) throw new TypeError("Symbol.asyncDispose is not defined.");
+            dispose = value[Symbol.asyncDispose];
+        }
+        if (dispose === void 0) {
+            if (!Symbol.dispose) throw new TypeError("Symbol.dispose is not defined.");
+            dispose = value[Symbol.dispose];
+            if (async) inner = dispose;
+        }
+        if (typeof dispose !== "function") throw new TypeError("Object not disposable.");
+        if (inner) dispose = function() { try { inner.call(this); } catch (e) { return Promise.reject(e); } };
+        env.stack.push({ value: value, dispose: dispose, async: async });
+    }
+    else if (async) {
+        env.stack.push({ async: true });
+    }
+    return value;
+};
+var __disposeResources = (this && this.__disposeResources) || (function (SuppressedError) {
+    return function (env) {
+        function fail(e) {
+            env.error = env.hasError ? new SuppressedError(e, env.error, "An error was suppressed during disposal.") : e;
+            env.hasError = true;
+        }
+        var r, s = 0;
+        function next() {
+            while (r = env.stack.pop()) {
+                try {
+                    if (!r.async && s === 1) return s = 0, env.stack.push(r), Promise.resolve().then(next);
+                    if (r.dispose) {
+                        var result = r.dispose.call(r.value);
+                        if (r.async) return s |= 2, Promise.resolve(result).then(next, function(e) { fail(e); return next(); });
+                    }
+                    else s |= 1;
+                }
+                catch (e) {
+                    fail(e);
+                }
+            }
+            if (s === 1) return env.hasError ? Promise.reject(env.error) : Promise.resolve();
+            if (env.hasError) throw env.error;
+        }
+        return next();
+    };
+})(typeof SuppressedError === "function" ? SuppressedError : function (error, suppressed, message) {
+    var e = new Error(message);
+    return e.name = "SuppressedError", e.error = error, e.suppressed = suppressed, e;
+});
+import { __I32, __box, __cellAddress, __newStruct, register as __register, __release, __sharedStruct } from "./threads.mjs";
+// A Lock and a Condition last as long as the program, as a channel does: a struct holds them the same
+// way. A barrier for n threads:
+import { Condition, i32, Lock, ref, struct } from "./threads.mjs";
+const Barrier = __sharedStruct("Barrier", ["n", "waiting", "round", "lock", "changed"], [], "iiicc");
+export function barrier(n) {
+    var _a;
+    let b = __newStruct(Barrier);
+    try {
+        __I32[(b >> 2) + 2] = n;
+        __I32[(b >> 2) + 8] = __cellAddress(new Lock());
+        __I32[(b >> 2) + 10] = __cellAddress(new Condition());
+        return (_a = b, b = 0, _a);
+    }
+    finally {
+        __release(b);
+    }
+}
+// returns once all n threads have called it
+export function wait(b) {
+    const env_1 = { stack: [], error: void 0, hasError: false };
+    try {
+        const lock = __box(__I32[(b >> 2) + 8]), changed = __box(__I32[(b >> 2) + 10]);
+        const _ = __addDisposableResource(env_1, lock.hold(), false);
+        const round = __I32[(b >> 2) + 6];
+        if (++__I32[(b >> 2) + 4] === __I32[(b >> 2) + 2]) {
+            __I32[(b >> 2) + 4] = 0;
+            __I32[(b >> 2) + 6] = round + 1;
+            changed.notifyAll();
+        }
+        else
+            while (__I32[(b >> 2) + 6] === round)
+                changed.wait(lock);
+    }
+    catch (e_1) {
+        env_1.error = e_1;
+        env_1.hasError = true;
+    }
+    finally {
+        __disposeResources(env_1);
+    }
+}
+__register(import.meta.url, { barrier, wait });
 //// [syntax.mjs]
 import { __F64, __I32, __box, __cellAddress, register as __register, __sharedStruct } from "./threads.mjs";
 // The syntax's shared structs take channel fields as well.

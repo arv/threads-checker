@@ -1,6 +1,7 @@
 //// [tests/cases/compiler/ownLayoutChannelFields.ts] ////
 
 === threads.d.mts ===
+/// <reference lib="esnext.disposable" />
 // Threads for JavaScript in plain TypeScript: own and shared values, shared structs, and channels.
 //
 // Code written against these types is ordinary TypeScript: tsc, editors, linters and formatters
@@ -389,6 +390,41 @@ export declare class Slots<T> implements Cell {
 >flat : () => Shared<T extends readonly (infer E)[] ? E[] : T[]>
 }
 
+/** A lock: one thread at a time holds it, to change what several threads share. */
+export declare class Lock implements Cell {
+>Lock : Lock
+
+  readonly [cellBrand]: true;
+>[cellBrand] : true
+>cellBrand : unique symbol
+>true : true
+
+  constructor();
+  /** Blocks until this thread holds the lock; disposing what it returns releases it (`using`). */
+  hold(): Disposable;
+>hold : () => Disposable
+}
+
+/** A condition: threads holding a lock wait on it until another thread notifies them. */
+export declare class Condition implements Cell {
+>Condition : Condition
+
+  readonly [cellBrand]: true;
+>[cellBrand] : true
+>cellBrand : unique symbol
+>true : true
+
+  constructor();
+  /** Releases `lock`, which this thread holds, blocks until notified, and holds `lock` again. */
+  wait(lock: Lock): void;
+>wait : (lock: Lock) => void
+>lock : Lock
+
+  /** Wakes every thread that waits. */
+  notifyAll(): void;
+>notifyAll : () => void
+}
+
 // ---- goroutines and channels ----
 
 /** A channel: values move through it from thread to thread, in order. */
@@ -627,6 +663,152 @@ export function open(): Replica {
 >db : Db & import("./threads.mjs").Cell
 >r : Replica & import("./threads.mjs").Cell
 >r : Replica & import("./threads.mjs").Cell
+}
+
+=== barrier.mts ===
+// A Lock and a Condition last as long as the program, as a channel does: a struct holds them the same
+// way. A barrier for n threads:
+import { Condition, i32, Lock, ref, struct } from "./threads.mjs";
+>Condition : typeof Condition
+>i32 : import("./threads.mjs").IntegerField<i32, "i32">
+>Lock : typeof Lock
+>ref : <T>() => import("./threads.mjs").Field<T | null>
+>struct : { <F extends Record<string, import("./threads.mjs").Field<any>>>(fields: F): import("./threads.mjs").StructType<{ -readonly [K in keyof F]: F[K] extends import("./threads.mjs").Field<infer V> ? V : never; }>; <T>(fields: { [K in keyof T]-?: import("./threads.mjs").Field<T[K]>; }): import("./threads.mjs").StructType<T>; }
+
+interface Barrier { n: i32; waiting: i32; round: i32; lock: Lock | null; changed: Condition | null }
+>n : i32
+>waiting : i32
+>round : i32
+>lock : Lock | null
+>changed : Condition | null
+
+const Barrier = struct<Barrier>({ n: i32, waiting: i32, round: i32, lock: ref<Lock>(), changed: ref<Condition>() });
+>Barrier : import("./threads.mjs").StructType<Barrier>
+>struct<Barrier>({ n: i32, waiting: i32, round: i32, lock: ref<Lock>(), changed: ref<Condition>() }) : import("./threads.mjs").StructType<Barrier>
+>struct : { <F extends Record<string, import("./threads.mjs").Field<any>>>(fields: F): import("./threads.mjs").StructType<{ -readonly [K in keyof F]: F[K] extends import("./threads.mjs").Field<infer V> ? V : never; }>; <T>(fields: { [K in keyof T]-?: import("./threads.mjs").Field<T[K]>; }): import("./threads.mjs").StructType<T>; }
+>{ n: i32, waiting: i32, round: i32, lock: ref<Lock>(), changed: ref<Condition>() } : { n: import("./threads.mjs").IntegerField<i32, "i32">; waiting: import("./threads.mjs").IntegerField<i32, "i32">; round: import("./threads.mjs").IntegerField<i32, "i32">; lock: import("./threads.mjs").Field<Lock | null>; changed: import("./threads.mjs").Field<Condition | null>; }
+>n : import("./threads.mjs").IntegerField<i32, "i32">
+>i32 : import("./threads.mjs").IntegerField<i32, "i32">
+>waiting : import("./threads.mjs").IntegerField<i32, "i32">
+>i32 : import("./threads.mjs").IntegerField<i32, "i32">
+>round : import("./threads.mjs").IntegerField<i32, "i32">
+>i32 : import("./threads.mjs").IntegerField<i32, "i32">
+>lock : import("./threads.mjs").Field<Lock | null>
+>ref<Lock>() : import("./threads.mjs").Field<Lock | null>
+>ref : <T>() => import("./threads.mjs").Field<T | null>
+>changed : import("./threads.mjs").Field<Condition | null>
+>ref<Condition>() : import("./threads.mjs").Field<Condition | null>
+>ref : <T>() => import("./threads.mjs").Field<T | null>
+
+export function barrier(n: i32): Barrier {
+>barrier : (n: i32) => Barrier
+>n : i32
+
+    const b = new Barrier();
+>b : Barrier & import("./threads.mjs").Cell
+>new Barrier() : Barrier & import("./threads.mjs").Cell
+>Barrier : import("./threads.mjs").StructType<Barrier>
+
+    b.n = n;
+>b.n = n : i32
+>b.n : i32
+>b : Barrier & import("./threads.mjs").Cell
+>n : i32
+>n : i32
+
+    b.lock = new Lock();
+>b.lock = new Lock() : Lock
+>b.lock : Lock | null
+>b : Barrier & import("./threads.mjs").Cell
+>lock : Lock | null
+>new Lock() : Lock
+>Lock : typeof Lock
+
+    b.changed = new Condition();
+>b.changed = new Condition() : Condition
+>b.changed : Condition | null
+>b : Barrier & import("./threads.mjs").Cell
+>changed : Condition | null
+>new Condition() : Condition
+>Condition : typeof Condition
+
+    return b;
+>b : Barrier & import("./threads.mjs").Cell
+}
+
+// returns once all n threads have called it
+export function wait(b: Barrier) {
+>wait : (b: Barrier) => void
+>b : Barrier
+
+    const lock = b.lock!, changed = b.changed!;
+>lock : Lock
+>b.lock! : Lock
+>b.lock : Lock | null
+>b : Barrier
+>lock : Lock | null
+>changed : Condition
+>b.changed! : Condition
+>b.changed : Condition | null
+>b : Barrier
+>changed : Condition | null
+
+    using _ = lock.hold();
+>_ : Disposable
+>lock.hold() : Disposable
+>lock.hold : () => Disposable
+>lock : Lock
+>hold : () => Disposable
+
+    const round = b.round;
+>round : i32
+>b.round : i32
+>b : Barrier
+>round : i32
+
+    if (++b.waiting === b.n) {
+>++b.waiting === b.n : boolean
+>++b.waiting : number
+>b.waiting : i32
+>b : Barrier
+>waiting : i32
+>b.n : i32
+>b : Barrier
+>n : i32
+
+        b.waiting = 0;
+>b.waiting = 0 : 0
+>b.waiting : i32
+>b : Barrier
+>waiting : i32
+>0 : 0
+
+        b.round = round + 1;
+>b.round = round + 1 : number
+>b.round : i32
+>b : Barrier
+>round : i32
+>round + 1 : number
+>round : i32
+>1 : 1
+
+        changed.notifyAll();
+>changed.notifyAll() : void
+>changed.notifyAll : () => void
+>changed : Condition
+>notifyAll : () => void
+
+    } else while (b.round === round) changed.wait(lock);
+>b.round === round : boolean
+>b.round : i32
+>b : Barrier
+>round : i32
+>round : i32
+>changed.wait(lock) : void
+>changed.wait : (lock: Lock) => void
+>changed : Condition
+>wait : (lock: Lock) => void
+>lock : Lock
 }
 
 === syntax.mts ===

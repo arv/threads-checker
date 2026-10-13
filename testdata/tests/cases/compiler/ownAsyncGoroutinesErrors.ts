@@ -11,6 +11,7 @@
 // form). selectAsync of channels of struct values is rejected as select is.
 
 // @filename: threads.d.mts
+/// <reference lib="esnext.disposable" />
 // Threads for JavaScript in plain TypeScript: own and shared values, shared structs, and channels.
 //
 // Code written against these types is ordinary TypeScript: tsc, editors, linters and formatters
@@ -25,7 +26,7 @@
 //   - owned, the default: an ordinary object only one thread can reach. `Sending<T>` moves it: the
 //     caller gives it up and the receiver owns it;
 //   - shared: `Shared<T>`, deeply immutable, so any number of threads may read it;
-//   - a cell: shared and mutable, but only through what synchronizes it (Barrier, Slots, Channel), or,
+//   - a cell: shared and mutable, but only through what synchronizes it (Lock, Condition, Channel), or,
 //     for shared structs and SharedArrays, in place, ordered by one of those.
 
 declare const cellBrand: unique symbol;
@@ -106,7 +107,7 @@ export type Struct<S> = S extends StructType<infer T> ? T & Cell : never;
 
 /**
  * Declares a shared struct: fields at fixed places in shared memory, which every thread reads and
- * writes in place. Reads and writes are not ordered between threads: a Barrier or a Channel orders
+ * writes in place. Reads and writes are not ordered between threads: a Lock or a Channel orders
  * them.
  *
  *     const Body = struct({ x: f64, y: f64, m: f64 });
@@ -125,7 +126,7 @@ export declare function struct<T>(fields: { [K in keyof T]-?: Field<T[K]> }): St
 /**
  * A fixed-length array in shared memory: of numbers (`Number`), of i32s (`i32`), of bytes (`u8`), of
  * booleans (`Boolean`, a byte each), of strings (`String`, interned as `str` fields are), or of shared
- * structs stored inline. Every thread reads and writes the same elements, with no copying; a Barrier,
+ * structs stored inline. Every thread reads and writes the same elements, with no copying; a Lock,
  * a Channel or an atomic operation orders them.
  */
 export interface SharedArray<T, L = ElementLayout<T>> extends Cell {
@@ -231,25 +232,28 @@ export declare function partition<T>(items: Sending<T[]>, parts: number): Sendin
 /** Takes element `index` out of an array of owned values, so the caller owns it. Trusted. */
 export declare function take<T>(items: Sending<T>[], index: number): Sending<T>;
 
-/** A reusable barrier for a fixed number of threads. */
-export declare class Barrier implements Cell {
+/** A lock: one thread at a time holds it, to change what several threads share. */
+export declare class Lock implements Cell {
   readonly [cellBrand]: true;
-  constructor(threads: number);
-  /** Blocks until all threads have called `wait`. */
-  wait(): void;
-  /** Waits, without blocking, until all threads have called `wait` or `waitAsync`: for an async function. */
-  waitAsync(): Promise<void>;
+  constructor();
+  /** Blocks until this thread holds the lock; disposing what it returns releases it (`using`). */
+  hold(): Disposable;
+  /** The same in an async function: waits for the lock without blocking. */
+  holdAsync(): Promise<Disposable>;
 }
 
-/** One slot per thread: a thread publishes a shared value into its slot, and everyone reads every slot. */
-export declare class Slots<T> implements Cell {
+/** A condition: threads holding a lock wait on it until another thread notifies them. */
+export declare class Condition implements Cell {
   readonly [cellBrand]: true;
-  constructor(count: number);
-  readonly length: number;
-  set(index: number, value: Shared<T>): void;
-  get(index: number): Shared<T> | undefined;
-  /** The arrays in all slots, concatenated in slot order. */
-  flat(): Shared<T extends readonly (infer E)[] ? E[] : T[]>;
+  constructor();
+  /** Releases `lock`, which this thread holds, blocks until notified, and holds `lock` again. */
+  wait(lock: Lock): void;
+  /** The same in an async function: waits without blocking. */
+  waitAsync(lock: Lock): Promise<void>;
+  /** Wakes one thread that waits. */
+  notifyOne(): void;
+  /** Wakes every thread that waits. */
+  notifyAll(): void;
 }
 
 // ---- goroutines and channels ----
@@ -295,17 +299,18 @@ export declare function log(...args: unknown[]): void;
 export declare function heapStats(): { heapBytes: number; allocated: number; freed: number; pending: number };
 
 // @filename: blocking.mts
-import { atomic, Barrier, Channel, i32, scope, select, selectAsync, struct, type Thread } from "./threads.mjs";
+import { atomic, Channel, Condition, i32, Lock, scope, select, selectAsync, struct, type Thread } from "./threads.mjs";
 
 const Work = struct({ n: i32 });
 type Work = typeof Work extends { new (): infer W } ? W : never;
 
-export async function blocking(ch: Channel<number>, t: Thread<number>, b: Barrier, w: Work) {
+export async function blocking(ch: Channel<number>, t: Thread<number>, l: Lock, c: Condition, w: Work) {
     ch.send(1);
     ch.recv();
     select(ch);
     t.join();
-    b.wait();
+    using _ = l.hold();
+    c.wait(l);
     scope(s => s);
     atomic.wait(w, "n", 0);
     for (const v of ch) ch.close();
@@ -318,11 +323,12 @@ export async function blocking(ch: Channel<number>, t: Thread<number>, b: Barrie
 }
 
 // a blocking thread may block: no errors
-export function plain(ch: Channel<number>, t: Thread<number>, b: Barrier) {
+export function plain(ch: Channel<number>, t: Thread<number>, l: Lock, c: Condition) {
     ch.send(1);
     for (const v of ch) ch.recv();
     t.join();
-    b.wait();
+    using _ = l.hold();
+    c.wait(l);
 }
 
 type Order = { id: number; items: number[] };

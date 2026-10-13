@@ -106,7 +106,7 @@ const (
 	OwnFieldStr  OwnFieldKind = 's' // a string: an interned string's address in an i32, 0 for ""
 	OwnFieldI32  OwnFieldKind = 'i' // an i32 (the runtime's `i32`)
 	OwnFieldU8   OwnFieldKind = 'u' // a u8 (the runtime's `u8`): a byte at the start of the slot
-	OwnFieldChan OwnFieldKind = 'c' // a Channel (or null): its block's address in an i32, 0 for null (a channel lives as long as the program: no count)
+	OwnFieldChan OwnFieldKind = 'c' // a Channel, a Lock or a Condition (or null): its block's address in an i32, 0 for null (it lives as long as the program: no count)
 )
 
 type OwnCellType struct {

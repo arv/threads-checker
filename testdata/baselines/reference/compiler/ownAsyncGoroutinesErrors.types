@@ -1,6 +1,7 @@
 //// [tests/cases/compiler/ownAsyncGoroutinesErrors.ts] ////
 
 === threads.d.mts ===
+/// <reference lib="esnext.disposable" />
 // Threads for JavaScript in plain TypeScript: own and shared values, shared structs, and channels.
 //
 // Code written against these types is ordinary TypeScript: tsc, editors, linters and formatters
@@ -15,7 +16,7 @@
 //   - owned, the default: an ordinary object only one thread can reach. `Sending<T>` moves it: the
 //     caller gives it up and the receiver owns it;
 //   - shared: `Shared<T>`, deeply immutable, so any number of threads may read it;
-//   - a cell: shared and mutable, but only through what synchronizes it (Barrier, Slots, Channel), or,
+//   - a cell: shared and mutable, but only through what synchronizes it (Lock, Condition, Channel), or,
 //     for shared structs and SharedArrays, in place, ordered by one of those.
 
 declare const cellBrand: unique symbol;
@@ -139,7 +140,7 @@ export type Struct<S> = S extends StructType<infer T> ? T & Cell : never;
 
 /**
  * Declares a shared struct: fields at fixed places in shared memory, which every thread reads and
- * writes in place. Reads and writes are not ordered between threads: a Barrier or a Channel orders
+ * writes in place. Reads and writes are not ordered between threads: a Lock or a Channel orders
  * them.
  *
  *     const Body = struct({ x: f64, y: f64, m: f64 });
@@ -164,7 +165,7 @@ export declare function struct<T>(fields: { [K in keyof T]-?: Field<T[K]> }): St
 /**
  * A fixed-length array in shared memory: of numbers (`Number`), of i32s (`i32`), of bytes (`u8`), of
  * booleans (`Boolean`, a byte each), of strings (`String`, interned as `str` fields are), or of shared
- * structs stored inline. Every thread reads and writes the same elements, with no copying; a Barrier,
+ * structs stored inline. Every thread reads and writes the same elements, with no copying; a Lock,
  * a Channel or an atomic operation orders them.
  */
 export interface SharedArray<T, L = ElementLayout<T>> extends Cell {
@@ -362,54 +363,52 @@ export declare function take<T>(items: Sending<T>[], index: number): Sending<T>;
 >items : T[]
 >index : number
 
-/** A reusable barrier for a fixed number of threads. */
-export declare class Barrier implements Cell {
->Barrier : Barrier
+/** A lock: one thread at a time holds it, to change what several threads share. */
+export declare class Lock implements Cell {
+>Lock : Lock
 
   readonly [cellBrand]: true;
 >[cellBrand] : true
 >cellBrand : unique symbol
 >true : true
 
-  constructor(threads: number);
->threads : number
+  constructor();
+  /** Blocks until this thread holds the lock; disposing what it returns releases it (`using`). */
+  hold(): Disposable;
+>hold : () => Disposable
 
-  /** Blocks until all threads have called `wait`. */
-  wait(): void;
->wait : () => void
-
-  /** Waits, without blocking, until all threads have called `wait` or `waitAsync`: for an async function. */
-  waitAsync(): Promise<void>;
->waitAsync : () => Promise<void>
+  /** The same in an async function: waits for the lock without blocking. */
+  holdAsync(): Promise<Disposable>;
+>holdAsync : () => Promise<Disposable>
 }
 
-/** One slot per thread: a thread publishes a shared value into its slot, and everyone reads every slot. */
-export declare class Slots<T> implements Cell {
->Slots : Slots<T>
+/** A condition: threads holding a lock wait on it until another thread notifies them. */
+export declare class Condition implements Cell {
+>Condition : Condition
 
   readonly [cellBrand]: true;
 >[cellBrand] : true
 >cellBrand : unique symbol
 >true : true
 
-  constructor(count: number);
->count : number
+  constructor();
+  /** Releases `lock`, which this thread holds, blocks until notified, and holds `lock` again. */
+  wait(lock: Lock): void;
+>wait : (lock: Lock) => void
+>lock : Lock
 
-  readonly length: number;
->length : number
+  /** The same in an async function: waits without blocking. */
+  waitAsync(lock: Lock): Promise<void>;
+>waitAsync : (lock: Lock) => Promise<void>
+>lock : Lock
 
-  set(index: number, value: Shared<T>): void;
->set : (index: number, value: Shared<T>) => void
->index : number
->value : Shared<T>
+  /** Wakes one thread that waits. */
+  notifyOne(): void;
+>notifyOne : () => void
 
-  get(index: number): Shared<T> | undefined;
->get : (index: number) => Shared<T> | undefined
->index : number
-
-  /** The arrays in all slots, concatenated in slot order. */
-  flat(): Shared<T extends readonly (infer E)[] ? E[] : T[]>;
->flat : () => Shared<T extends readonly (infer E)[] ? E[] : T[]>
+  /** Wakes every thread that waits. */
+  notifyAll(): void;
+>notifyAll : () => void
 }
 
 // ---- goroutines and channels ----
@@ -502,11 +501,12 @@ export declare function heapStats(): { heapBytes: number; allocated: number; fre
 >pending : number
 
 === blocking.mts ===
-import { atomic, Barrier, Channel, i32, scope, select, selectAsync, struct, type Thread } from "./threads.mjs";
+import { atomic, Channel, Condition, i32, Lock, scope, select, selectAsync, struct, type Thread } from "./threads.mjs";
 >atomic : import("./threads.mjs").Atomic
->Barrier : typeof Barrier
 >Channel : typeof Channel
+>Condition : typeof Condition
 >i32 : import("./threads.mjs").IntegerField<i32, "i32">
+>Lock : typeof Lock
 >scope : <R>(body: (s: import("./threads.mjs").Scope) => R) => R
 >select : <T>(...channels: Channel<T>[]) => [index: number, value: T | undefined]
 >selectAsync : <T>(...channels: Channel<T>[]) => Promise<[index: number, value: T | undefined]>
@@ -525,11 +525,12 @@ type Work = typeof Work extends { new (): infer W } ? W : never;
 >Work : { n: i32; } & import("./threads.mjs").Cell
 >Work : import("./threads.mjs").StructType<{ n: i32; }>
 
-export async function blocking(ch: Channel<number>, t: Thread<number>, b: Barrier, w: Work) {
->blocking : (ch: Channel<number>, t: Thread<number>, b: Barrier, w: Work) => Promise<void>
+export async function blocking(ch: Channel<number>, t: Thread<number>, l: Lock, c: Condition, w: Work) {
+>blocking : (ch: Channel<number>, t: Thread<number>, l: Lock, c: Condition, w: Work) => Promise<void>
 >ch : Channel<number>
 >t : Thread<number>
->b : Barrier
+>l : Lock
+>c : Condition
 >w : { n: i32; } & import("./threads.mjs").Cell
 
     ch.send(1);
@@ -556,11 +557,19 @@ export async function blocking(ch: Channel<number>, t: Thread<number>, b: Barrie
 >t : Thread<number>
 >join : () => number
 
-    b.wait();
->b.wait() : void
->b.wait : () => void
->b : Barrier
->wait : () => void
+    using _ = l.hold();
+>_ : Disposable
+>l.hold() : Disposable
+>l.hold : () => Disposable
+>l : Lock
+>hold : () => Disposable
+
+    c.wait(l);
+>c.wait(l) : void
+>c.wait : (lock: Lock) => void
+>c : Condition
+>wait : (lock: Lock) => void
+>l : Lock
 
     scope(s => s);
 >scope(s => s) : import("./threads.mjs").Scope
@@ -620,11 +629,12 @@ export async function blocking(ch: Channel<number>, t: Thread<number>, b: Barrie
 }
 
 // a blocking thread may block: no errors
-export function plain(ch: Channel<number>, t: Thread<number>, b: Barrier) {
->plain : (ch: Channel<number>, t: Thread<number>, b: Barrier) => void
+export function plain(ch: Channel<number>, t: Thread<number>, l: Lock, c: Condition) {
+>plain : (ch: Channel<number>, t: Thread<number>, l: Lock, c: Condition) => void
 >ch : Channel<number>
 >t : Thread<number>
->b : Barrier
+>l : Lock
+>c : Condition
 
     ch.send(1);
 >ch.send(1) : void
@@ -647,11 +657,19 @@ export function plain(ch: Channel<number>, t: Thread<number>, b: Barrier) {
 >t : Thread<number>
 >join : () => number
 
-    b.wait();
->b.wait() : void
->b.wait : () => void
->b : Barrier
->wait : () => void
+    using _ = l.hold();
+>_ : Disposable
+>l.hold() : Disposable
+>l.hold : () => Disposable
+>l : Lock
+>hold : () => Disposable
+
+    c.wait(l);
+>c.wait(l) : void
+>c.wait : (lock: Lock) => void
+>c : Condition
+>wait : (lock: Lock) => void
+>l : Lock
 }
 
 type Order = { id: number; items: number[] };

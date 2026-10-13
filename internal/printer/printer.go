@@ -5088,7 +5088,7 @@ func (p *Printer) setSourceFile(sourceFile *ast.SourceFile) {
 	p.uniqueHelperNames = nil
 	p.externalHelpersModuleName = nil
 	if sourceFile != nil {
-		if p.emitContext.EmitFlags(p.emitContext.MostOriginal(sourceFile.AsNode()))&EFExternalHelpers != 0 {
+		if p.emitContext.EmitFlags(p.emitContext.MostOriginal(sourceFile.AsNode()))&(EFExternalHelpers|EFOwnRuntimeHelpers) != 0 {
 			p.uniqueHelperNames = make(map[string]*ast.IdentifierNode)
 		}
 		p.externalHelpersModuleName = p.emitContext.GetExternalHelpersModuleName(sourceFile)

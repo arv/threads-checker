@@ -162,7 +162,9 @@ func CreateOwnRuntimeStatements(emitContext *printer.EmitContext, options *core.
 		return nil, nil
 	}
 	// Helper references print as unique names (`__register_1`) if the file uses the name itself.
-	emitContext.AddEmitFlags(original.AsNode(), printer.EFExternalHelpers)
+	// (EFExternalHelpers would do that too, but it also leaves out TypeScript's own helpers, such as
+	// `using`'s, as if tslib provided them.)
+	emitContext.AddEmitFlags(original.AsNode(), printer.EFOwnRuntimeHelpers)
 	specifiers := core.Map(helpers, func(name string) *ast.Node {
 		exported := name
 		if name == OwnRuntimeRegisterHelper {

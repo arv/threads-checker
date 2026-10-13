@@ -18,7 +18,7 @@ import (
 //	Sending<T>                  sending T (an alias of T: on a parameter, a rest parameter, a result)
 //	Shared<T>                   shared T (deeply readonly)
 //	consume(x)                  consume x (emitted as x)
-//	a type assignable to Cell   a cell: shared and region-less, as `shared BarrierCell` was
+//	a type assignable to Cell   a cell: shared and region-less, as a `shared` cell type was
 //	const S = struct({ a: f64, next: ref<T>() })
 //	const S = struct<I>({ ... })
 //	                            shared struct S { a: number; next: T | null } (emitted as
@@ -137,7 +137,7 @@ func (c *Checker) getOwnAtomicCall(call *ast.Node) (*printer.OwnAtomicCall, bool
 // function calls instead ("" for none).
 var ownBlockingCalls = map[string]string{
 	"Channel.send": "sendAsync", "Channel.recv": "recvAsync", "ChannelCell.send": "sendAsync", "ChannelCell.recv": "recvAsync",
-	"Thread.join": "joinAsync", "Barrier.wait": "waitAsync", "select": "selectAsync", "scope": "",
+	"Thread.join": "joinAsync", "Lock.hold": "holdAsync", "Condition.wait": "waitAsync", "select": "selectAsync", "scope": "",
 }
 
 // A call of the runtime's that blocks its thread: its name, what an async function calls instead (""
@@ -194,8 +194,8 @@ func (c *Checker) getOwnRuntimeType(name string) *Type {
 	return result
 }
 
-// Reports whether a type is a cell of the plain API: assignable to the runtime's `Cell` (Barrier,
-// Slots, Channel, Thread, Scope, SharedArray, a struct's values), or a struct type or a field marker
+// Reports whether a type is a cell of the plain API: assignable to the runtime's `Cell` (Lock,
+// Condition, Channel, Thread, Scope, SharedArray, a struct's values), or a struct type or a field marker
 // (immutable, `IntegerField` included). Its values are shared, with no region.
 func (c *Checker) isOwnCellBranded(t *Type) bool {
 	if c.compilerOptions.OwnRuntime == "" || t == nil || t.flags&(TypeFlagsAnyOrUnknown|TypeFlagsNever|TypeFlagsPrimitive) != 0 {

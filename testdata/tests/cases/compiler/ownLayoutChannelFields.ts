@@ -10,6 +10,7 @@
 // address (`__cellAddress`). A Go function that waits for a replica's position, ported.
 
 // @filename: threads.d.mts
+/// <reference lib="esnext.disposable" />
 // Threads for JavaScript in plain TypeScript: own and shared values, shared structs, and channels.
 //
 // Code written against these types is ordinary TypeScript: tsc, editors, linters and formatters
@@ -240,6 +241,24 @@ export declare class Slots<T> implements Cell {
   flat(): Shared<T extends readonly (infer E)[] ? E[] : T[]>;
 }
 
+/** A lock: one thread at a time holds it, to change what several threads share. */
+export declare class Lock implements Cell {
+  readonly [cellBrand]: true;
+  constructor();
+  /** Blocks until this thread holds the lock; disposing what it returns releases it (`using`). */
+  hold(): Disposable;
+}
+
+/** A condition: threads holding a lock wait on it until another thread notifies them. */
+export declare class Condition implements Cell {
+  readonly [cellBrand]: true;
+  constructor();
+  /** Releases `lock`, which this thread holds, blocks until notified, and holds `lock` again. */
+  wait(lock: Lock): void;
+  /** Wakes every thread that waits. */
+  notifyAll(): void;
+}
+
 // ---- goroutines and channels ----
 
 /** A channel: values move through it from thread to thread, in order. */
@@ -299,6 +318,34 @@ export function open(): Replica {
     db.done = new Channel<void>();
     const same = (r.db = db);
     return same === db ? r : r;
+}
+
+// @filename: barrier.mts
+// A Lock and a Condition last as long as the program, as a channel does: a struct holds them the same
+// way. A barrier for n threads:
+import { Condition, i32, Lock, ref, struct } from "./threads.mjs";
+
+interface Barrier { n: i32; waiting: i32; round: i32; lock: Lock | null; changed: Condition | null }
+const Barrier = struct<Barrier>({ n: i32, waiting: i32, round: i32, lock: ref<Lock>(), changed: ref<Condition>() });
+
+export function barrier(n: i32): Barrier {
+    const b = new Barrier();
+    b.n = n;
+    b.lock = new Lock();
+    b.changed = new Condition();
+    return b;
+}
+
+// returns once all n threads have called it
+export function wait(b: Barrier) {
+    const lock = b.lock!, changed = b.changed!;
+    using _ = lock.hold();
+    const round = b.round;
+    if (++b.waiting === b.n) {
+        b.waiting = 0;
+        b.round = round + 1;
+        changed.notifyAll();
+    } else while (b.round === round) changed.wait(lock);
 }
 
 // @filename: syntax.mts

@@ -1,6 +1,7 @@
 //// [tests/cases/compiler/ownAsyncGoroutines.ts] ////
 
 //// [threads.d.mts]
+/// <reference lib="esnext.disposable" />
 // Threads for JavaScript in plain TypeScript: own and shared values, shared structs, and channels.
 //
 // Code written against these types is ordinary TypeScript: tsc, editors, linters and formatters
@@ -15,7 +16,7 @@
 //   - owned, the default: an ordinary object only one thread can reach. `Sending<T>` moves it: the
 //     caller gives it up and the receiver owns it;
 //   - shared: `Shared<T>`, deeply immutable, so any number of threads may read it;
-//   - a cell: shared and mutable, but only through what synchronizes it (Barrier, Slots, Channel), or,
+//   - a cell: shared and mutable, but only through what synchronizes it (Lock, Condition, Channel), or,
 //     for shared structs and SharedArrays, in place, ordered by one of those.
 
 declare const cellBrand: unique symbol;
@@ -96,7 +97,7 @@ export type Struct<S> = S extends StructType<infer T> ? T & Cell : never;
 
 /**
  * Declares a shared struct: fields at fixed places in shared memory, which every thread reads and
- * writes in place. Reads and writes are not ordered between threads: a Barrier or a Channel orders
+ * writes in place. Reads and writes are not ordered between threads: a Lock or a Channel orders
  * them.
  *
  *     const Body = struct({ x: f64, y: f64, m: f64 });
@@ -115,7 +116,7 @@ export declare function struct<T>(fields: { [K in keyof T]-?: Field<T[K]> }): St
 /**
  * A fixed-length array in shared memory: of numbers (`Number`), of i32s (`i32`), of bytes (`u8`), of
  * booleans (`Boolean`, a byte each), of strings (`String`, interned as `str` fields are), or of shared
- * structs stored inline. Every thread reads and writes the same elements, with no copying; a Barrier,
+ * structs stored inline. Every thread reads and writes the same elements, with no copying; a Lock,
  * a Channel or an atomic operation orders them.
  */
 export interface SharedArray<T, L = ElementLayout<T>> extends Cell {
@@ -221,25 +222,28 @@ export declare function partition<T>(items: Sending<T[]>, parts: number): Sendin
 /** Takes element `index` out of an array of owned values, so the caller owns it. Trusted. */
 export declare function take<T>(items: Sending<T>[], index: number): Sending<T>;
 
-/** A reusable barrier for a fixed number of threads. */
-export declare class Barrier implements Cell {
+/** A lock: one thread at a time holds it, to change what several threads share. */
+export declare class Lock implements Cell {
   readonly [cellBrand]: true;
-  constructor(threads: number);
-  /** Blocks until all threads have called `wait`. */
-  wait(): void;
-  /** Waits, without blocking, until all threads have called `wait` or `waitAsync`: for an async function. */
-  waitAsync(): Promise<void>;
+  constructor();
+  /** Blocks until this thread holds the lock; disposing what it returns releases it (`using`). */
+  hold(): Disposable;
+  /** The same in an async function: waits for the lock without blocking. */
+  holdAsync(): Promise<Disposable>;
 }
 
-/** One slot per thread: a thread publishes a shared value into its slot, and everyone reads every slot. */
-export declare class Slots<T> implements Cell {
+/** A condition: threads holding a lock wait on it until another thread notifies them. */
+export declare class Condition implements Cell {
   readonly [cellBrand]: true;
-  constructor(count: number);
-  readonly length: number;
-  set(index: number, value: Shared<T>): void;
-  get(index: number): Shared<T> | undefined;
-  /** The arrays in all slots, concatenated in slot order. */
-  flat(): Shared<T extends readonly (infer E)[] ? E[] : T[]>;
+  constructor();
+  /** Releases `lock`, which this thread holds, blocks until notified, and holds `lock` again. */
+  wait(lock: Lock): void;
+  /** The same in an async function: waits without blocking. */
+  waitAsync(lock: Lock): Promise<void>;
+  /** Wakes one thread that waits. */
+  notifyOne(): void;
+  /** Wakes every thread that waits. */
+  notifyAll(): void;
 }
 
 // ---- goroutines and channels ----
@@ -285,7 +289,7 @@ export declare function log(...args: unknown[]): void;
 export declare function heapStats(): { heapBytes: number; allocated: number; freed: number; pending: number };
 
 //// [replica.mts]
-import { Barrier, Channel, go, i32, ref, selectAsync, spawn, struct, type Sending } from "./threads.mjs";
+import { Channel, Condition, go, i32, Lock, ref, selectAsync, spawn, struct, type Sending } from "./threads.mjs";
 
 interface Db { done: Channel<void> | null }
 const Db = struct<Db>({ done: ref<Channel<void>>() });
@@ -340,10 +344,13 @@ async function nodes(input: Channel<Node>, output: Channel<Node>) {
     if (last) last.value = 1;
 }
 
-export async function main(b: Barrier) {
+export async function main(l: Lock, c: Condition) {
     const t = spawn(total, { id: 1, items: [1, 2] });
     const n = await t.joinAsync();
-    await b.waitAsync();
+    {
+        using _ = await l.holdAsync();
+        await c.waitAsync(l);
+    }
     const order = await build(n);
     const orders = new Channel<Order>(1), copies = new Channel<Order>(1);
     await orders.sendAsync(order);
@@ -357,6 +364,58 @@ export async function main(b: Barrier) {
 
 
 //// [replica.mjs]
+var __addDisposableResource = (this && this.__addDisposableResource) || function (env, value, async) {
+    if (value !== null && value !== void 0) {
+        if (typeof value !== "object" && typeof value !== "function") throw new TypeError("Object expected.");
+        var dispose, inner;
+        if (async) {
+            if (!Symbol.asyncDispose) throw new TypeError("Symbol.asyncDispose is not defined.");
+            dispose = value[Symbol.asyncDispose];
+        }
+        if (dispose === void 0) {
+            if (!Symbol.dispose) throw new TypeError("Symbol.dispose is not defined.");
+            dispose = value[Symbol.dispose];
+            if (async) inner = dispose;
+        }
+        if (typeof dispose !== "function") throw new TypeError("Object not disposable.");
+        if (inner) dispose = function() { try { inner.call(this); } catch (e) { return Promise.reject(e); } };
+        env.stack.push({ value: value, dispose: dispose, async: async });
+    }
+    else if (async) {
+        env.stack.push({ async: true });
+    }
+    return value;
+};
+var __disposeResources = (this && this.__disposeResources) || (function (SuppressedError) {
+    return function (env) {
+        function fail(e) {
+            env.error = env.hasError ? new SuppressedError(e, env.error, "An error was suppressed during disposal.") : e;
+            env.hasError = true;
+        }
+        var r, s = 0;
+        function next() {
+            while (r = env.stack.pop()) {
+                try {
+                    if (!r.async && s === 1) return s = 0, env.stack.push(r), Promise.resolve().then(next);
+                    if (r.dispose) {
+                        var result = r.dispose.call(r.value);
+                        if (r.async) return s |= 2, Promise.resolve(result).then(next, function(e) { fail(e); return next(); });
+                    }
+                    else s |= 1;
+                }
+                catch (e) {
+                    fail(e);
+                }
+            }
+            if (s === 1) return env.hasError ? Promise.reject(env.error) : Promise.resolve();
+            if (env.hasError) throw env.error;
+        }
+        return next();
+    };
+})(typeof SuppressedError === "function" ? SuppressedError : function (error, suppressed, message) {
+    var e = new Error(message);
+    return e.name = "SuppressedError", e.error = error, e.suppressed = suppressed, e;
+});
 import { __F64, __I32, __box, __cellAddress, __newStruct, __quiescent, __ref, register as __register, __release, __retain, __sharedStruct } from "./threads.mjs";
 import { Channel, go, i32, ref, selectAsync, spawn, struct } from "./threads.mjs";
 const Db = __sharedStruct("Db", ["done"], [], "c");
@@ -431,10 +490,23 @@ async function nodes(input, output) {
         __release(last);
     }
 }
-export async function main(b) {
+export async function main(l, c) {
     const t = spawn(total, { id: 1, items: [1, 2] });
     const n = await t.joinAsync();
-    await b.waitAsync();
+    {
+        const env_1 = { stack: [], error: void 0, hasError: false };
+        try {
+            const _ = __addDisposableResource(env_1, await l.holdAsync(), false);
+            await c.waitAsync(l);
+        }
+        catch (e_1) {
+            env_1.error = e_1;
+            env_1.hasError = true;
+        }
+        finally {
+            __disposeResources(env_1);
+        }
+    }
     const order = await build(n);
     const orders = new Channel(1), copies = new Channel(1);
     await orders.sendAsync(order);

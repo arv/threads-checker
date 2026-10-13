@@ -197,26 +197,30 @@ func (c *Checker) getOwnIntegerKind(t *Type) printer.OwnFieldKind {
 	return printer.OwnFieldNone
 }
 
-// Reports whether a field of type t holds a channel: the runtime's Channel, possibly with null or
-// undefined.
-func (c *Checker) isOwnChannelFieldType(t *Type) bool {
+// The runtime's cells that last as long as the program: a field holds one by address, uncounted.
+var ownLastingCells = []string{"Channel", "Condition", "Lock"}
+
+// Reports whether a field of type t holds a lasting cell: the runtime's Channel, Lock or Condition,
+// possibly with null or undefined.
+func (c *Checker) isOwnLastingCellFieldType(t *Type) bool {
 	members := c.ownNonNullishMembers(t)
 	if len(members) != 1 || members[0].flags&TypeFlagsObject == 0 {
 		return false
 	}
 	target := members[0].Target()
-	return target != nil && target.symbol != nil && target.symbol.Name == "Channel" && c.getOwnRuntimeExportName(target.symbol) == "Channel"
+	return target != nil && target.symbol != nil && slices.Contains(ownLastingCells, target.symbol.Name) &&
+		c.getOwnRuntimeExportName(target.symbol) == target.symbol.Name
 }
 
 // The kind of a field of type t: an f64 for a number (and for a type no field may have, which is
 // reported), an i32 or a u8, a boolean, a string, a reference (a shared struct or a SharedArray), or
-// a channel.
+// a lasting cell (a Channel, a Lock or a Condition).
 func (c *Checker) getOwnFieldKind(t *Type) printer.OwnFieldKind {
 	if kind := c.getOwnIntegerKind(t); kind != printer.OwnFieldNone {
 		return kind
 	}
 	switch {
-	case c.isOwnChannelFieldType(t):
+	case c.isOwnLastingCellFieldType(t):
 		return printer.OwnFieldChan
 	case isOwnBooleanType(t):
 		return printer.OwnFieldBool
@@ -229,12 +233,12 @@ func (c *Checker) getOwnFieldKind(t *Type) printer.OwnFieldKind {
 }
 
 // Reports whether a shared struct may have a field of type t: a number (or an i32 or a u8), a boolean,
-// a string, or a reference (a shared struct, a SharedArray or a Channel, possibly with null or
-// undefined).
+// a string, or a reference (a shared struct, a SharedArray, a Channel, a Lock or a Condition,
+// possibly with null or undefined).
 func (c *Checker) isOwnFieldType(t *Type) bool {
 	return t.flags&TypeFlagsNumber != 0 && t.flags&TypeFlagsUnion == 0 || c.getOwnIntegerKind(t) != printer.OwnFieldNone ||
 		isOwnBooleanType(t) || isOwnStringType(t) || len(c.ownNonNullishMembers(t)) == 1 && c.isOwnCellType(t) ||
-		c.isOwnChannelFieldType(t)
+		c.isOwnLastingCellFieldType(t)
 }
 
 // Classifies a type for the layout emit: a shared struct (or a union of them), a SharedArray of
