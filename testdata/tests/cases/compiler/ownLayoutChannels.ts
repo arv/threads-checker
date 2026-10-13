@@ -9,7 +9,7 @@
 // message take a count of their own (`__ref(E)`), and a received value is owned (+1).
 
 // @filename: own.d.mts
-// Types for the own/shared threads runtime own.mjs (the runtime itself lives in porffor). Programs
+// Types for the own/shared threads runtime own.mjs (now own.ts in github.com/arv/threads). Programs
 // import their API from "./own.mjs"; the compiler adds the imports of the helpers it emits
 // (`__sharedStruct`, `__register`) when `ownRuntime` is set.
 //

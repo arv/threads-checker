@@ -9,7 +9,7 @@
 // and a field at the same place in every struct of the union is read and written in place.
 
 // @filename: threads.d.mts
-// The shared struct part of threads.d.mts (porffor's threads/escape-proto).
+// The shared struct part of threads.d.mts (now threads.d.ts in github.com/arv/threads).
 declare const cellBrand: unique symbol;
 declare const fieldBrand: unique symbol;
 

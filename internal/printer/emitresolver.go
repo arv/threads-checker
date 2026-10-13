@@ -160,8 +160,8 @@ type OwnStructCall struct {
 	Layout OwnCellType
 }
 
-// How a struct or SharedArray value (a raw address) is counted (see REFCOUNT.md in porffor's
-// threads/escape-proto and checker/ownrefcount.go).
+// How a struct or SharedArray value (a raw address) is counted (see REFCOUNT.md in
+// github.com/arv/threads and checker/ownrefcount.go).
 type OwnCount int32
 
 const (

@@ -11,9 +11,9 @@ import (
 
 // The plain TypeScript API of the own/shared threads extension (only with `--ownRuntime`).
 //
-// Programs need not use the extension's syntax: the module that `ownRuntime` names (threads.d.mts in
-// porffor's threads/escape-proto) exports markers that stock TypeScript accepts, and the checker
-// gives them the syntax's meaning:
+// Programs need not use the extension's syntax: the module that `ownRuntime` names (@arv/threads,
+// threads.d.ts in github.com/arv/threads) exports markers that stock TypeScript accepts, and the
+// checker gives them the syntax's meaning:
 //
 //	Sending<T>                  sending T (an alias of T: on a parameter, a rest parameter, a result)
 //	Shared<T>                   shared T (deeply readonly)

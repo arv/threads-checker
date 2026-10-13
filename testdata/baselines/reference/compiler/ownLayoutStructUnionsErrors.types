@@ -1,7 +1,7 @@
 //// [tests/cases/compiler/ownLayoutStructUnionsErrors.ts] ////
 
 === threads.d.mts ===
-// The shared struct part of threads.d.mts (porffor's threads/escape-proto).
+// The shared struct part of threads.d.mts (now threads.d.ts in github.com/arv/threads).
 declare const cellBrand: unique symbol;
 >cellBrand : unique symbol
 

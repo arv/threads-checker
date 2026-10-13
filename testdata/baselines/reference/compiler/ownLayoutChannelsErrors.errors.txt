@@ -11,7 +11,7 @@ moves.mts(82,16): error TS96022: A 'for-of' or 'for-in' variable cannot have typ
 
 
 ==== own.d.mts (0 errors) ====
-    // Types for the own/shared threads runtime own.mjs (the runtime itself lives in porffor). Programs
+    // Types for the own/shared threads runtime own.mjs (now own.ts in github.com/arv/threads). Programs
     // import their API from "./own.mjs"; the compiler adds the imports of the helpers it emits
     // (`__sharedStruct`, `__register`) when `ownRuntime` is set.
     //

@@ -1,4 +1,4 @@
-// Types for the own/shared threads runtime own.mjs (the runtime itself lives in porffor). Programs
+// Types for the own/shared threads runtime own.mjs (now own.ts in github.com/arv/threads). Programs
 // import their API from "./own.mjs"; the compiler adds the imports of the helpers it emits
 // (`__sharedStruct`, `__register`) when `ownRuntime` is set.
 //

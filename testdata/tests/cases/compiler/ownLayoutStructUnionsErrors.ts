@@ -10,7 +10,7 @@
 // a union cannot be read or written in place, whether the union comes from `new` or a parameter.
 
 // @filename: threads.d.mts
-// The shared struct part of threads.d.mts (porffor's threads/escape-proto).
+// The shared struct part of threads.d.mts (now threads.d.ts in github.com/arv/threads).
 declare const cellBrand: unique symbol;
 declare const fieldBrand: unique symbol;
 

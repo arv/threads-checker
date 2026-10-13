@@ -72,7 +72,7 @@ import (
 // `__box(E)` or `__unbox(E)` (see checker/ownlayout.go); null and undefined are 0 where an address is
 // expected. The helpers are imported from the `ownRuntime` module by the ES module transform.
 //
-// Reference counting (REFCOUNT.md in porffor's threads/escape-proto; the checker's decisions are in
+// Reference counting (REFCOUNT.md in github.com/arv/threads; the checker's decisions are in
 // checker/ownrefcount.go). Every raw address is visited in a context: used at once (an operand, the
 // object of an access, a helper's argument), passed to a function (which may reach a quiescent
 // point), taken (+1 for an owned local, a reference field or a result), or discarded. Its count

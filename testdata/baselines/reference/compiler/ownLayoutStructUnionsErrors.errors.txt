@@ -7,7 +7,7 @@ different.mts(38,14): error TS96026: Field 'u' is at different places in the sha
 
 
 ==== threads.d.mts (0 errors) ====
-    // The shared struct part of threads.d.mts (porffor's threads/escape-proto).
+    // The shared struct part of threads.d.mts (now threads.d.ts in github.com/arv/threads).
     declare const cellBrand: unique symbol;
     declare const fieldBrand: unique symbol;
     

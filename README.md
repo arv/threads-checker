@@ -1,3 +1,59 @@
+# threads-checker
+
+A fork of typescript-go, the native TypeScript 7 compiler, for
+[threads for JavaScript](https://github.com/arv/threads): programs written in
+plain TypeScript against the [@arv/threads](https://github.com/arv/threads) API
+have their ownership checked and their shared structs compiled.
+
+- **`tsgo own check -p tsconfig.json --ownRuntime @arv/threads`** reports only
+  ownership errors (use after send, an alias of something sent, a write to a
+  shared value, sending what the caller still holds) and leaves type errors to
+  tsc. It runs in CI like a linter, and exits 1 when it finds any.
+- **`tsgo -p tsconfig.json --ownRuntime @arv/threads`** compiles: a shared
+  struct's fields and a SharedArray's elements become typed-array reads and
+  writes on the shared heap, references to them are counted, and each module
+  registers the functions its threads run. @arv/threads' Vite plugin runs it
+  (its `tsgo` option names the binary).
+
+[@arv/threads-check](https://github.com/arv/threads/tree/main/src/checker)
+reports the same ownership errors on stock TypeScript 7.1, without this fork;
+`vp run compare` in arv/threads checks that the two agree. The compiler has no
+such stand-in: without it, programs run with their types erased, and shared
+structs are much slower.
+
+## Building
+
+```sh
+go build -o built/local/tsgo ./cmd/tsgo
+```
+
+## The changes
+
+The first commit is typescript-go as microsoft/TypeScript had it in `tsc/` at
+[1e4744d682](https://github.com/microsoft/TypeScript/commit/1e4744d68260a7cb91b62b12edc3f6a2187faaf1)
+(TypeScript 7.0.2); every commit after it is the fork's. Most of the fork is in
+new files:
+
+| File | What it does |
+| ---- | ------------ |
+| `internal/checker/ownership.go` | the ownership analysis, region by region |
+| `internal/checker/ownlayout.go` | typed layouts of shared structs and SharedArrays |
+| `internal/checker/ownrefcount.go` | which references are counted, and where |
+| `internal/checker/ownmarkers.go`, `ownintegers.go` | the plain TypeScript API (`Sending`, `Shared`, `consume`, `struct`), and the rule that a value stored into an i32 or a u8 is an integer expression |
+| `internal/transformers/tstransforms/ownlayout.go` | lowers struct and SharedArray accesses to the shared heap |
+| `internal/transformers/ownruntime.go` | imports the runtime's helpers, registers thread functions |
+| `internal/execute/own.go` | `tsgo own check` |
+| `internal/diagnostics/ownership.go` | the messages (codes 96000-96099) |
+| `internal/parser/ownshared.go` | an earlier syntax for the same model (`sending T`, `shared T`, `consume`, `shared struct`), which `examples/own-shared` uses |
+
+The `ownRuntime` compiler option names the runtime module. The tests are
+`testdata/tests/cases/compiler/own*.ts` and their baselines, run with
+`go test ./internal/testrunner -run TestLocal/own`.
+
+The rest of this README is typescript-go's.
+
+---
+
 # TypeScript 7
 
 [Not sure what this is? Read the announcement post!](https://devblogs.microsoft.com/typescript/typescript-native-port/)

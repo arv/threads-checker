@@ -10,7 +10,7 @@ import (
 )
 
 // Reference counting of the own/shared threads extension (only with `--ownRuntime`; the design is
-// REFCOUNT.md in porffor's threads/escape-proto).
+// REFCOUNT.md in github.com/arv/threads).
 //
 // A shared struct or SharedArray is freed when nothing refers to it. Its block counts the references
 // stored in the shared heap (reference fields) and the references threads hold; the emit (see
@@ -247,7 +247,7 @@ func isOwnAmbientDeclaration(decl *ast.Node) bool {
 	return file == nil || file.IsDeclarationFile
 }
 
-// The element type of a channel, if t is one: `Channel<T>`, the class that threads.d.mts declares
+// The element type of a channel, if t is one: `Channel<T>`, the class that threads.d.ts declares
 // (or `ChannelCell<T>`, the interface of chan.d.mts). A for-of over a channel receives its values,
 // which the receiver owns.
 func (c *Checker) getOwnChannelElementType(t *Type) *Type {

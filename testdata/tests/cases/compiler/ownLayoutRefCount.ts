@@ -5,12 +5,12 @@
 // @lib: es2022
 // @ownRuntime: ./own.mjs
 
-// Reference counting of shared structs and SharedArrays (REFCOUNT.md in porffor's
-// threads/escape-proto): every address is owned (+1), a stable borrow or an unstable borrow, and the
-// emit retains and releases where the rules say.
+// Reference counting of shared structs and SharedArrays (REFCOUNT.md in github.com/arv/threads):
+// every address is owned (+1), a stable borrow or an unstable borrow, and the emit retains and
+// releases where the rules say.
 
 // @filename: own.d.mts
-// Types for the own/shared threads runtime own.mjs (the runtime itself lives in porffor). Programs
+// Types for the own/shared threads runtime own.mjs (now own.ts in github.com/arv/threads). Programs
 // import their API from "./own.mjs"; the compiler adds the imports of the helpers it emits
 // (`__sharedStruct`, `__register`) when `ownRuntime` is set.
 //
