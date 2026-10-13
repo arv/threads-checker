@@ -27,6 +27,13 @@ structs are much slower.
 go build -o built/local/tsgo ./cmd/tsgo
 ```
 
+The threads playground also runs it in a browser, compiled to WebAssembly
+(`cmd/wasm`; arv/threads' `vp run build-wasm` builds it):
+
+```sh
+GOOS=js GOARCH=wasm go build -trimpath -ldflags='-s -w' -o threads.wasm ./cmd/wasm
+```
+
 ## The changes
 
 The first commit is typescript-go as microsoft/TypeScript had it in `tsc/` at
@@ -43,6 +50,7 @@ new files:
 | `internal/transformers/tstransforms/ownlayout.go` | lowers struct and SharedArray accesses to the shared heap |
 | `internal/transformers/ownruntime.go` | imports the runtime's helpers, registers thread functions |
 | `internal/execute/own.go` | `tsgo own check` |
+| `cmd/wasm/main.go` | the playground's compiler in a browser: one program from memory, compiled, checked and with its types erased |
 | `internal/diagnostics/ownership.go` | the messages (codes 96000-96099) |
 | `internal/parser/ownshared.go` | an earlier syntax for the same model (`sending T`, `shared T`, `consume`, `shared struct`), which `examples/own-shared` uses |
 
