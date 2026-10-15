@@ -264,8 +264,7 @@ func GetOperatorPrecedence(nodeKind Kind, operatorKind Kind, flags OperatorPrece
 		KindTypeOfExpression,
 		KindVoidExpression,
 		KindDeleteExpression,
-		KindAwaitExpression,
-		KindConsumeExpression:
+		KindAwaitExpression:
 		return OperatorPrecedenceUnary
 
 	case KindPostfixUnaryExpression:
@@ -665,7 +664,7 @@ func GetTypeNodePrecedence(n *TypeNode) TypePrecedence {
 		return TypePrecedenceUnion
 	case KindIntersectionType:
 		return TypePrecedenceIntersection
-	case KindTypeOperator, KindSendingType, KindSharedType:
+	case KindTypeOperator:
 		return TypePrecedenceTypeOperator
 	case KindInferType:
 		if n.AsInferTypeNode().TypeParameter.AsTypeParameterDeclaration().Constraint != nil {

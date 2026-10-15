@@ -1,214 +1,262 @@
 //// [tests/cases/compiler/ownSharedLoopBindings.ts] ////
 
-=== ownSharedLoopBindings.ts ===
-// A variable declared in a loop's body is a fresh binding in every iteration: what an earlier
-// iteration sent must not stick to it. A variable declared outside the loop keeps its state across
-// iterations. Lines marked "error" are expected to be reported.
+=== threads.d.mts ===
+// The part of the runtime's plain TypeScript API that this test uses.
+
+declare const cellBrand: unique symbol;
+>cellBrand : Symbol(cellBrand, Decl(threads.d.mts, 2, 13))
+
+/** A cell: shared and mutable. Any number of threads may hold the same one. */
+export interface Cell {
+>Cell : Symbol(Cell, Decl(threads.d.mts, 2, 39))
+
+  readonly [cellBrand]: true;
+>[cellBrand] : Symbol(Cell[cellBrand], Decl(threads.d.mts, 5, 23))
+>cellBrand : Symbol(cellBrand, Decl(threads.d.mts, 2, 13))
+}
+
+/** A value whose ownership moves, on a parameter or a result. To TypeScript it is just T. */
+export type Sending<T> = T;
+>Sending : Symbol(Sending, Decl(threads.d.mts, 7, 1))
+>T : Symbol(T, Decl(threads.d.mts, 10, 20))
+>T : Symbol(T, Decl(threads.d.mts, 10, 20))
+
+/** A deeply immutable value, which any number of threads may read. To TypeScript it is deeply readonly. */
+export type Shared<T> = T extends Cell | ((...args: any[]) => any) ? T
+>Shared : Symbol(Shared, Decl(threads.d.mts, 10, 27))
+>T : Symbol(T, Decl(threads.d.mts, 13, 19))
+>T : Symbol(T, Decl(threads.d.mts, 13, 19))
+>Cell : Symbol(Cell, Decl(threads.d.mts, 2, 39))
+>args : Symbol(args, Decl(threads.d.mts, 13, 43))
+>T : Symbol(T, Decl(threads.d.mts, 13, 19))
+
+  : T extends object ? { readonly [K in keyof T]: Shared<T[K]> }
+>T : Symbol(T, Decl(threads.d.mts, 13, 19))
+>K : Symbol(K, Decl(threads.d.mts, 14, 35))
+>T : Symbol(T, Decl(threads.d.mts, 13, 19))
+>Shared : Symbol(Shared, Decl(threads.d.mts, 10, 27))
+>T : Symbol(T, Decl(threads.d.mts, 13, 19))
+>K : Symbol(K, Decl(threads.d.mts, 14, 35))
+
+  : T;
+>T : Symbol(T, Decl(threads.d.mts, 13, 19))
+
+/** Freezes a value the caller owns into a deeply immutable value every thread can read. */
+export declare function share<T>(value: Sending<T>): Shared<T>;
+>share : Symbol(share, Decl(threads.d.mts, 15, 6))
+>T : Symbol(T, Decl(threads.d.mts, 18, 30))
+>value : Symbol(value, Decl(threads.d.mts, 18, 33))
+>Sending : Symbol(Sending, Decl(threads.d.mts, 7, 1))
+>T : Symbol(T, Decl(threads.d.mts, 18, 30))
+>Shared : Symbol(Shared, Decl(threads.d.mts, 10, 27))
+>T : Symbol(T, Decl(threads.d.mts, 18, 30))
+
+=== loops.mts ===
+import { type Sending, type Shared, share } from "./threads.mjs";
+>Sending : Symbol(Sending, Decl(loops.mts, 0, 8))
+>Shared : Symbol(Shared, Decl(loops.mts, 0, 22))
+>share : Symbol(share, Decl(loops.mts, 0, 35))
 
 type Pos = { x: number };
->Pos : Symbol(Pos, Decl(ownSharedLoopBindings.ts, 0, 0))
->x : Symbol(x, Decl(ownSharedLoopBindings.ts, 4, 12))
+>Pos : Symbol(Pos, Decl(loops.mts, 0, 65))
+>x : Symbol(x, Decl(loops.mts, 2, 12))
 
 type Positions = { t: number; pos: Pos[] };
->Positions : Symbol(Positions, Decl(ownSharedLoopBindings.ts, 4, 25))
->t : Symbol(t, Decl(ownSharedLoopBindings.ts, 5, 18))
->pos : Symbol(pos, Decl(ownSharedLoopBindings.ts, 5, 29))
->Pos : Symbol(Pos, Decl(ownSharedLoopBindings.ts, 0, 0))
+>Positions : Symbol(Positions, Decl(loops.mts, 2, 25))
+>t : Symbol(t, Decl(loops.mts, 3, 18))
+>pos : Symbol(pos, Decl(loops.mts, 3, 29))
+>Pos : Symbol(Pos, Decl(loops.mts, 0, 65))
 
-declare function share<T>(x: sending T): shared T;
->share : Symbol(share, Decl(ownSharedLoopBindings.ts, 5, 43))
->T : Symbol(T, Decl(ownSharedLoopBindings.ts, 6, 23))
->x : Symbol(x, Decl(ownSharedLoopBindings.ts, 6, 26))
->T : Symbol(T, Decl(ownSharedLoopBindings.ts, 6, 23))
->T : Symbol(T, Decl(ownSharedLoopBindings.ts, 6, 23))
+declare function send<T>(x: Sending<T>): void;
+>send : Symbol(send, Decl(loops.mts, 3, 43))
+>T : Symbol(T, Decl(loops.mts, 4, 22))
+>x : Symbol(x, Decl(loops.mts, 4, 25))
+>Sending : Symbol(Sending, Decl(loops.mts, 0, 8))
+>T : Symbol(T, Decl(loops.mts, 4, 22))
 
-declare function send<T>(x: sending T): void;
->send : Symbol(send, Decl(ownSharedLoopBindings.ts, 6, 50))
->T : Symbol(T, Decl(ownSharedLoopBindings.ts, 7, 22))
->x : Symbol(x, Decl(ownSharedLoopBindings.ts, 7, 25))
->T : Symbol(T, Decl(ownSharedLoopBindings.ts, 7, 22))
+declare function recv(): Sending<Positions | undefined>;
+>recv : Symbol(recv, Decl(loops.mts, 4, 46))
+>Sending : Symbol(Sending, Decl(loops.mts, 0, 8))
+>Positions : Symbol(Positions, Decl(loops.mts, 2, 25))
 
-declare function recv(): sending Positions | undefined;
->recv : Symbol(recv, Decl(ownSharedLoopBindings.ts, 7, 45))
->Positions : Symbol(Positions, Decl(ownSharedLoopBindings.ts, 4, 25))
-
-declare function use(xs: readonly shared Pos[]): void;
->use : Symbol(use, Decl(ownSharedLoopBindings.ts, 8, 55))
->xs : Symbol(xs, Decl(ownSharedLoopBindings.ts, 9, 21))
->Pos : Symbol(Pos, Decl(ownSharedLoopBindings.ts, 0, 0))
+declare function use(xs: Shared<Pos[]>): void;
+>use : Symbol(use, Decl(loops.mts, 5, 56))
+>xs : Symbol(xs, Decl(loops.mts, 6, 21))
+>Shared : Symbol(Shared, Decl(loops.mts, 0, 22))
+>Pos : Symbol(Pos, Decl(loops.mts, 0, 65))
 
 // The n-body gather: each step builds `slots` from received messages, then shares it.
 export function gather(steps: number, threads: number) {
->gather : Symbol(gather, Decl(ownSharedLoopBindings.ts, 9, 54))
->steps : Symbol(steps, Decl(ownSharedLoopBindings.ts, 12, 23))
->threads : Symbol(threads, Decl(ownSharedLoopBindings.ts, 12, 37))
+>gather : Symbol(gather, Decl(loops.mts, 6, 46))
+>steps : Symbol(steps, Decl(loops.mts, 9, 23))
+>threads : Symbol(threads, Decl(loops.mts, 9, 37))
 
     for (let s = 0; s < steps; s++) {
->s : Symbol(s, Decl(ownSharedLoopBindings.ts, 13, 12))
->s : Symbol(s, Decl(ownSharedLoopBindings.ts, 13, 12))
->steps : Symbol(steps, Decl(ownSharedLoopBindings.ts, 12, 23))
->s : Symbol(s, Decl(ownSharedLoopBindings.ts, 13, 12))
+>s : Symbol(s, Decl(loops.mts, 10, 12))
+>s : Symbol(s, Decl(loops.mts, 10, 12))
+>steps : Symbol(steps, Decl(loops.mts, 9, 23))
+>s : Symbol(s, Decl(loops.mts, 10, 12))
 
         const slots: Pos[][] = [];
->slots : Symbol(slots, Decl(ownSharedLoopBindings.ts, 14, 13))
->Pos : Symbol(Pos, Decl(ownSharedLoopBindings.ts, 0, 0))
+>slots : Symbol(slots, Decl(loops.mts, 11, 13))
+>Pos : Symbol(Pos, Decl(loops.mts, 0, 65))
 
         for (let k = 0; k < threads; k++) {
->k : Symbol(k, Decl(ownSharedLoopBindings.ts, 15, 16))
->k : Symbol(k, Decl(ownSharedLoopBindings.ts, 15, 16))
->threads : Symbol(threads, Decl(ownSharedLoopBindings.ts, 12, 37))
->k : Symbol(k, Decl(ownSharedLoopBindings.ts, 15, 16))
+>k : Symbol(k, Decl(loops.mts, 12, 16))
+>k : Symbol(k, Decl(loops.mts, 12, 16))
+>threads : Symbol(threads, Decl(loops.mts, 9, 37))
+>k : Symbol(k, Decl(loops.mts, 12, 16))
 
             const m = recv()!;
->m : Symbol(m, Decl(ownSharedLoopBindings.ts, 16, 17))
->recv : Symbol(recv, Decl(ownSharedLoopBindings.ts, 7, 45))
+>m : Symbol(m, Decl(loops.mts, 13, 17))
+>recv : Symbol(recv, Decl(loops.mts, 4, 46))
 
             slots[m.t] = m.pos;
->slots : Symbol(slots, Decl(ownSharedLoopBindings.ts, 14, 13))
->m.t : Symbol(t, Decl(ownSharedLoopBindings.ts, 5, 18))
->m : Symbol(m, Decl(ownSharedLoopBindings.ts, 16, 17))
->t : Symbol(t, Decl(ownSharedLoopBindings.ts, 5, 18))
->m.pos : Symbol(pos, Decl(ownSharedLoopBindings.ts, 5, 29))
->m : Symbol(m, Decl(ownSharedLoopBindings.ts, 16, 17))
->pos : Symbol(pos, Decl(ownSharedLoopBindings.ts, 5, 29))
+>slots : Symbol(slots, Decl(loops.mts, 11, 13))
+>m.t : Symbol(t, Decl(loops.mts, 3, 18))
+>m : Symbol(m, Decl(loops.mts, 13, 17))
+>t : Symbol(t, Decl(loops.mts, 3, 18))
+>m.pos : Symbol(pos, Decl(loops.mts, 3, 29))
+>m : Symbol(m, Decl(loops.mts, 13, 17))
+>pos : Symbol(pos, Decl(loops.mts, 3, 29))
         }
         const all = share(slots.flat());
->all : Symbol(all, Decl(ownSharedLoopBindings.ts, 19, 13))
->share : Symbol(share, Decl(ownSharedLoopBindings.ts, 5, 43))
+>all : Symbol(all, Decl(loops.mts, 16, 13))
+>share : Symbol(share, Decl(loops.mts, 0, 35))
 >slots.flat : Symbol(Array.flat, Decl(lib.es2019.array.d.ts, --, --))
->slots : Symbol(slots, Decl(ownSharedLoopBindings.ts, 14, 13))
+>slots : Symbol(slots, Decl(loops.mts, 11, 13))
 >flat : Symbol(Array.flat, Decl(lib.es2019.array.d.ts, --, --))
 
         use(all);
->use : Symbol(use, Decl(ownSharedLoopBindings.ts, 8, 55))
->all : Symbol(all, Decl(ownSharedLoopBindings.ts, 19, 13))
+>use : Symbol(use, Decl(loops.mts, 5, 56))
+>all : Symbol(all, Decl(loops.mts, 16, 13))
     }
 }
 
 export function nested(steps: number) {
->nested : Symbol(nested, Decl(ownSharedLoopBindings.ts, 22, 1))
->steps : Symbol(steps, Decl(ownSharedLoopBindings.ts, 24, 23))
+>nested : Symbol(nested, Decl(loops.mts, 19, 1))
+>steps : Symbol(steps, Decl(loops.mts, 21, 23))
 
     for (let s = 0; s < steps; s++) {
->s : Symbol(s, Decl(ownSharedLoopBindings.ts, 25, 12))
->s : Symbol(s, Decl(ownSharedLoopBindings.ts, 25, 12))
->steps : Symbol(steps, Decl(ownSharedLoopBindings.ts, 24, 23))
->s : Symbol(s, Decl(ownSharedLoopBindings.ts, 25, 12))
+>s : Symbol(s, Decl(loops.mts, 22, 12))
+>s : Symbol(s, Decl(loops.mts, 22, 12))
+>steps : Symbol(steps, Decl(loops.mts, 21, 23))
+>s : Symbol(s, Decl(loops.mts, 22, 12))
 
         do {
             const { pos } = recv()!;          // destructured: fresh bindings too
->pos : Symbol(pos, Decl(ownSharedLoopBindings.ts, 27, 19))
->recv : Symbol(recv, Decl(ownSharedLoopBindings.ts, 7, 45))
+>pos : Symbol(pos, Decl(loops.mts, 24, 19))
+>recv : Symbol(recv, Decl(loops.mts, 4, 46))
 
             send(pos);
->send : Symbol(send, Decl(ownSharedLoopBindings.ts, 6, 50))
->pos : Symbol(pos, Decl(ownSharedLoopBindings.ts, 27, 19))
+>send : Symbol(send, Decl(loops.mts, 3, 43))
+>pos : Symbol(pos, Decl(loops.mts, 24, 19))
 
         } while (steps > s);
->steps : Symbol(steps, Decl(ownSharedLoopBindings.ts, 24, 23))
->s : Symbol(s, Decl(ownSharedLoopBindings.ts, 25, 12))
+>steps : Symbol(steps, Decl(loops.mts, 21, 23))
+>s : Symbol(s, Decl(loops.mts, 22, 12))
 
         let last: Pos[] = [];
->last : Symbol(last, Decl(ownSharedLoopBindings.ts, 30, 11))
->Pos : Symbol(Pos, Decl(ownSharedLoopBindings.ts, 0, 0))
+>last : Symbol(last, Decl(loops.mts, 27, 11))
+>Pos : Symbol(Pos, Decl(loops.mts, 0, 65))
 
         while (last.length < 3) {
 >last.length : Symbol(Array.length, Decl(lib.es5.d.ts, --, --))
->last : Symbol(last, Decl(ownSharedLoopBindings.ts, 30, 11))
+>last : Symbol(last, Decl(loops.mts, 27, 11))
 >length : Symbol(Array.length, Decl(lib.es5.d.ts, --, --))
 
             const next = recv()!.pos;
->next : Symbol(next, Decl(ownSharedLoopBindings.ts, 32, 17))
->recv()!.pos : Symbol(pos, Decl(ownSharedLoopBindings.ts, 5, 29))
->recv : Symbol(recv, Decl(ownSharedLoopBindings.ts, 7, 45))
->pos : Symbol(pos, Decl(ownSharedLoopBindings.ts, 5, 29))
+>next : Symbol(next, Decl(loops.mts, 29, 17))
+>recv()!.pos : Symbol(pos, Decl(loops.mts, 3, 29))
+>recv : Symbol(recv, Decl(loops.mts, 4, 46))
+>pos : Symbol(pos, Decl(loops.mts, 3, 29))
 
             last.push(...next);
 >last.push : Symbol(Array.push, Decl(lib.es5.d.ts, --, --))
->last : Symbol(last, Decl(ownSharedLoopBindings.ts, 30, 11))
+>last : Symbol(last, Decl(loops.mts, 27, 11))
 >push : Symbol(Array.push, Decl(lib.es5.d.ts, --, --))
->next : Symbol(next, Decl(ownSharedLoopBindings.ts, 32, 17))
+>next : Symbol(next, Decl(loops.mts, 29, 17))
         }
         send(last);
->send : Symbol(send, Decl(ownSharedLoopBindings.ts, 6, 50))
->last : Symbol(last, Decl(ownSharedLoopBindings.ts, 30, 11))
+>send : Symbol(send, Decl(loops.mts, 3, 43))
+>last : Symbol(last, Decl(loops.mts, 27, 11))
     }
 }
 
 export function outside(steps: number) {
->outside : Symbol(outside, Decl(ownSharedLoopBindings.ts, 37, 1))
->steps : Symbol(steps, Decl(ownSharedLoopBindings.ts, 39, 24))
+>outside : Symbol(outside, Decl(loops.mts, 34, 1))
+>steps : Symbol(steps, Decl(loops.mts, 36, 24))
 
     const slots: Pos[][] = [];
->slots : Symbol(slots, Decl(ownSharedLoopBindings.ts, 40, 9))
->Pos : Symbol(Pos, Decl(ownSharedLoopBindings.ts, 0, 0))
+>slots : Symbol(slots, Decl(loops.mts, 37, 9))
+>Pos : Symbol(Pos, Decl(loops.mts, 0, 65))
 
     for (let s = 0; s < steps; s++) {
->s : Symbol(s, Decl(ownSharedLoopBindings.ts, 41, 12))
->s : Symbol(s, Decl(ownSharedLoopBindings.ts, 41, 12))
->steps : Symbol(steps, Decl(ownSharedLoopBindings.ts, 39, 24))
->s : Symbol(s, Decl(ownSharedLoopBindings.ts, 41, 12))
+>s : Symbol(s, Decl(loops.mts, 38, 12))
+>s : Symbol(s, Decl(loops.mts, 38, 12))
+>steps : Symbol(steps, Decl(loops.mts, 36, 24))
+>s : Symbol(s, Decl(loops.mts, 38, 12))
 
         const all = share(slots.flat());      // error: sent in an earlier iteration
->all : Symbol(all, Decl(ownSharedLoopBindings.ts, 42, 13))
->share : Symbol(share, Decl(ownSharedLoopBindings.ts, 5, 43))
+>all : Symbol(all, Decl(loops.mts, 39, 13))
+>share : Symbol(share, Decl(loops.mts, 0, 35))
 >slots.flat : Symbol(Array.flat, Decl(lib.es2019.array.d.ts, --, --))
->slots : Symbol(slots, Decl(ownSharedLoopBindings.ts, 40, 9))
+>slots : Symbol(slots, Decl(loops.mts, 37, 9))
 >flat : Symbol(Array.flat, Decl(lib.es2019.array.d.ts, --, --))
 
         use(all);
->use : Symbol(use, Decl(ownSharedLoopBindings.ts, 8, 55))
->all : Symbol(all, Decl(ownSharedLoopBindings.ts, 42, 13))
+>use : Symbol(use, Decl(loops.mts, 5, 56))
+>all : Symbol(all, Decl(loops.mts, 39, 13))
     }
 }
 
 export function linked(steps: number) {
->linked : Symbol(linked, Decl(ownSharedLoopBindings.ts, 45, 1))
->steps : Symbol(steps, Decl(ownSharedLoopBindings.ts, 47, 23))
+>linked : Symbol(linked, Decl(loops.mts, 42, 1))
+>steps : Symbol(steps, Decl(loops.mts, 44, 23))
 
     const outer: Pos[] = [];
->outer : Symbol(outer, Decl(ownSharedLoopBindings.ts, 48, 9))
->Pos : Symbol(Pos, Decl(ownSharedLoopBindings.ts, 0, 0))
+>outer : Symbol(outer, Decl(loops.mts, 45, 9))
+>Pos : Symbol(Pos, Decl(loops.mts, 0, 65))
 
     for (let s = 0; s < steps; s++) {
->s : Symbol(s, Decl(ownSharedLoopBindings.ts, 49, 12))
->s : Symbol(s, Decl(ownSharedLoopBindings.ts, 49, 12))
->steps : Symbol(steps, Decl(ownSharedLoopBindings.ts, 47, 23))
->s : Symbol(s, Decl(ownSharedLoopBindings.ts, 49, 12))
+>s : Symbol(s, Decl(loops.mts, 46, 12))
+>s : Symbol(s, Decl(loops.mts, 46, 12))
+>steps : Symbol(steps, Decl(loops.mts, 44, 23))
+>s : Symbol(s, Decl(loops.mts, 46, 12))
 
         const inner = outer;                  // error: a fresh binding, but `outer` was sent through it
->inner : Symbol(inner, Decl(ownSharedLoopBindings.ts, 50, 13))
->outer : Symbol(outer, Decl(ownSharedLoopBindings.ts, 48, 9))
+>inner : Symbol(inner, Decl(loops.mts, 47, 13))
+>outer : Symbol(outer, Decl(loops.mts, 45, 9))
 
         send(inner);                          // error: in an earlier iteration
->send : Symbol(send, Decl(ownSharedLoopBindings.ts, 6, 50))
->inner : Symbol(inner, Decl(ownSharedLoopBindings.ts, 50, 13))
+>send : Symbol(send, Decl(loops.mts, 3, 43))
+>inner : Symbol(inner, Decl(loops.mts, 47, 13))
     }
 }
 
 export function sameIteration(steps: number) {
->sameIteration : Symbol(sameIteration, Decl(ownSharedLoopBindings.ts, 53, 1))
->steps : Symbol(steps, Decl(ownSharedLoopBindings.ts, 55, 30))
+>sameIteration : Symbol(sameIteration, Decl(loops.mts, 50, 1))
+>steps : Symbol(steps, Decl(loops.mts, 52, 30))
 
     for (let s = 0; s < steps; s++) {
->s : Symbol(s, Decl(ownSharedLoopBindings.ts, 56, 12))
->s : Symbol(s, Decl(ownSharedLoopBindings.ts, 56, 12))
->steps : Symbol(steps, Decl(ownSharedLoopBindings.ts, 55, 30))
->s : Symbol(s, Decl(ownSharedLoopBindings.ts, 56, 12))
+>s : Symbol(s, Decl(loops.mts, 53, 12))
+>s : Symbol(s, Decl(loops.mts, 53, 12))
+>steps : Symbol(steps, Decl(loops.mts, 52, 30))
+>s : Symbol(s, Decl(loops.mts, 53, 12))
 
         const xs: Pos[] = [];
->xs : Symbol(xs, Decl(ownSharedLoopBindings.ts, 57, 13))
->Pos : Symbol(Pos, Decl(ownSharedLoopBindings.ts, 0, 0))
+>xs : Symbol(xs, Decl(loops.mts, 54, 13))
+>Pos : Symbol(Pos, Decl(loops.mts, 0, 65))
 
         send(xs);
->send : Symbol(send, Decl(ownSharedLoopBindings.ts, 6, 50))
->xs : Symbol(xs, Decl(ownSharedLoopBindings.ts, 57, 13))
+>send : Symbol(send, Decl(loops.mts, 3, 43))
+>xs : Symbol(xs, Decl(loops.mts, 54, 13))
 
         xs.push({ x: 1 });                    // error: sent above, in this iteration
 >xs.push : Symbol(Array.push, Decl(lib.es5.d.ts, --, --))
->xs : Symbol(xs, Decl(ownSharedLoopBindings.ts, 57, 13))
+>xs : Symbol(xs, Decl(loops.mts, 54, 13))
 >push : Symbol(Array.push, Decl(lib.es5.d.ts, --, --))
->x : Symbol(x, Decl(ownSharedLoopBindings.ts, 59, 17))
+>x : Symbol(x, Decl(loops.mts, 56, 17))
     }
 }
 

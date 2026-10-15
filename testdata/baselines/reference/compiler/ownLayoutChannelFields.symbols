@@ -1020,35 +1020,3 @@ export function wait(b: Barrier) {
 >lock : Symbol(lock, Decl(barrier.mts, 17, 9))
 }
 
-=== syntax.mts ===
-// The syntax's shared structs take channel fields as well.
-import { Channel } from "./threads.mjs";
->Channel : Symbol(Channel, Decl(syntax.mts, 1, 8))
-
-shared struct Mailbox { count: number; inbox: Channel<string> | null }
->Mailbox : Symbol(Mailbox, Decl(syntax.mts, 1, 40))
->count : Symbol(Mailbox.count, Decl(syntax.mts, 2, 23))
->inbox : Symbol(Mailbox.inbox, Decl(syntax.mts, 2, 38))
->Channel : Symbol(Channel, Decl(syntax.mts, 1, 8))
-
-export function post(m: Mailbox, text: string) {
->post : Symbol(post, Decl(syntax.mts, 2, 70))
->m : Symbol(m, Decl(syntax.mts, 3, 21))
->Mailbox : Symbol(Mailbox, Decl(syntax.mts, 1, 40))
->text : Symbol(text, Decl(syntax.mts, 3, 32))
-
-    (m.inbox ??= new Channel<string>(8)).send(text);
->(m.inbox ??= new Channel<string>(8)).send : Symbol(Channel.send, Decl(threads.d.mts, 255, 33))
->m.inbox : Symbol(Mailbox.inbox, Decl(syntax.mts, 2, 38))
->m : Symbol(m, Decl(syntax.mts, 3, 21))
->inbox : Symbol(Mailbox.inbox, Decl(syntax.mts, 2, 38))
->Channel : Symbol(Channel, Decl(syntax.mts, 1, 8))
->send : Symbol(Channel.send, Decl(threads.d.mts, 255, 33))
->text : Symbol(text, Decl(syntax.mts, 3, 32))
-
-    m.count++;
->m.count : Symbol(Mailbox.count, Decl(syntax.mts, 2, 23))
->m : Symbol(m, Decl(syntax.mts, 3, 21))
->count : Symbol(Mailbox.count, Decl(syntax.mts, 2, 23))
-}
-

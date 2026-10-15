@@ -1,28 +1,74 @@
 //// [tests/cases/compiler/ownLayoutMovedReturns.ts] ////
 
-=== own.d.mts ===
-type Entry<K, V> = [key: K, value: V];
->Entry : Entry<K, V>
+=== threads.d.mts ===
+// The parts of the threads runtime (threads.mjs, from github.com/arv/threads) this test uses.
+declare const cellBrand: unique symbol;
+>cellBrand : unique symbol
 
-type Computed<K, V> = [key: K, callback: (key: K) => sending V];
->Computed : Computed<K, V>
->key : K
+declare const fieldBrand: unique symbol;
+>fieldBrand : unique symbol
+
+/** A cell: shared and mutable. Any number of threads may hold the same one. */
+export interface Cell {
+  readonly [cellBrand]: true;
+>[cellBrand] : true
+>cellBrand : unique symbol
+>true : true
+}
+/** A value whose ownership moves, on a parameter or a result. To TypeScript it is just T. */
+export type Sending<T> = T;
+>Sending : T
+
+/** A field of a shared struct. */
+export interface Field<T> {
+  readonly [fieldBrand]: T;
+>[fieldBrand] : T
+>fieldBrand : unique symbol
+}
+/** A number field: an f64 in shared memory. */
+export declare const f64: Field<number>;
+>f64 : Field<number>
+
+/** What `struct(...)` returns: `new S()` makes a zeroed struct in shared memory. */
+export interface StructType<T> {
+  new (): T & Cell;
+  readonly fields: readonly string[];
+>fields : readonly string[]
+}
+/** The value type of a struct type: `type Body = Struct<typeof Body>`. */
+export type Struct<S> = S extends StructType<infer T> ? T & Cell : never;
+>Struct : Struct<S>
+
+/** Declares a shared struct. */
+export declare function struct<F extends Record<string, Field<any>>>(
+>struct : <F extends Record<string, Field<any>>>(fields: F) => StructType<{ -readonly [K in keyof F]: F[K] extends Field<infer V> ? V : never; }>
+
+  fields: F,
+>fields : F
+
+): StructType<{ -readonly [K in keyof F]: F[K] extends Field<infer V> ? V : never }>;
 
 /** A map in shared memory. */
-export declare class SharedMap<K, V> {
+export declare class SharedMap<K, V> implements Cell {
 >SharedMap : SharedMap<K, V>
 
-    get(key: K): V | undefined;
+  readonly [cellBrand]: true;
+>[cellBrand] : true
+>cellBrand : unique symbol
+>true : true
+
+  get(key: K): V | undefined;
 >get : (key: K) => V | undefined
 >key : K
 
-    set(...entry: sending Entry<K, V>): this;
+  set(...entry: Sending<[key: K, value: V]>): this;
 >set : (key: K, value: V) => this
->entry : Entry<K, V>
+>entry : [key: K, value: V]
 
-    getOrInsertComputed(...entry: sending Computed<K, V>): V;
->getOrInsertComputed : (key: K, callback: (key: K) => V) => V
->entry : Computed<K, V>
+  getOrInsertComputed(...entry: Sending<[key: K, callback: (key: K) => Sending<V>]>): V;
+>getOrInsertComputed : (key: K, callback: (key: K) => Sending<V>) => V
+>entry : [key: K, callback: (key: K) => Sending<V>]
+>key : K
 }
 /** A callback whose result is not sent. */
 export declare function peek<V>(f: () => V): void;
@@ -30,83 +76,94 @@ export declare function peek<V>(f: () => V): void;
 >f : () => V
 
 === main.mts ===
-import { SharedMap, peek } from "./own.mjs";
->SharedMap : typeof SharedMap
+import { f64, peek, SharedMap, struct, type Struct } from "./threads.mjs";
+>f64 : import("./threads.mjs").Field<number>
 >peek : <V>(f: () => V) => void
+>SharedMap : typeof SharedMap
+>struct : <F extends Record<string, import("./threads.mjs").Field<any>>>(fields: F) => import("./threads.mjs").StructType<{ -readonly [K in keyof F]: F[K] extends import("./threads.mjs").Field<infer V> ? V : never; }>
+>Struct : any
 
-shared struct Count { n: number; }
->Count : Count
->n : number
+const Count = struct({ n: f64 });
+>Count : import("./threads.mjs").StructType<{ n: number; }>
+>struct({ n: f64 }) : import("./threads.mjs").StructType<{ n: number; }>
+>struct : <F extends Record<string, import("./threads.mjs").Field<any>>>(fields: F) => import("./threads.mjs").StructType<{ -readonly [K in keyof F]: F[K] extends import("./threads.mjs").Field<infer V> ? V : never; }>
+>{ n: f64 } : { n: import("./threads.mjs").Field<number>; }
+>n : import("./threads.mjs").Field<number>
+>f64 : import("./threads.mjs").Field<number>
+
+type Count = Struct<typeof Count>;
+>Count : { n: number; } & import("./threads.mjs").Cell
+>Count : import("./threads.mjs").StructType<{ n: number; }>
 
 export function count(counts: SharedMap<string, Count>, word: string) {
 >count : (counts: SharedMap<string, Count>, word: string) => void
->counts : SharedMap<string, Count>
+>counts : SharedMap<string, { n: number; } & import("./threads.mjs").Cell>
 >word : string
 
     counts.getOrInsertComputed(word, () => new Count()).n++;
 >counts.getOrInsertComputed(word, () => new Count()).n++ : number
 >counts.getOrInsertComputed(word, () => new Count()).n : number
->counts.getOrInsertComputed(word, () => new Count()) : Count
->counts.getOrInsertComputed : (key: string, callback: (key: string) => Count) => Count
->counts : SharedMap<string, Count>
->getOrInsertComputed : (key: string, callback: (key: string) => Count) => Count
+>counts.getOrInsertComputed(word, () => new Count()) : { n: number; } & import("./threads.mjs").Cell
+>counts.getOrInsertComputed : (key: string, callback: (key: string) => { n: number; } & import("./threads.mjs").Cell) => { n: number; } & import("./threads.mjs").Cell
+>counts : SharedMap<string, { n: number; } & import("./threads.mjs").Cell>
+>getOrInsertComputed : (key: string, callback: (key: string) => { n: number; } & import("./threads.mjs").Cell) => { n: number; } & import("./threads.mjs").Cell
 >word : string
->() => new Count() : () => Count
->new Count() : Count
->Count : new () => Count
+>() => new Count() : () => { n: number; } & import("./threads.mjs").Cell
+>new Count() : { n: number; } & import("./threads.mjs").Cell
+>Count : import("./threads.mjs").StructType<{ n: number; }>
 >n : number
 
     counts.getOrInsertComputed(word, function () { return new Count(); }).n++;
 >counts.getOrInsertComputed(word, function () { return new Count(); }).n++ : number
 >counts.getOrInsertComputed(word, function () { return new Count(); }).n : number
->counts.getOrInsertComputed(word, function () { return new Count(); }) : Count
->counts.getOrInsertComputed : (key: string, callback: (key: string) => Count) => Count
->counts : SharedMap<string, Count>
->getOrInsertComputed : (key: string, callback: (key: string) => Count) => Count
+>counts.getOrInsertComputed(word, function () { return new Count(); }) : { n: number; } & import("./threads.mjs").Cell
+>counts.getOrInsertComputed : (key: string, callback: (key: string) => { n: number; } & import("./threads.mjs").Cell) => { n: number; } & import("./threads.mjs").Cell
+>counts : SharedMap<string, { n: number; } & import("./threads.mjs").Cell>
+>getOrInsertComputed : (key: string, callback: (key: string) => { n: number; } & import("./threads.mjs").Cell) => { n: number; } & import("./threads.mjs").Cell
 >word : string
->function () { return new Count(); } : () => Count
->new Count() : Count
->Count : new () => Count
+>function () { return new Count(); } : () => { n: number; } & import("./threads.mjs").Cell
+>new Count() : { n: number; } & import("./threads.mjs").Cell
+>Count : import("./threads.mjs").StructType<{ n: number; }>
 >n : number
 
     counts.getOrInsertComputed(word, () => {
->counts.getOrInsertComputed(word, () => {        const c = new Count();        c.n = 1;        return c;    }) : Count
->counts.getOrInsertComputed : (key: string, callback: (key: string) => Count) => Count
->counts : SharedMap<string, Count>
->getOrInsertComputed : (key: string, callback: (key: string) => Count) => Count
+>counts.getOrInsertComputed(word, () => {        const c = new Count();        c.n = 1;        return c;    }) : { n: number; } & import("./threads.mjs").Cell
+>counts.getOrInsertComputed : (key: string, callback: (key: string) => { n: number; } & import("./threads.mjs").Cell) => { n: number; } & import("./threads.mjs").Cell
+>counts : SharedMap<string, { n: number; } & import("./threads.mjs").Cell>
+>getOrInsertComputed : (key: string, callback: (key: string) => { n: number; } & import("./threads.mjs").Cell) => { n: number; } & import("./threads.mjs").Cell
 >word : string
->() => {        const c = new Count();        c.n = 1;        return c;    } : () => Count
+>() => {        const c = new Count();        c.n = 1;        return c;    } : () => { n: number; } & import("./threads.mjs").Cell
 
         const c = new Count();
->c : Count
->new Count() : Count
->Count : new () => Count
+>c : { n: number; } & import("./threads.mjs").Cell
+>new Count() : { n: number; } & import("./threads.mjs").Cell
+>Count : import("./threads.mjs").StructType<{ n: number; }>
 
         c.n = 1;
 >c.n = 1 : 1
 >c.n : number
->c : Count
+>c : { n: number; } & import("./threads.mjs").Cell
 >n : number
 >1 : 1
 
         return c;
->c : Count
+>c : { n: number; } & import("./threads.mjs").Cell
 
     });
     counts.set(word, new Count());
->counts.set(word, new Count()) : SharedMap<string, Count>
->counts.set : (key: string, value: Count) => SharedMap<string, Count>
->counts : SharedMap<string, Count>
->set : (key: string, value: Count) => SharedMap<string, Count>
+>counts.set(word, new Count()) : SharedMap<string, { n: number; } & import("./threads.mjs").Cell>
+>counts.set : (key: string, value: { n: number; } & import("./threads.mjs").Cell) => SharedMap<string, { n: number; } & import("./threads.mjs").Cell>
+>counts : SharedMap<string, { n: number; } & import("./threads.mjs").Cell>
+>set : (key: string, value: { n: number; } & import("./threads.mjs").Cell) => SharedMap<string, { n: number; } & import("./threads.mjs").Cell>
 >word : string
->new Count() : Count
->Count : new () => Count
+>new Count() : { n: number; } & import("./threads.mjs").Cell
+>Count : import("./threads.mjs").StructType<{ n: number; }>
 
     peek(() => new Count());
 >peek(() => new Count()) : void
 >peek : <V>(f: () => V) => void
->() => new Count() : () => Count
->new Count() : Count
->Count : new () => Count
+>() => new Count() : () => { n: number; } & import("./threads.mjs").Cell
+>new Count() : { n: number; } & import("./threads.mjs").Cell
+>Count : import("./threads.mjs").StructType<{ n: number; }>
 }
 

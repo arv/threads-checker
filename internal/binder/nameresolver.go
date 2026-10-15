@@ -490,7 +490,7 @@ func isSelfReferenceLocation(node *ast.Node, lastLocation *ast.Node) bool {
 	switch node.Kind {
 	case ast.KindParameter:
 		return lastLocation != nil && lastLocation == node.Name()
-	case ast.KindFunctionDeclaration, ast.KindClassDeclaration, ast.KindInterfaceDeclaration, ast.KindSharedStructDeclaration, ast.KindEnumDeclaration,
+	case ast.KindFunctionDeclaration, ast.KindClassDeclaration, ast.KindInterfaceDeclaration, ast.KindEnumDeclaration,
 		ast.KindTypeAliasDeclaration, ast.KindJSTypeAliasDeclaration, ast.KindModuleDeclaration: // For `namespace N { N; }`
 		return true
 	}

@@ -198,14 +198,6 @@ export function labels(n: number): number {
     return chars + names.length;
 }
 
-//// [syntax.mts]
-// The syntax's shared structs take string fields as well, string literal types included.
-shared struct Task { id: number; state: "todo" | "done"; title: string }
-export function finish(t: Task): string {
-    t.state = "done";
-    return t.title + ": " + t.state;
-}
-
 
 //// [strings.mjs]
 import { F64 as __F64, I32 as __I32, newSharedArray as __newSharedArray, outOfBounds as __outOfBounds, register as __register, release as __release, sharedStruct as __sharedStruct, storeStr as __storeStr, strAt as __strAt } from "./threads.mjs";
@@ -244,12 +236,3 @@ export function labels(n) {
     }
 }
 __register(import.meta.url, { greet, defaults, labels });
-//// [syntax.mjs]
-import { I32 as __I32, register as __register, sharedStruct as __sharedStruct, storeStr as __storeStr, strAt as __strAt } from "./threads.mjs";
-// The syntax's shared structs take string fields as well, string literal types included.
-const Task = __sharedStruct("Task", ["id", "state", "title"], [], "fss");
-export function finish(t) {
-    __storeStr((t >> 2) + 4, "done");
-    return __strAt(__I32[(t >> 2) + 6]) + ": " + __strAt(__I32[(t >> 2) + 4]);
-}
-__register(import.meta.url, { finish });

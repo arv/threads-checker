@@ -128,7 +128,7 @@ func (c *Checker) computeOwnRawCount(expr *ast.Node) printer.OwnCount {
 			}
 		}
 		return printer.OwnCountUnstable
-	case ast.KindAsExpression, ast.KindSatisfiesExpression, ast.KindNonNullExpression, ast.KindTypeAssertionExpression, ast.KindConsumeExpression:
+	case ast.KindAsExpression, ast.KindSatisfiesExpression, ast.KindNonNullExpression, ast.KindTypeAssertionExpression:
 		if inner := c.getOwnCount(expr.Expression()); inner != printer.OwnCountNone {
 			return inner
 		}
@@ -195,7 +195,7 @@ func (c *Checker) isOwnCountedCall(call *ast.Node) bool {
 	}
 	decl := signature.declaration
 	if isOwnAmbientDeclaration(decl) {
-		// A runtime function: its result is +1 if it hands over ownership (`sending T`), as a
+		// A runtime function: its result is +1 if it hands over ownership (`Sending<T>`), as a
 		// channel's `recv()` does (and `join()`, whose thread's function returned +1).
 		return decl.FunctionLikeData() != nil && (&ownAnalyzer{c: c}).returnKind(decl) == ownReturnsSending
 	}
@@ -293,7 +293,7 @@ func (c *Checker) isOwnHoldable(expr *ast.Node) bool {
 	case ast.KindIdentifier:
 		symbol := c.ownReferencedVariable(expr)
 		return symbol != nil && !c.isOwnAssigned(symbol)
-	case ast.KindAsExpression, ast.KindSatisfiesExpression, ast.KindNonNullExpression, ast.KindTypeAssertionExpression, ast.KindConsumeExpression:
+	case ast.KindAsExpression, ast.KindSatisfiesExpression, ast.KindNonNullExpression, ast.KindTypeAssertionExpression:
 		return c.isOwnHoldable(expr.Expression())
 	case ast.KindCallExpression:
 		return c.isOwnConsumeCall(expr) && c.isOwnHoldable(expr.Arguments()[0])
@@ -414,7 +414,7 @@ func (c *Checker) isOwnReturnedLocal(body *ast.Node, symbol *ast.Symbol) bool {
 		switch expr.Kind {
 		case ast.KindIdentifier:
 			return c.ownReferencedVariable(expr) == symbol
-		case ast.KindParenthesizedExpression, ast.KindAsExpression, ast.KindSatisfiesExpression, ast.KindNonNullExpression, ast.KindTypeAssertionExpression, ast.KindConsumeExpression:
+		case ast.KindParenthesizedExpression, ast.KindAsExpression, ast.KindSatisfiesExpression, ast.KindNonNullExpression, ast.KindTypeAssertionExpression:
 			return returns(expr.Expression())
 		case ast.KindCallExpression:
 			return c.isOwnConsumeCall(expr) && returns(expr.Arguments()[0])
@@ -666,7 +666,7 @@ func (c *Checker) isOwnReferenceField(access *ast.Node) bool {
 }
 
 // Reports whether an argument is a counted value that the callee takes a count of, which the emit
-// passes as `__countedRef(E)`: a `sending` parameter of a runtime (ambient) function, other than a share-like
+// passes as `__countedRef(E)`: a `Sending<T>` parameter of a runtime (ambient) function, other than a share-like
 // one. That is a thread's arguments (`spawn`, `go`), which the thread releases when its function
 // returns, and a channel's `send`, whose message carries the count to the receiver.
 func (c *Checker) isOwnRefArgument(arg *ast.Node) bool {
@@ -689,7 +689,7 @@ func (c *Checker) isOwnRefArgument(arg *ast.Node) bool {
 
 // Reports whether a returned expression is a counted value that moves into the runtime, which the
 // emit passes as `__moved(E)`: the result of an arrow function or function expression that a runtime
-// (ambient) function type with a `sending` result types, as a SharedMap's getOrInsertComputed types
+// (ambient) function type with a `Sending<T>` result types, as a SharedMap's getOrInsertComputed types
 // its callback. A result carries a count (ownReturn), which the runtime takes over; `__moved` tells it
 // that the number is an address with a count rather than a number.
 func (c *Checker) isOwnMovedReturn(expr *ast.Node) bool {

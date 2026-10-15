@@ -2111,27 +2111,7 @@ func (p *Printer) emitTypeOperator(node *ast.TypeOperatorNode) {
 	state := p.enterNode(node.AsNode())
 	p.emitToken(node.Operator, node.Pos(), WriteKindKeyword, node.AsNode())
 	p.writeSpace()
-	// `readonly` only applies to array and tuple types, but it may see them through `sending`/`shared`
-	// (`readonly shared T[]`), which must not be parenthesized.
-	p.emitTypeNode(node.Type, core.IfElse(node.Operator == ast.KindReadonlyKeyword && !ast.IsOwnershipTypeNode(node.Type), ast.TypePrecedencePostfix, ast.TypePrecedenceTypeOperator))
-	p.exitNode(node.AsNode(), state)
-}
-
-// `sending T` (own/shared threads extension)
-func (p *Printer) emitSendingType(node *ast.SendingTypeNode) {
-	state := p.enterNode(node.AsNode())
-	p.writeKeyword("sending")
-	p.writeSpace()
-	p.emitTypeNode(node.Type, ast.TypePrecedenceTypeOperator)
-	p.exitNode(node.AsNode(), state)
-}
-
-// `shared T` (own/shared threads extension)
-func (p *Printer) emitSharedType(node *ast.SharedTypeNode) {
-	state := p.enterNode(node.AsNode())
-	p.writeKeyword("shared")
-	p.writeSpace()
-	p.emitTypeNode(node.Type, ast.TypePrecedenceTypeOperator)
+	p.emitTypeNode(node.Type, core.IfElse(node.Operator == ast.KindReadonlyKeyword, ast.TypePrecedencePostfix, ast.TypePrecedenceTypeOperator))
 	p.exitNode(node.AsNode(), state)
 }
 
@@ -2355,10 +2335,6 @@ func (p *Printer) emitTypeNode(node *ast.TypeNode, precedence ast.TypePrecedence
 		p.emitThisType(node.AsThisTypeNode())
 	case ast.KindTypeOperator:
 		p.emitTypeOperator(node.AsTypeOperatorNode())
-	case ast.KindSendingType:
-		p.emitSendingType(node.AsSendingTypeNode())
-	case ast.KindSharedType:
-		p.emitSharedType(node.AsSharedTypeNode())
 	case ast.KindIndexedAccessType:
 		p.emitIndexedAccessType(node.AsIndexedAccessTypeNode())
 	case ast.KindMappedType:
@@ -2736,15 +2712,6 @@ func (p *Printer) emitVoidExpression(node *ast.VoidExpression) {
 func (p *Printer) emitAwaitExpression(node *ast.AwaitExpression) {
 	state := p.enterNode(node.AsNode())
 	p.emitToken(ast.KindAwaitKeyword, node.Pos(), WriteKindKeyword, node.AsNode())
-	p.writeSpace()
-	p.emitExpression(node.Expression, ast.OperatorPrecedenceUnary)
-	p.exitNode(node.AsNode(), state)
-}
-
-// `consume x` (own/shared threads extension)
-func (p *Printer) emitConsumeExpression(node *ast.ConsumeExpression) {
-	state := p.enterNode(node.AsNode())
-	p.writeKeyword("consume")
 	p.writeSpace()
 	p.emitExpression(node.Expression, ast.OperatorPrecedenceUnary)
 	p.exitNode(node.AsNode(), state)
@@ -3305,8 +3272,6 @@ func (p *Printer) emitExpression(node *ast.Expression, precedence ast.OperatorPr
 		p.emitVoidExpression(node.AsVoidExpression())
 	case ast.KindAwaitExpression:
 		p.emitAwaitExpression(node.AsAwaitExpression())
-	case ast.KindConsumeExpression:
-		p.emitConsumeExpression(node.AsConsumeExpression())
 	case ast.KindPrefixUnaryExpression:
 		p.emitPrefixUnaryExpression(node.AsPrefixUnaryExpression())
 	case ast.KindPostfixUnaryExpression:
@@ -3821,25 +3786,6 @@ func (p *Printer) emitInterfaceDeclaration(node *ast.InterfaceDeclaration) {
 	p.exitNode(node.AsNode(), state)
 }
 
-// `shared struct Name { field: Type; ... }` (own/shared threads extension)
-func (p *Printer) emitSharedStructDeclaration(node *ast.SharedStructDeclaration) {
-	state := p.enterNode(node.AsNode())
-	p.emitModifierList(node.AsNode(), node.Modifiers(), false /*allowDecorators*/)
-	p.writeKeyword("shared")
-	p.writeSpace()
-	p.writeKeyword("struct")
-	p.writeSpace()
-	p.emitBindingIdentifier(node.Name().AsIdentifier())
-	p.writeSpace()
-	p.writePunctuation("{")
-	p.pushNameGenerationScope(node.AsNode())
-	p.generateAllMemberNames(node.Members)
-	p.emitList((*Printer).emitTypeElement, node.AsNode(), node.Members, LFInterfaceMembers)
-	p.popNameGenerationScope(node.AsNode())
-	p.writePunctuation("}")
-	p.exitNode(node.AsNode(), state)
-}
-
 func (p *Printer) emitTypeAliasDeclaration(node *ast.TypeAliasDeclaration) {
 	state := p.enterNode(node.AsNode())
 	p.emitModifierList(node.AsNode(), node.Modifiers(), false /*allowDecorators*/)
@@ -4242,8 +4188,6 @@ func (p *Printer) emitStatement(node *ast.Statement) {
 		p.emitClassDeclaration(node.AsClassDeclaration())
 	case ast.KindInterfaceDeclaration:
 		p.emitInterfaceDeclaration(node.AsInterfaceDeclaration())
-	case ast.KindSharedStructDeclaration:
-		p.emitSharedStructDeclaration(node.AsSharedStructDeclaration())
 	case ast.KindTypeAliasDeclaration, ast.KindJSTypeAliasDeclaration:
 		p.emitTypeAliasDeclaration(node.AsTypeAliasDeclaration())
 	case ast.KindEnumDeclaration:

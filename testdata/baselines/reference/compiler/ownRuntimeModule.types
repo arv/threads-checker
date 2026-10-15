@@ -1,135 +1,170 @@
 //// [tests/cases/compiler/ownRuntimeModule.ts] ////
 
-=== own.d.mts ===
-// Types for the own/shared threads runtime own.mjs (now own.ts in github.com/arv/threads). Programs
-// import their API from "./own.mjs"; the compiler adds the imports of the helpers it emits
-// (`__sharedStruct`, `__register`) when `ownRuntime` is set.
-//
-// `sending T` marks a value whose ownership moves to the receiver: the sender must not use it
-// afterwards. `shared T` marks a value any number of threads may read at once: deeply immutable, or
-// a cell that synchronizes internally (Slots, Barrier, a shared struct).
+=== threads.d.mts ===
+// The parts of the runtime's API that the example uses. Programs import their API from
+// "./threads.mjs"; the compiler adds the imports of the helpers it emits (`__sharedStruct`,
+// `__register`, ...) when `ownRuntime` is set.
 
-/** One slot per thread: a thread publishes into its own slot, and everyone reads every slot. */
-export interface SlotsCell<T> {
-    readonly length: number;
->length : number
+declare const cellBrand: unique symbol;
+>cellBrand : unique symbol
 
-    /** Publishes `value` in slot `index`, replacing what was there. */
-    set(index: number, value: T): void;
->set : (index: number, value: T) => void
->index : number
->value : T
+declare const fieldBrand: unique symbol;
+>fieldBrand : unique symbol
 
-    /** The value in slot `index`. */
-    get(index: number): shared T;
->get : (index: number) => shared T
->index : number
-
-    /** The arrays in all slots, concatenated in slot order. */
-    flat(): shared (T extends readonly (infer E)[] ? E : T)[];
->flat : () => shared (T extends readonly (infer E)[] ? E : T)[]
+/** A cell: shared and mutable. Any number of threads may hold the same one. */
+export interface Cell {
+  readonly [cellBrand]: true;
+>[cellBrand] : true
+>cellBrand : unique symbol
+>true : true
 }
-export declare const Slots: new <T>(count: number) => shared SlotsCell<T>;
->Slots : new <T>(count: number) => shared SlotsCell<T>
->count : number
 
-/** A reusable barrier for a fixed number of threads. */
-export interface BarrierCell {
-    /** Blocks until all threads have called `wait`. */
-    wait(): void;
->wait : () => void
-}
-export declare const Barrier: new (threads: number) => shared BarrierCell;
->Barrier : new (threads: number) => shared BarrierCell
->threads : number
+/** A value whose ownership moves, on a parameter or a result. */
+export type Sending<T> = T;
+>Sending : T
+
+/** A deeply immutable value, which any number of threads may read. */
+export type Shared<T> = T extends Cell | ((...args: any[]) => any) ? T
+>Shared : Shared<T>
+>args : any[]
+
+  : T extends object ? { readonly [K in keyof T]: Shared<T[K]> }
+  : T;
 
 /** Freezes a value the caller owns into a deeply immutable value every thread can read. */
-export declare function share<T>(value: sending T): shared T;
->share : <T>(value: sending T) => shared T
+export declare function share<T>(value: Sending<T>): Shared<T>;
+>share : <T>(value: Sending<T>) => Shared<T>
 >value : T
 
-/** A thread started inside a `scope`; joining it moves the thread's result back. */
+/** A field of a shared struct. */
+export interface Field<T> {
+  readonly [fieldBrand]: T;
+>[fieldBrand] : T
+>fieldBrand : unique symbol
+}
+/** A number field: an f64 in shared memory. */
+export declare const f64: Field<number>;
+>f64 : Field<number>
+
+/** What `struct(...)` returns: `new S()` makes a zeroed struct in shared memory. */
+export interface StructType<T> {
+  new (): T & Cell;
+  readonly fields: readonly string[];
+>fields : readonly string[]
+}
+/** The value type of a struct type: `type Body = Struct<typeof Body>`. */
+export type Struct<S> = S extends StructType<infer T> ? T & Cell : never;
+>Struct : Struct<S>
+
+/** Declares a shared struct. */
+export declare function struct<F extends Record<string, Field<any>>>(
+>struct : <F extends Record<string, Field<any>>>(fields: F) => StructType<{ -readonly [K in keyof F]: F[K] extends Field<infer V> ? V : never; }>
+
+  fields: F,
+>fields : F
+
+): StructType<{ -readonly [K in keyof F]: F[K] extends Field<infer V> ? V : never }>;
+
+/** A thread; joining it moves the thread's result back. */
 export interface Thread<R> {
-    join(): sending R;
->join : () => sending R
+  join(): Sending<R>;
+>join : () => Sending<R>
 }
 
 /** Spawns threads that cannot outlive the scope. Every argument is sent to the new thread. */
 export interface Scope {
-    spawn<A extends unknown[], R>(f: (...args: A) => sending R, ...args: sending A): shared Thread<R>;
->spawn : <A extends unknown[], R>(f: (...args: A) => sending R, ...args: sending A) => shared Thread<R>
->f : (...args: A) => sending R
+  spawn<A extends unknown[], R>(f: (...args: A) => Sending<R>, ...args: Sending<A>): Thread<R>;
+>spawn : <A extends unknown[], R>(f: (...args: A) => Sending<R>, ...args: Sending<A>) => Thread<R>
+>f : (...args: A) => Sending<R>
 >args : A
 >args : A
 }
-
 /** Runs `body` and joins every thread it spawned before returning. */
-export declare function scope<R>(body: (s: shared Scope) => R): R;
->scope : <R>(body: (s: shared Scope) => R) => R
->body : (s: shared Scope) => R
+export declare function scope<R>(body: (s: Scope) => R): R;
+>scope : <R>(body: (s: Scope) => R) => R
+>body : (s: Scope) => R
 >s : Scope
 
 /** Splits an owned array into `parts` owned, disjoint chunks of nearly equal size. Trusted. */
-export declare function partition<T>(items: sending T[], parts: number): (sending T[])[];
->partition : <T>(items: sending T[], parts: number) => (sending T[])[]
+export declare function partition<T>(items: Sending<T[]>, parts: number): Sending<T[]>[];
+>partition : <T>(items: Sending<T[]>, parts: number) => Sending<T[]>[]
 >items : T[]
 >parts : number
 
 /** Takes element `index` out of an array of owned values, so the caller owns it. Trusted. */
-export declare function take<T>(items: (sending T)[], index: number): sending T;
->take : <T>(items: (sending T)[], index: number) => sending T
+export declare function take<T>(items: Sending<T>[], index: number): Sending<T>;
+>take : <T>(items: Sending<T>[], index: number) => Sending<T>
 >items : T[]
 >index : number
+
+/** A reusable barrier for a fixed number of threads. */
+export declare class Barrier implements Cell {
+>Barrier : Barrier
+
+  readonly [cellBrand]: true;
+>[cellBrand] : true
+>cellBrand : unique symbol
+>true : true
+
+  constructor(threads: number);
+>threads : number
+
+  /** Blocks until all threads have called `wait`. */
+  wait(): void;
+>wait : () => void
+}
+
+/** One slot per thread: a thread publishes a shared value into its slot, and everyone reads every slot. */
+export declare class Slots<T> implements Cell {
+>Slots : Slots<T>
+
+  readonly [cellBrand]: true;
+>[cellBrand] : true
+>cellBrand : unique symbol
+>true : true
+
+  constructor(count: number);
+>count : number
+
+  readonly length: number;
+>length : number
+
+  set(index: number, value: Shared<T>): void;
+>set : (index: number, value: Shared<T>) => void
+>index : number
+>value : Shared<T>
+
+  get(index: number): Shared<T> | undefined;
+>get : (index: number) => Shared<T> | undefined
+>index : number
+
+  /** The arrays in all slots, concatenated in slot order. */
+  flat(): Shared<T extends readonly (infer E)[] ? E[] : T[]>;
+>flat : () => Shared<T extends readonly (infer E)[] ? E[] : T[]>
+}
 
 /** Prints a line, synchronously, from any thread. */
 export declare function log(...args: unknown[]): void;
 >log : (...args: unknown[]) => void
 >args : unknown[]
 
-/** A shared struct's value as a type: what `new SharedArray(Struct, n)` takes. */
-export interface SharedStructType<T> {
-    new (): T;
-}
-
-/**
- * A fixed-length array in the shared heap, of numbers or of shared structs stored inline. Threads
- * share it with no copying. With `ownRuntime` the compiler lays it out in the shared heap and turns
- * `a[i]` and `a.length` into typed-array accesses.
- */
-export interface SharedArray<T> {
-    readonly length: number;
->length : number
-
-    [index: number]: T;
->index : number
-}
-export declare const SharedArray: {
->SharedArray : { new (type: NumberConstructor, length: number): SharedArray<number>; new <T>(type: SharedStructType<T>, length: number): SharedArray<T>; }
-
-    new (type: NumberConstructor, length: number): SharedArray<number>;
->type : NumberConstructor
->length : number
-
-    new <T>(type: SharedStructType<T>, length: number): SharedArray<T>;
->type : SharedStructType<T>
->length : number
-
-};
-
 === nbody.mts ===
-// The n-body example as an ES module for the own.mjs runtime. With `ownRuntime` set, the compiler
-// imports the runtime helpers this module needs and registers its top-level functions, so that
-// spawned threads can find `worker` by name.
-import { Barrier, type BarrierCell, log, partition, scope, share, Slots, type SlotsCell, take, type Thread } from "./own.mjs";
->Barrier : new (threads: number) => shared BarrierCell
->BarrierCell : any
+// The n-body example as an ES module for the threads.mjs runtime. With `ownRuntime` set, the
+// compiler imports the runtime helpers this module needs and registers its top-level functions, so
+// that spawned threads can find `worker` by name.
+import { Barrier, f64, log, partition, scope, type Sending, share, type Shared, Slots, struct, type Struct, take, type Thread } from "./threads.mjs";
+>Barrier : typeof Barrier
+>f64 : import("./threads.mjs").Field<number>
 >log : (...args: unknown[]) => void
->partition : <T>(items: sending T[], parts: number) => (sending T[])[]
->scope : <R>(body: (s: shared import("./own.mjs").Scope) => R) => R
->share : <T>(value: sending T) => shared T
->Slots : new <T>(count: number) => shared SlotsCell<T>
->SlotsCell : any
->take : <T>(items: (sending T)[], index: number) => sending T
+>partition : <T>(items: Sending<T[]>, parts: number) => Sending<T[]>[]
+>scope : <R>(body: (s: import("./threads.mjs").Scope) => R) => R
+>Sending : any
+>share : <T>(value: Sending<T>) => Shared<T>
+>Shared : any
+>Slots : typeof Slots
+>struct : <F extends Record<string, import("./threads.mjs").Field<any>>>(fields: F) => import("./threads.mjs").StructType<{ -readonly [K in keyof F]: F[K] extends import("./threads.mjs").Field<infer V> ? V : never; }>
+>Struct : any
+>take : <T>(items: Sending<T>[], index: number) => Sending<T>
 >Thread : any
 
 type Body = { x: number; y: number; z: number; vx: number; vy: number; vz: number; m: number };
@@ -160,12 +195,20 @@ const BODIES = 800, STEPS = 30, DT = 0.001, SOFTEN = 0.01;
 >0.01 : 0.01
 
 /** Counts steps across threads. */
-shared struct Progress { steps: number }
->Progress : Progress
->steps : number
+const Progress = struct({ steps: f64 });
+>Progress : import("./threads.mjs").StructType<{ steps: number; }>
+>struct({ steps: f64 }) : import("./threads.mjs").StructType<{ steps: number; }>
+>struct : <F extends Record<string, import("./threads.mjs").Field<any>>>(fields: F) => import("./threads.mjs").StructType<{ -readonly [K in keyof F]: F[K] extends import("./threads.mjs").Field<infer V> ? V : never; }>
+>{ steps: f64 } : { steps: import("./threads.mjs").Field<number>; }
+>steps : import("./threads.mjs").Field<number>
+>f64 : import("./threads.mjs").Field<number>
 
-function makeBodies(): sending Body[] {
->makeBodies : () => sending Body[]
+type Progress = Struct<typeof Progress>;
+>Progress : { steps: number; } & import("./threads.mjs").Cell
+>Progress : import("./threads.mjs").StructType<{ steps: number; }>
+
+function makeBodies(): Sending<Body[]> {
+>makeBodies : () => Sending<Body[]>
 
     let seed = 1;
 >seed : number
@@ -242,10 +285,10 @@ function makeBodies(): sending Body[] {
 >bodies : Body[]
 }
 
-function accelerate(mine: Body[], all: readonly shared Pos[]) {
->accelerate : (mine: Body[], all: readonly shared Pos[]) => void
+function accelerate(mine: Body[], all: Shared<Pos[]>) {
+>accelerate : (mine: Body[], all: Shared<Pos[]>) => void
 >mine : Body[]
->all : readonly Pos[]
+>all : readonly { readonly x: number; readonly y: number; readonly z: number; readonly m: number; }[]
 
     for (const b of mine) {
 >b : Body
@@ -260,14 +303,14 @@ function accelerate(mine: Body[], all: readonly shared Pos[]) {
 >0 : 0
 
         for (const o of all) {
->o : Pos
->all : readonly Pos[]
+>o : { readonly x: number; readonly y: number; readonly z: number; readonly m: number; }
+>all : readonly { readonly x: number; readonly y: number; readonly z: number; readonly m: number; }[]
 
             const dx = o.x - b.x, dy = o.y - b.y, dz = o.z - b.z;
 >dx : number
 >o.x - b.x : number
 >o.x : number
->o : Pos
+>o : { readonly x: number; readonly y: number; readonly z: number; readonly m: number; }
 >x : number
 >b.x : number
 >b : Body
@@ -275,7 +318,7 @@ function accelerate(mine: Body[], all: readonly shared Pos[]) {
 >dy : number
 >o.y - b.y : number
 >o.y : number
->o : Pos
+>o : { readonly x: number; readonly y: number; readonly z: number; readonly m: number; }
 >y : number
 >b.y : number
 >b : Body
@@ -283,7 +326,7 @@ function accelerate(mine: Body[], all: readonly shared Pos[]) {
 >dz : number
 >o.z - b.z : number
 >o.z : number
->o : Pos
+>o : { readonly x: number; readonly y: number; readonly z: number; readonly m: number; }
 >z : number
 >b.z : number
 >b : Body
@@ -309,7 +352,7 @@ function accelerate(mine: Body[], all: readonly shared Pos[]) {
 >f : number
 >o.m / (d2 * Math.sqrt(d2)) : number
 >o.m : number
->o : Pos
+>o : { readonly x: number; readonly y: number; readonly z: number; readonly m: number; }
 >m : number
 >(d2 * Math.sqrt(d2)) : number
 >d2 * Math.sqrt(d2) : number
@@ -461,13 +504,13 @@ function energy(bodies: Body[]): number {
 >e : number
 }
 
-function worker(t: number, mine: sending Body[], board: shared SlotsCell<Pos[]>, barrier: shared BarrierCell, progress: Progress): sending Body[] {
->worker : (t: number, mine: sending Body[], board: shared SlotsCell<Pos[]>, barrier: shared BarrierCell, progress: Progress) => sending Body[]
+function worker(t: number, mine: Sending<Body[]>, board: Slots<Pos[]>, barrier: Barrier, progress: Progress): Sending<Body[]> {
+>worker : (t: number, mine: Sending<Body[]>, board: Slots<Pos[]>, barrier: Barrier, progress: Progress) => Sending<Body[]>
 >t : number
 >mine : Body[]
->board : SlotsCell<Pos[]>
->barrier : BarrierCell
->progress : Progress
+>board : Slots<Pos[]>
+>barrier : Barrier
+>progress : { steps: number; } & import("./threads.mjs").Cell
 
     for (let s = 0; s < STEPS; s++) {
 >s : number
@@ -480,12 +523,12 @@ function worker(t: number, mine: sending Body[], board: shared SlotsCell<Pos[]>,
 
         board.set(t, share(mine.map(b => ({ x: b.x, y: b.y, z: b.z, m: b.m }))));
 >board.set(t, share(mine.map(b => ({ x: b.x, y: b.y, z: b.z, m: b.m })))) : void
->board.set : (index: number, value: Pos[]) => void
->board : SlotsCell<Pos[]>
->set : (index: number, value: Pos[]) => void
+>board.set : (index: number, value: readonly { readonly x: number; readonly y: number; readonly z: number; readonly m: number; }[]) => void
+>board : Slots<Pos[]>
+>set : (index: number, value: readonly { readonly x: number; readonly y: number; readonly z: number; readonly m: number; }[]) => void
 >t : number
->share(mine.map(b => ({ x: b.x, y: b.y, z: b.z, m: b.m }))) : { x: number; y: number; z: number; m: number; }[]
->share : <T>(value: sending T) => shared T
+>share(mine.map(b => ({ x: b.x, y: b.y, z: b.z, m: b.m }))) : readonly { readonly x: number; readonly y: number; readonly z: number; readonly m: number; }[]
+>share : <T>(value: Sending<T>) => Shared<T>
 >mine.map(b => ({ x: b.x, y: b.y, z: b.z, m: b.m })) : { x: number; y: number; z: number; m: number; }[]
 >mine.map : <U>(callbackfn: (value: Body, index: number, array: Body[]) => U, thisArg?: any) => U[]
 >mine : Body[]
@@ -514,22 +557,22 @@ function worker(t: number, mine: sending Body[], board: shared SlotsCell<Pos[]>,
         barrier.wait();
 >barrier.wait() : void
 >barrier.wait : () => void
->barrier : BarrierCell
+>barrier : Barrier
 >wait : () => void
 
         accelerate(mine, board.flat());
 >accelerate(mine, board.flat()) : void
->accelerate : (mine: Body[], all: readonly shared Pos[]) => void
+>accelerate : (mine: Body[], all: Shared<Pos[]>) => void
 >mine : Body[]
->board.flat() : Pos[]
->board.flat : () => Pos[]
->board : SlotsCell<Pos[]>
->flat : () => Pos[]
+>board.flat() : readonly { readonly x: number; readonly y: number; readonly z: number; readonly m: number; }[]
+>board.flat : () => readonly { readonly x: number; readonly y: number; readonly z: number; readonly m: number; }[]
+>board : Slots<Pos[]>
+>flat : () => readonly { readonly x: number; readonly y: number; readonly z: number; readonly m: number; }[]
 
         barrier.wait();
 >barrier.wait() : void
 >barrier.wait : () => void
->barrier : BarrierCell
+>barrier : Barrier
 >wait : () => void
 
         move(mine);
@@ -540,7 +583,7 @@ function worker(t: number, mine: sending Body[], board: shared SlotsCell<Pos[]>,
         progress.steps++;
 >progress.steps++ : number
 >progress.steps : number
->progress : Progress
+>progress : { steps: number; } & import("./threads.mjs").Cell
 >steps : number
     }
     return mine;
@@ -552,33 +595,33 @@ function simulate(threads: number): number {
 >threads : number
 
     const board = new Slots<Pos[]>(threads), barrier = new Barrier(threads), progress = new Progress();
->board : SlotsCell<Pos[]>
->new Slots<Pos[]>(threads) : SlotsCell<Pos[]>
->Slots : new <T>(count: number) => shared SlotsCell<T>
+>board : Slots<Pos[]>
+>new Slots<Pos[]>(threads) : Slots<Pos[]>
+>Slots : typeof Slots
 >threads : number
->barrier : BarrierCell
->new Barrier(threads) : BarrierCell
->Barrier : new (threads: number) => shared BarrierCell
+>barrier : Barrier
+>new Barrier(threads) : Barrier
+>Barrier : typeof Barrier
 >threads : number
->progress : Progress
->new Progress() : Progress
->Progress : new () => Progress
+>progress : { steps: number; } & import("./threads.mjs").Cell
+>new Progress() : { steps: number; } & import("./threads.mjs").Cell
+>Progress : import("./threads.mjs").StructType<{ steps: number; }>
 
     return scope(s => {
->scope(s => {        const parts = partition(makeBodies(), threads);        const ts: (shared Thread<Body[]>)[] = [];        for (let t = 0; t < threads; t++) ts.push(s.spawn(worker, t, take(parts, t), board, barrier, progress));        return energy(ts.flatMap(th => th.join()));    }) : number
->scope : <R>(body: (s: shared import("./own.mjs").Scope) => R) => R
->s => {        const parts = partition(makeBodies(), threads);        const ts: (shared Thread<Body[]>)[] = [];        for (let t = 0; t < threads; t++) ts.push(s.spawn(worker, t, take(parts, t), board, barrier, progress));        return energy(ts.flatMap(th => th.join()));    } : (s: import("./own.mjs").Scope) => number
->s : import("./own.mjs").Scope
+>scope(s => {        const parts = partition(makeBodies(), threads);        const ts: Thread<Body[]>[] = [];        for (let t = 0; t < threads; t++) ts.push(s.spawn(worker, t, take(parts, t), board, barrier, progress));        return energy(ts.flatMap(th => th.join()));    }) : number
+>scope : <R>(body: (s: import("./threads.mjs").Scope) => R) => R
+>s => {        const parts = partition(makeBodies(), threads);        const ts: Thread<Body[]>[] = [];        for (let t = 0; t < threads; t++) ts.push(s.spawn(worker, t, take(parts, t), board, barrier, progress));        return energy(ts.flatMap(th => th.join()));    } : (s: import("./threads.mjs").Scope) => number
+>s : import("./threads.mjs").Scope
 
         const parts = partition(makeBodies(), threads);
 >parts : Body[][]
 >partition(makeBodies(), threads) : Body[][]
->partition : <T>(items: sending T[], parts: number) => (sending T[])[]
+>partition : <T>(items: Sending<T[]>, parts: number) => Sending<T[]>[]
 >makeBodies() : Body[]
->makeBodies : () => sending Body[]
+>makeBodies : () => Sending<Body[]>
 >threads : number
 
-        const ts: (shared Thread<Body[]>)[] = [];
+        const ts: Thread<Body[]>[] = [];
 >ts : Thread<Body[]>[]
 >[] : never[]
 
@@ -595,18 +638,18 @@ function simulate(threads: number): number {
 >ts : Thread<Body[]>[]
 >push : (...items: Thread<Body[]>[]) => number
 >s.spawn(worker, t, take(parts, t), board, barrier, progress) : Thread<Body[]>
->s.spawn : <A extends unknown[], R>(f: (...args: A) => sending R, ...args: sending A) => shared Thread<R>
->s : import("./own.mjs").Scope
->spawn : <A extends unknown[], R>(f: (...args: A) => sending R, ...args: sending A) => shared Thread<R>
->worker : (t: number, mine: sending Body[], board: shared SlotsCell<Pos[]>, barrier: shared BarrierCell, progress: Progress) => sending Body[]
+>s.spawn : <A extends unknown[], R>(f: (...args: A) => Sending<R>, ...args: Sending<A>) => Thread<R>
+>s : import("./threads.mjs").Scope
+>spawn : <A extends unknown[], R>(f: (...args: A) => Sending<R>, ...args: Sending<A>) => Thread<R>
+>worker : (t: number, mine: Sending<Body[]>, board: Slots<Pos[]>, barrier: Barrier, progress: Progress) => Sending<Body[]>
 >t : number
 >take(parts, t) : Body[]
->take : <T>(items: (sending T)[], index: number) => sending T
+>take : <T>(items: Sending<T>[], index: number) => Sending<T>
 >parts : Body[][]
 >t : number
->board : SlotsCell<Pos[]>
->barrier : BarrierCell
->progress : Progress
+>board : Slots<Pos[]>
+>barrier : Barrier
+>progress : { steps: number; } & import("./threads.mjs").Cell
 
         return energy(ts.flatMap(th => th.join()));
 >energy(ts.flatMap(th => th.join())) : number

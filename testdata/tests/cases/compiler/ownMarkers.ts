@@ -6,8 +6,8 @@
 // @ownRuntime: ./threads.mjs
 
 // The plain TypeScript API of the own/shared threads extension: the markers that threads.d.mts
-// exports (Sending, Shared, consume, Cell, struct, f64, ref) mean what the syntax means, with the
-// same typed layouts, reference counting and emit.
+// exports (Sending, Shared, consume, Cell, struct, f64, ref) give the ownership analysis its
+// meaning, and shared structs their typed layouts, reference counting and emit.
 
 // @filename: threads.d.mts
 // Threads for JavaScript in plain TypeScript: own and shared values, shared structs, and channels.
@@ -184,7 +184,7 @@ const Node = struct<Node>({ value: f64, next: ref<Node>() });
 const Box = struct({ item: ref<Node>(), bodies: ref<SharedArray<Body>>() });
 type Box = Struct<typeof Box>;
 
-// Typed layouts and reference counting, as with `shared struct`.
+// Typed layouts and reference counting.
 export function makeList(n: number): Node | null {
     let head: Node | null = null;
     for (let i = 0; i < n; i++) {

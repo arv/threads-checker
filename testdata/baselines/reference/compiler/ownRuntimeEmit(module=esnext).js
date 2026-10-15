@@ -1,15 +1,38 @@
 //// [tests/cases/compiler/ownRuntimeEmit.ts] ////
 
-//// [own.d.mts]
-export declare function share<T>(x: sending T): shared T;
+//// [threads.d.mts]
+declare const cellBrand: unique symbol;
+declare const fieldBrand: unique symbol;
+export interface Cell {
+  readonly [cellBrand]: true;
+}
+export type Sending<T> = T;
+export type Shared<T> = T extends Cell | ((...args: any[]) => any) ? T
+  : T extends object ? { readonly [K in keyof T]: Shared<T[K]> }
+  : T;
+export declare function share<T>(value: Sending<T>): Shared<T>;
+export interface Field<T> {
+  readonly [fieldBrand]: T;
+}
+export declare const f64: Field<number>;
+export interface StructType<T> {
+  new (): T & Cell;
+  readonly fields: readonly string[];
+}
+export type Struct<S> = S extends StructType<infer T> ? T & Cell : never;
+export declare function struct<F extends Record<string, Field<any>>>(
+  fields: F,
+): StructType<{ -readonly [K in keyof F]: F[K] extends Field<infer V> ? V : never }>;
 
 //// [main.mts]
-import { share } from "./own.mjs";
+import { f64, type Sending, share, struct } from "./threads.mjs";
 
-export shared struct Point { x: number; y: number }
-shared struct Local { n: number }
+export const Point = struct({ x: f64, y: f64 });
+const Local = struct({ n: f64 });
 
-export function exported(p: sending number[]): sending number[] { return p; }
+// Registered: function declarations with a body, exported or not, once for overloads. Not
+// registered: ambient functions, arrow functions, and functions in namespaces or other functions.
+export function exported(p: Sending<number[]>): Sending<number[]> { return p; }
 function notExported() { return share([1]); }
 function overloaded(x: string): string;
 function overloaded(x: number): number;
@@ -21,37 +44,50 @@ namespace NS { export function inner() {} }
 function outer() { function nested() {} return nested; }
 
 //// [structOnly.mts]
-export shared struct Only { v: number }
+// A struct and no functions: the struct's helper is imported, and nothing is registered.
+import { f64, struct } from "./threads.mjs";
+export const Only = struct({ v: f64 });
 
 //// [functionsOnly.mts]
-export function f(x: sending number[]) { return x; }
+// Only a type-only import, which is elided: the functions are still registered.
+import type { Sending } from "./threads.mjs";
+export function f(x: Sending<number[]>) { return x; }
 function g() {}
 
 //// [plain.mts]
+// Does not import the runtime: nothing is imported or registered.
 export function plain() { return 1; }
 
 //// [collision.mts]
-export function __register(x: sending number[]) { return x; }
-export shared struct S { v: number }
+// Declares the helpers' names itself: the helpers get unique names.
+import { f64, type Sending, struct } from "./threads.mjs";
+export function __register(x: Sending<number[]>) { return x; }
+export const S = struct({ v: f64 });
 function __sharedStruct() {}
 
 //// [nameless.mts]
-export default function (x: sending number[]) { return x; }
+// A default-exported function without a name is not registered.
+import type { Sending } from "./threads.mjs";
+export default function (x: Sending<number[]>) { return x; }
 function helper() {}
 
 //// [cjs.cts]
-export function c(x: sending number[]) { return x; }
+// Emitted as CommonJS: nothing is imported or registered.
+import type { Sending } from "./threads.mjs";
+export function c(x: Sending<number[]>) { return x; }
 
 //// [script.ts]
-declare function send<T>(x: sending T): void;
-function scriptFunction() { send([1]); }
+// A script cannot import the runtime: nothing is registered.
+function scriptFunction() { return [1]; }
 
 
 //// [main.mjs]
-import { newStruct as __newStruct, register as __register, sharedStruct as __sharedStruct } from "./own.mjs";
-import { share } from "./own.mjs";
+import { newStruct as __newStruct, register as __register, sharedStruct as __sharedStruct } from "./threads.mjs";
+import { f64, share, struct } from "./threads.mjs";
 export const Point = __sharedStruct("Point", ["x", "y"], []);
 const Local = __sharedStruct("Local", ["n"], []);
+// Registered: function declarations with a body, exported or not, once for overloads. Not
+// registered: ambient functions, arrow functions, and functions in namespaces or other functions.
 export function exported(p) { return p; }
 function notExported() { return share([1]); }
 function overloaded(x) { return x; }
@@ -65,23 +101,28 @@ var NS;
 function outer() { function nested() { } return nested; }
 __register(import.meta.url, { exported, notExported, overloaded, main, outer });
 //// [structOnly.mjs]
-import { sharedStruct as __sharedStruct } from "./own.mjs";
+import { sharedStruct as __sharedStruct } from "./threads.mjs";
+// A struct and no functions: the struct's helper is imported, and nothing is registered.
+import { f64, struct } from "./threads.mjs";
 export const Only = __sharedStruct("Only", ["v"], []);
 //// [functionsOnly.mjs]
-import { register as __register } from "./own.mjs";
+import { register as __register } from "./threads.mjs";
 export function f(x) { return x; }
 function g() { }
 __register(import.meta.url, { f, g });
 //// [plain.mjs]
+// Does not import the runtime: nothing is imported or registered.
 export function plain() { return 1; }
 //// [collision.mjs]
-import { register as __register_1, sharedStruct as __sharedStruct_1 } from "./own.mjs";
+import { register as __register_1, sharedStruct as __sharedStruct_1 } from "./threads.mjs";
+// Declares the helpers' names itself: the helpers get unique names.
+import { f64, struct } from "./threads.mjs";
 export function __register(x) { return x; }
 export const S = __sharedStruct_1("S", ["v"], []);
 function __sharedStruct() { }
 __register_1(import.meta.url, { __register, __sharedStruct });
 //// [nameless.mjs]
-import { register as __register } from "./own.mjs";
+import { register as __register } from "./threads.mjs";
 export default function (x) { return x; }
 function helper() { }
 __register(import.meta.url, { helper });
@@ -92,4 +133,5 @@ exports.c = c;
 function c(x) { return x; }
 //// [script.js]
 "use strict";
-function scriptFunction() { send([1]); }
+// A script cannot import the runtime: nothing is registered.
+function scriptFunction() { return [1]; }

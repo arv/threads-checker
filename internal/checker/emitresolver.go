@@ -137,7 +137,7 @@ func (r *EmitResolver) IsOwnRefArgument(argument *ast.Node) bool {
 }
 
 // Reports whether a returned expression of the original tree is a counted value that moves into the
-// runtime: the result of a callback that a runtime function type with a `sending` result types (own/
+// runtime: the result of a callback that a runtime function type with a `Sending<T>` result types (own/
 // shared threads extension).
 func (r *EmitResolver) IsOwnMovedReturn(expression *ast.Node) bool {
 	if !isOwnOriginalNode(expression) {
@@ -288,7 +288,6 @@ func (r *EmitResolver) determineIfDeclarationIsVisible(node *ast.Node) bool {
 		ast.KindModuleDeclaration,
 		ast.KindClassDeclaration,
 		ast.KindInterfaceDeclaration,
-		ast.KindSharedStructDeclaration,
 		ast.KindTypeAliasDeclaration,
 		ast.KindJSTypeAliasDeclaration,
 		ast.KindFunctionDeclaration,

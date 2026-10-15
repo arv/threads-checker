@@ -299,16 +299,6 @@ export function arrays(n: number, image: SharedArray<Pixel>): number {
     return ints[n - 1] + bytes[0] + atomic.sub(ints, 0, 1) + image[0].gray;
 }
 
-//// [syntax.mts]
-// The syntax's shared structs take the integer types as well.
-import { type i32, type u8 } from "./threads.mjs";
-shared struct Color { r: u8; g: u8; b: u8; count: i32 }
-export function brighten(c: Color): number {
-    c.r += 10;
-    c.count++;
-    return c.r + c.g + c.b + c.count;
-}
-
 
 //// [integers.mjs]
 import { F64 as __F64, I32 as __I32, U8 as __U8, newSharedArray as __newSharedArray, outOfBounds as __outOfBounds, register as __register, release as __release, sharedStruct as __sharedStruct } from "./threads.mjs";
@@ -361,12 +351,3 @@ export function arrays(n, image) {
     }
 }
 __register(import.meta.url, { fields, claim, waitFor, arrays });
-//// [syntax.mjs]
-import { I32 as __I32, U8 as __U8, register as __register, sharedStruct as __sharedStruct } from "./threads.mjs";
-const Color = __sharedStruct("Color", ["r", "g", "b", "count"], [], "uuui");
-export function brighten(c) {
-    __U8[c + 8] += 10;
-    __I32[(c >> 2) + 8]++;
-    return __U8[c + 8] + __U8[c + 16] + __U8[c + 24] + __I32[(c >> 2) + 8];
-}
-__register(import.meta.url, { brighten });

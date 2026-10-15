@@ -307,13 +307,3 @@ export function arrays(n: number, image: SharedArray<Pixel>): number {
     image[0].gray = 255;
     return ints[n - 1] + bytes[0] + atomic.sub(ints, 0, 1) + image[0].gray;
 }
-
-// @filename: syntax.mts
-// The syntax's shared structs take the integer types as well.
-import { type i32, type u8 } from "./threads.mjs";
-shared struct Color { r: u8; g: u8; b: u8; count: i32 }
-export function brighten(c: Color): number {
-    c.r += 10;
-    c.count++;
-    return c.r + c.g + c.b + c.count;
-}

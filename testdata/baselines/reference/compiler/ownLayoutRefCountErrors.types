@@ -1,127 +1,113 @@
 //// [tests/cases/compiler/ownLayoutRefCountErrors.ts] ////
 
-=== own.d.mts ===
-// Types for the own/shared threads runtime own.mjs (now own.ts in github.com/arv/threads). Programs
-// import their API from "./own.mjs"; the compiler adds the imports of the helpers it emits
-// (`__sharedStruct`, `__register`) when `ownRuntime` is set.
-//
-// `sending T` marks a value whose ownership moves to the receiver: the sender must not use it
-// afterwards. `shared T` marks a value any number of threads may read at once: deeply immutable, or
-// a cell that synchronizes internally (Slots, Barrier, a shared struct).
+=== threads.d.mts ===
+// The parts of the threads runtime's plain TypeScript API (threads.d.ts in github.com/arv/threads)
+// that this test uses. Programs import their API from "./threads.mjs"; the compiler adds the imports
+// of the helpers it emits (`__sharedStruct`, `__register`, ...) when `ownRuntime` is set.
 
-/** One slot per thread: a thread publishes into its own slot, and everyone reads every slot. */
-export interface SlotsCell<T> {
-    readonly length: number;
+declare const cellBrand: unique symbol;
+>cellBrand : unique symbol
+
+declare const fieldBrand: unique symbol;
+>fieldBrand : unique symbol
+
+/** A cell: shared and mutable. Any number of threads may hold the same one. */
+export interface Cell {
+  readonly [cellBrand]: true;
+>[cellBrand] : true
+>cellBrand : unique symbol
+>true : true
+}
+
+/** A value whose ownership moves, on a parameter or a result. To TypeScript it is just T. */
+export type Sending<T> = T;
+>Sending : T
+
+/** A deeply immutable value, which any number of threads may read. */
+export type Shared<T> = T extends Cell | ((...args: any[]) => any) ? T
+>Shared : Shared<T>
+>args : any[]
+
+  : T extends object ? { readonly [K in keyof T]: Shared<T[K]> }
+  : T;
+
+/** A field of a shared struct. */
+export interface Field<T> {
+  readonly [fieldBrand]: T;
+>[fieldBrand] : T
+>fieldBrand : unique symbol
+}
+/** A number field: an f64 in shared memory. */
+export declare const f64: Field<number>;
+>f64 : Field<number>
+
+/** A reference field: a shared struct, a SharedArray or a Channel, or null. */
+export declare function ref<T>(): Field<T | null>;
+>ref : <T>() => Field<T | null>
+
+/** What `struct(...)` returns: `new S()` makes a zeroed struct in shared memory. */
+export interface StructType<T> {
+  new (): T & Cell;
+  readonly fields: readonly string[];
+>fields : readonly string[]
+}
+/** The value type of a struct type: `type Body = Struct<typeof Body>`. */
+export type Struct<S> = S extends StructType<infer T> ? T & Cell : never;
+>Struct : Struct<S>
+
+/** Declares a shared struct; one that refers to its own type is declared with an interface. */
+export declare function struct<F extends Record<string, Field<any>>>(
+>struct : { <F extends Record<string, Field<any>>>(fields: F): StructType<{ -readonly [K in keyof F]: F[K] extends Field<infer V> ? V : never; }>; <T>(fields: { [K in keyof T]-?: Field<T[K]>; }): StructType<T>; }
+
+  fields: F,
+>fields : F
+
+): StructType<{ -readonly [K in keyof F]: F[K] extends Field<infer V> ? V : never }>;
+export declare function struct<T>(fields: { [K in keyof T]-?: Field<T[K]> }): StructType<T>;
+>struct : { <F extends Record<string, Field<any>>>(fields: F): StructType<{ -readonly [K in keyof F]: F[K] extends Field<infer V> ? V : never; }>; <T>(fields: { [K in keyof T]-?: Field<T[K]>; }): StructType<T>; }
+>fields : { [K in keyof T]-?: Field<T[K]>; }
+
+/** A fixed-length array in shared memory, of numbers or of shared structs stored inline. */
+export interface SharedArray<T> extends Cell {
+  readonly length: number;
 >length : number
 
-    /** Publishes `value` in slot `index`, replacing what was there. */
-    set(index: number, value: T): void;
->set : (index: number, value: T) => void
->index : number
->value : T
-
-    /** The value in slot `index`. */
-    get(index: number): shared T;
->get : (index: number) => shared T
->index : number
-
-    /** The arrays in all slots, concatenated in slot order. */
-    flat(): shared (T extends readonly (infer E)[] ? E : T)[];
->flat : () => shared (T extends readonly (infer E)[] ? E : T)[]
-}
-export declare const Slots: new <T>(count: number) => shared SlotsCell<T>;
->Slots : new <T>(count: number) => shared SlotsCell<T>
->count : number
-
-/** A reusable barrier for a fixed number of threads. */
-export interface BarrierCell {
-    /** Blocks until all threads have called `wait`. */
-    wait(): void;
->wait : () => void
-}
-export declare const Barrier: new (threads: number) => shared BarrierCell;
->Barrier : new (threads: number) => shared BarrierCell
->threads : number
-
-/** Freezes a value the caller owns into a deeply immutable value every thread can read. */
-export declare function share<T>(value: sending T): shared T;
->share : <T>(value: sending T) => shared T
->value : T
-
-/** A thread started inside a `scope`; joining it moves the thread's result back. */
-export interface Thread<R> {
-    join(): sending R;
->join : () => sending R
-}
-
-/** Spawns threads that cannot outlive the scope. Every argument is sent to the new thread. */
-export interface Scope {
-    spawn<A extends unknown[], R>(f: (...args: A) => sending R, ...args: sending A): shared Thread<R>;
->spawn : <A extends unknown[], R>(f: (...args: A) => sending R, ...args: sending A) => shared Thread<R>
->f : (...args: A) => sending R
->args : A
->args : A
-}
-
-/** Runs `body` and joins every thread it spawned before returning. */
-export declare function scope<R>(body: (s: shared Scope) => R): R;
->scope : <R>(body: (s: shared Scope) => R) => R
->body : (s: shared Scope) => R
->s : Scope
-
-/** Splits an owned array into `parts` owned, disjoint chunks of nearly equal size. Trusted. */
-export declare function partition<T>(items: sending T[], parts: number): (sending T[])[];
->partition : <T>(items: sending T[], parts: number) => (sending T[])[]
->items : T[]
->parts : number
-
-/** Takes element `index` out of an array of owned values, so the caller owns it. Trusted. */
-export declare function take<T>(items: (sending T)[], index: number): sending T;
->take : <T>(items: (sending T)[], index: number) => sending T
->items : T[]
->index : number
-
-/** Prints a line, synchronously, from any thread. */
-export declare function log(...args: unknown[]): void;
->log : (...args: unknown[]) => void
->args : unknown[]
-
-/** A shared struct's value as a type: what `new SharedArray(Struct, n)` takes. */
-export interface SharedStructType<T> {
-    new (): T;
-}
-
-/**
- * A fixed-length array in the shared heap, of numbers or of shared structs stored inline. Threads
- * share it with no copying. With `ownRuntime` the compiler lays it out in the shared heap and turns
- * `a[i]` and `a.length` into typed-array accesses.
- */
-export interface SharedArray<T> {
-    readonly length: number;
->length : number
-
-    [index: number]: T;
+  [index: number]: T;
 >index : number
 }
 export declare const SharedArray: {
->SharedArray : { new (type: NumberConstructor, length: number): SharedArray<number>; new <T>(type: SharedStructType<T>, length: number): SharedArray<T>; }
+>SharedArray : { new (type: NumberConstructor, length: number): SharedArray<number>; new <T>(type: StructType<T>, length: number): SharedArray<T & Cell>; }
 
-    new (type: NumberConstructor, length: number): SharedArray<number>;
+  new (type: NumberConstructor, length: number): SharedArray<number>;
 >type : NumberConstructor
 >length : number
 
-    new <T>(type: SharedStructType<T>, length: number): SharedArray<T>;
->type : SharedStructType<T>
+  new <T>(type: StructType<T>, length: number): SharedArray<T & Cell>;
+>type : StructType<T>
 >length : number
 
 };
 
-
 === errors.mts ===
-export shared struct Node { value: number; next: Node | null }
->Node : Node
+import { f64, ref, struct } from "./threads.mjs";
+>f64 : import("./threads.mjs").Field<number>
+>ref : <T>() => import("./threads.mjs").Field<T | null>
+>struct : { <F extends Record<string, import("./threads.mjs").Field<any>>>(fields: F): import("./threads.mjs").StructType<{ -readonly [K in keyof F]: F[K] extends import("./threads.mjs").Field<infer V> ? V : never; }>; <T>(fields: { [K in keyof T]-?: import("./threads.mjs").Field<T[K]>; }): import("./threads.mjs").StructType<T>; }
+
+export interface Node { value: number; next: Node | null }
 >value : number
 >next : Node | null
+
+export const Node = struct<Node>({ value: f64, next: ref<Node>() });
+>Node : import("./threads.mjs").StructType<Node>
+>struct<Node>({ value: f64, next: ref<Node>() }) : import("./threads.mjs").StructType<Node>
+>struct : { <F extends Record<string, import("./threads.mjs").Field<any>>>(fields: F): import("./threads.mjs").StructType<{ -readonly [K in keyof F]: F[K] extends import("./threads.mjs").Field<infer V> ? V : never; }>; <T>(fields: { [K in keyof T]-?: import("./threads.mjs").Field<T[K]>; }): import("./threads.mjs").StructType<T>; }
+>{ value: f64, next: ref<Node>() } : { value: import("./threads.mjs").Field<number>; next: import("./threads.mjs").Field<Node | null>; }
+>value : import("./threads.mjs").Field<number>
+>f64 : import("./threads.mjs").Field<number>
+>next : import("./threads.mjs").Field<Node | null>
+>ref<Node>() : import("./threads.mjs").Field<Node | null>
+>ref : <T>() => import("./threads.mjs").Field<T | null>
 
 let current: Node | null = null;             // a module's variable, which functions capture
 >current : Node | null
@@ -152,10 +138,10 @@ export function captured(head: Node) {
 >value : number
 
     n = new Node();                          // error: captured and reassigned
->n = new Node() : Node
+>n = new Node() : Node & import("./threads.mjs").Cell
 >n : Node
->new Node() : Node
->Node : new () => Node
+>new Node() : Node & import("./threads.mjs").Cell
+>Node : import("./threads.mjs").StructType<Node>
 
     return f;
 >f : () => number
@@ -220,8 +206,8 @@ export class Holder {
 
     node: Node = new Node();                 // error
 >node : Node
->new Node() : Node
->Node : new () => Node
+>new Node() : Node & import("./threads.mjs").Cell
+>Node : import("./threads.mjs").StructType<Node>
 
     constructor(public other: Node) {}       // error
 >other : Node

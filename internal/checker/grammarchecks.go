@@ -1396,8 +1396,7 @@ func (c *Checker) checkGrammarTypeOperatorNode(node *ast.TypeOperatorNode) bool 
 			return c.grammarErrorOnNode(node.AsNode(), diagnostics.X_unique_symbol_types_are_not_allowed_here)
 		}
 	} else if node.Operator == ast.KindReadonlyKeyword {
-		// `readonly shared T[]` and `readonly sending T[]` are fine.
-		innerType := ast.SkipOwnershipTypes(node.Type)
+		innerType := node.Type
 		if innerType.Kind != ast.KindArrayType && innerType.Kind != ast.KindTupleType {
 			return c.grammarErrorOnFirstToken(node.AsNode(), diagnostics.X_readonly_type_modifier_is_only_permitted_on_array_and_tuple_literal_types, scanner.TokenToString(ast.KindSymbolKeyword))
 		}

@@ -1,14 +1,83 @@
 //// [tests/cases/compiler/ownRuntimeCommonJS.ts] ////
 
-=== ownRuntimeCommonJS.ts ===
-// `ownRuntime` needs ES module output: with CommonJS it is an error, and it is ignored.
+=== threads.d.mts ===
+declare const cellBrand: unique symbol;
+>cellBrand : Symbol(cellBrand, Decl(threads.d.mts, 0, 13))
 
-export shared struct S { v: number }
->S : Symbol(S, Decl(ownRuntimeCommonJS.ts, 0, 0))
->v : Symbol(S.v, Decl(ownRuntimeCommonJS.ts, 2, 24))
+declare const fieldBrand: unique symbol;
+>fieldBrand : Symbol(fieldBrand, Decl(threads.d.mts, 1, 13))
 
-export function f(x: sending number[]) { return x; }
->f : Symbol(f, Decl(ownRuntimeCommonJS.ts, 2, 36))
->x : Symbol(x, Decl(ownRuntimeCommonJS.ts, 3, 18))
->x : Symbol(x, Decl(ownRuntimeCommonJS.ts, 3, 18))
+export interface Cell {
+>Cell : Symbol(Cell, Decl(threads.d.mts, 1, 40))
+
+  readonly [cellBrand]: true;
+>[cellBrand] : Symbol(Cell[cellBrand], Decl(threads.d.mts, 2, 23))
+>cellBrand : Symbol(cellBrand, Decl(threads.d.mts, 0, 13))
+}
+export type Sending<T> = T;
+>Sending : Symbol(Sending, Decl(threads.d.mts, 4, 1))
+>T : Symbol(T, Decl(threads.d.mts, 5, 20))
+>T : Symbol(T, Decl(threads.d.mts, 5, 20))
+
+export interface Field<T> {
+>Field : Symbol(Field, Decl(threads.d.mts, 5, 27))
+>T : Symbol(T, Decl(threads.d.mts, 6, 23))
+
+  readonly [fieldBrand]: T;
+>[fieldBrand] : Symbol(Field[fieldBrand], Decl(threads.d.mts, 6, 27))
+>fieldBrand : Symbol(fieldBrand, Decl(threads.d.mts, 1, 13))
+>T : Symbol(T, Decl(threads.d.mts, 6, 23))
+}
+export declare const f64: Field<number>;
+>f64 : Symbol(f64, Decl(threads.d.mts, 9, 20))
+>Field : Symbol(Field, Decl(threads.d.mts, 5, 27))
+
+export interface StructType<T> {
+>StructType : Symbol(StructType, Decl(threads.d.mts, 9, 40))
+>T : Symbol(T, Decl(threads.d.mts, 10, 28))
+
+  new (): T & Cell;
+>T : Symbol(T, Decl(threads.d.mts, 10, 28))
+>Cell : Symbol(Cell, Decl(threads.d.mts, 1, 40))
+
+  readonly fields: readonly string[];
+>fields : Symbol(StructType.fields, Decl(threads.d.mts, 11, 19))
+}
+export declare function struct<F extends Record<string, Field<any>>>(
+>struct : Symbol(struct, Decl(threads.d.mts, 13, 1))
+>F : Symbol(F, Decl(threads.d.mts, 14, 31))
+>Record : Symbol(Record, Decl(lib.es5.d.ts, --, --))
+>Field : Symbol(Field, Decl(threads.d.mts, 5, 27))
+
+  fields: F,
+>fields : Symbol(fields, Decl(threads.d.mts, 14, 69))
+>F : Symbol(F, Decl(threads.d.mts, 14, 31))
+
+): StructType<{ -readonly [K in keyof F]: F[K] extends Field<infer V> ? V : never }>;
+>StructType : Symbol(StructType, Decl(threads.d.mts, 9, 40))
+>K : Symbol(K, Decl(threads.d.mts, 16, 27))
+>F : Symbol(F, Decl(threads.d.mts, 14, 31))
+>F : Symbol(F, Decl(threads.d.mts, 14, 31))
+>K : Symbol(K, Decl(threads.d.mts, 16, 27))
+>Field : Symbol(Field, Decl(threads.d.mts, 5, 27))
+>V : Symbol(V, Decl(threads.d.mts, 16, 66))
+>V : Symbol(V, Decl(threads.d.mts, 16, 66))
+
+=== main.ts ===
+import { f64, type Sending, struct } from "./threads.mjs";
+>f64 : Symbol(f64, Decl(main.ts, 0, 8))
+>Sending : Symbol(Sending, Decl(main.ts, 0, 13))
+>struct : Symbol(struct, Decl(main.ts, 0, 27))
+
+export const S = struct({ v: f64 });
+>S : Symbol(S, Decl(main.ts, 2, 12))
+>struct : Symbol(struct, Decl(main.ts, 0, 27))
+>v : Symbol(v, Decl(main.ts, 2, 25))
+>f64 : Symbol(f64, Decl(main.ts, 0, 8))
+
+export function f(x: Sending<number[]>) { return x; }
+>f : Symbol(f, Decl(main.ts, 2, 36))
+>x : Symbol(x, Decl(main.ts, 3, 18))
+>Sending : Symbol(Sending, Decl(main.ts, 0, 13))
+>x : Symbol(x, Decl(main.ts, 3, 18))
 

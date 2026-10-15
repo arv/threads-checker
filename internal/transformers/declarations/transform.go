@@ -234,7 +234,6 @@ func (tx *DeclarationTransformer) visit(node *ast.Node) *ast.Node {
 		ast.KindModuleDeclaration,
 		ast.KindImportEqualsDeclaration,
 		ast.KindInterfaceDeclaration,
-		ast.KindSharedStructDeclaration,
 		ast.KindClassDeclaration,
 		ast.KindJSTypeAliasDeclaration,
 		ast.KindTypeAliasDeclaration,
@@ -1726,8 +1725,6 @@ func (tx *DeclarationTransformer) transformTopLevelDeclaration(input *ast.Node) 
 		result = tx.transformTypeAliasDeclaration(input.AsTypeAliasDeclaration())
 	case ast.KindInterfaceDeclaration:
 		result = tx.transformInterfaceDeclaration(input.AsInterfaceDeclaration())
-	case ast.KindSharedStructDeclaration:
-		result = tx.transformSharedStructDeclaration(input.AsSharedStructDeclaration())
 	case ast.KindFunctionDeclaration:
 		result = tx.transformFunctionDeclaration(input.AsFunctionDeclaration())
 	case ast.KindModuleDeclaration:
@@ -1768,17 +1765,6 @@ func (tx *DeclarationTransformer) transformInterfaceDeclaration(input *ast.Inter
 		input.Name(),
 		tx.Visitor().VisitNodes(input.TypeParameters),
 		tx.Visitor().VisitNodes(input.HeritageClauses),
-		tx.Visitor().VisitNodes(input.Members),
-	)
-}
-
-// A shared struct is kept as is in declaration files (as `declare shared struct` at the top level),
-// with its field types visited like the members of an interface.
-func (tx *DeclarationTransformer) transformSharedStructDeclaration(input *ast.SharedStructDeclaration) *ast.Node {
-	return tx.Factory().UpdateSharedStructDeclaration(
-		input,
-		tx.ensureModifiers(input.AsNode()),
-		input.Name(),
 		tx.Visitor().VisitNodes(input.Members),
 	)
 }

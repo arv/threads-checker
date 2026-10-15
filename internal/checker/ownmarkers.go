@@ -11,17 +11,17 @@ import (
 
 // The plain TypeScript API of the own/shared threads extension (only with `--ownRuntime`).
 //
-// Programs need not use the extension's syntax: the module that `ownRuntime` names (@arv/threads,
-// threads.d.ts in github.com/arv/threads) exports markers that stock TypeScript accepts, and the
-// checker gives them the syntax's meaning:
+// Programs are plain TypeScript: the module that `ownRuntime` names (@arv/threads, threads.d.ts in
+// github.com/arv/threads) exports markers that stock TypeScript accepts, and the checker gives them
+// their meaning:
 //
-//	Sending<T>                  sending T (an alias of T: on a parameter, a rest parameter, a result)
-//	Shared<T>                   shared T (deeply readonly)
-//	consume(x)                  consume x (emitted as x)
-//	a type assignable to Cell   a cell: shared and region-less, as a `shared` cell type was
+//	Sending<T>                  ownership moves (an alias of T: on a parameter, a rest parameter, a result)
+//	Shared<T>                   a deeply immutable value (deeply readonly)
+//	consume(x)                  ends x's lifetime, handing its value over (emitted as x)
+//	a type assignable to Cell   a cell: shared and region-less
 //	const S = struct({ a: f64, next: ref<T>() })
 //	const S = struct<I>({ ... })
-//	                            shared struct S { a: number; next: T | null } (emitted as
+//	                            a shared struct with fields `a: number; next: T | null` (emitted as
 //	                            `__sharedStruct("S", ["a", "next"], [1])`): its fields in the order of
 //	                            the object literal, `f64` a number field and `ref<T>()` a reference
 //	                            field (and `bool`, `str`, `i32` and `u8`, see OwnFieldKind). Its values
@@ -215,7 +215,7 @@ func (c *Checker) isOwnCellBranded(t *Type) bool {
 
 // A shared struct: its name, fields in slot order, and how each holds its value.
 type ownStructInfo struct {
-	decl   *ast.Node // the `shared struct` declaration, or the `struct(...)` call
+	decl   *ast.Node // the `struct(...)` call
 	name   string
 	fields []string
 	kinds  []printer.OwnFieldKind
@@ -293,8 +293,7 @@ func (c *Checker) getOwnStructOfCall(call *ast.Node) *ownStructInfo {
 }
 
 // Checks a `struct(...)` call: its fields are given in an object literal, by name, and each is a
-// number, a boolean, a string or a reference (a shared struct or a SharedArray, possibly null), as for
-// `shared struct`.
+// number, a boolean, a string or a reference (a shared struct or a SharedArray, possibly null).
 func (c *Checker) checkOwnStructCall(call *ast.Node) {
 	t := c.getOwnStructTypeOfCall(call)
 	if t == nil || len(call.Arguments()) < 1 {

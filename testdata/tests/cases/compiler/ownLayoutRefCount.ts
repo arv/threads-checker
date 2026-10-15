@@ -3,90 +3,87 @@
 // @moduleResolution: bundler
 // @strict: true
 // @lib: es2022
-// @ownRuntime: ./own.mjs
+// @ownRuntime: ./threads.mjs
 
 // Reference counting of shared structs and SharedArrays (REFCOUNT.md in github.com/arv/threads):
 // every address is owned (+1), a stable borrow or an unstable borrow, and the emit retains and
 // releases where the rules say.
 
-// @filename: own.d.mts
-// Types for the own/shared threads runtime own.mjs (now own.ts in github.com/arv/threads). Programs
-// import their API from "./own.mjs"; the compiler adds the imports of the helpers it emits
-// (`__sharedStruct`, `__register`) when `ownRuntime` is set.
-//
-// `sending T` marks a value whose ownership moves to the receiver: the sender must not use it
-// afterwards. `shared T` marks a value any number of threads may read at once: deeply immutable, or
-// a cell that synchronizes internally (Slots, Barrier, a shared struct).
+// @filename: threads.d.mts
+// The parts of the threads runtime's plain TypeScript API (threads.d.ts in github.com/arv/threads)
+// that this test uses. Programs import their API from "./threads.mjs"; the compiler adds the imports
+// of the helpers it emits (`__sharedStruct`, `__register`, ...) when `ownRuntime` is set.
 
-/** One slot per thread: a thread publishes into its own slot, and everyone reads every slot. */
-export interface SlotsCell<T> {
-    readonly length: number;
-    /** Publishes `value` in slot `index`, replacing what was there. */
-    set(index: number, value: T): void;
-    /** The value in slot `index`. */
-    get(index: number): shared T;
-    /** The arrays in all slots, concatenated in slot order. */
-    flat(): shared (T extends readonly (infer E)[] ? E : T)[];
-}
-export declare const Slots: new <T>(count: number) => shared SlotsCell<T>;
+declare const cellBrand: unique symbol;
+declare const fieldBrand: unique symbol;
 
-/** A reusable barrier for a fixed number of threads. */
-export interface BarrierCell {
-    /** Blocks until all threads have called `wait`. */
-    wait(): void;
-}
-export declare const Barrier: new (threads: number) => shared BarrierCell;
-
-/** Freezes a value the caller owns into a deeply immutable value every thread can read. */
-export declare function share<T>(value: sending T): shared T;
-
-/** A thread started inside a `scope`; joining it moves the thread's result back. */
-export interface Thread<R> {
-    join(): sending R;
+/** A cell: shared and mutable. Any number of threads may hold the same one. */
+export interface Cell {
+  readonly [cellBrand]: true;
 }
 
+/** A value whose ownership moves, on a parameter or a result. To TypeScript it is just T. */
+export type Sending<T> = T;
+
+/** A deeply immutable value, which any number of threads may read. */
+export type Shared<T> = T extends Cell | ((...args: any[]) => any) ? T
+  : T extends object ? { readonly [K in keyof T]: Shared<T[K]> }
+  : T;
+
+/** A field of a shared struct. */
+export interface Field<T> {
+  readonly [fieldBrand]: T;
+}
+/** A number field: an f64 in shared memory. */
+export declare const f64: Field<number>;
+/** A reference field: a shared struct, a SharedArray or a Channel, or null. */
+export declare function ref<T>(): Field<T | null>;
+
+/** What `struct(...)` returns: `new S()` makes a zeroed struct in shared memory. */
+export interface StructType<T> {
+  new (): T & Cell;
+  readonly fields: readonly string[];
+}
+/** The value type of a struct type: `type Body = Struct<typeof Body>`. */
+export type Struct<S> = S extends StructType<infer T> ? T & Cell : never;
+
+/** Declares a shared struct; one that refers to its own type is declared with an interface. */
+export declare function struct<F extends Record<string, Field<any>>>(
+  fields: F,
+): StructType<{ -readonly [K in keyof F]: F[K] extends Field<infer V> ? V : never }>;
+export declare function struct<T>(fields: { [K in keyof T]-?: Field<T[K]> }): StructType<T>;
+
+/** A fixed-length array in shared memory, of numbers or of shared structs stored inline. */
+export interface SharedArray<T> extends Cell {
+  readonly length: number;
+  [index: number]: T;
+}
+export declare const SharedArray: {
+  new (type: NumberConstructor, length: number): SharedArray<number>;
+  new <T>(type: StructType<T>, length: number): SharedArray<T & Cell>;
+};
+
+/** A thread; joining it moves the thread's result back. */
+export interface Thread<R> extends Cell {
+  join(): Sending<R>;
+}
 /** Spawns threads that cannot outlive the scope. Every argument is sent to the new thread. */
-export interface Scope {
-    spawn<A extends unknown[], R>(f: (...args: A) => sending R, ...args: sending A): shared Thread<R>;
+export interface Scope extends Cell {
+  spawn<A extends unknown[], R>(f: (...args: A) => Sending<R>, ...args: Sending<A>): Thread<R>;
 }
-
 /** Runs `body` and joins every thread it spawned before returning. */
-export declare function scope<R>(body: (s: shared Scope) => R): R;
-
-/** Splits an owned array into `parts` owned, disjoint chunks of nearly equal size. Trusted. */
-export declare function partition<T>(items: sending T[], parts: number): (sending T[])[];
-
-/** Takes element `index` out of an array of owned values, so the caller owns it. Trusted. */
-export declare function take<T>(items: (sending T)[], index: number): sending T;
+export declare function scope<R>(body: (s: Scope) => R): R;
 
 /** Prints a line, synchronously, from any thread. */
 export declare function log(...args: unknown[]): void;
 
-/** A shared struct's value as a type: what `new SharedArray(Struct, n)` takes. */
-export interface SharedStructType<T> {
-    new (): T;
-}
-
-/**
- * A fixed-length array in the shared heap, of numbers or of shared structs stored inline. Threads
- * share it with no copying. With `ownRuntime` the compiler lays it out in the shared heap and turns
- * `a[i]` and `a.length` into typed-array accesses.
- */
-export interface SharedArray<T> {
-    readonly length: number;
-    [index: number]: T;
-}
-export declare const SharedArray: {
-    new (type: NumberConstructor, length: number): SharedArray<number>;
-    new <T>(type: SharedStructType<T>, length: number): SharedArray<T>;
-};
-
-
 // @filename: list.mts
-import { log, scope } from "./own.mjs";
+import { f64, log, ref, scope, struct, type Struct } from "./threads.mjs";
 
-export shared struct Node { value: number; next: Node | null }
-export shared struct Box { item: Node | null }
+export interface Node { value: number; next: Node | null }
+export const Node = struct<Node>({ value: f64, next: ref<Node>() });
+export const Box = struct({ item: ref<Node>() });
+export type Box = Struct<typeof Box>;
 
 // The linked list: building it (`head` is reassigned, so it is owned, and `node` is new), and
 // returning it (the owned local's count moves out).

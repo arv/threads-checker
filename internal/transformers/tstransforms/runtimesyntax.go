@@ -4,7 +4,6 @@ package tstransforms
 
 import (
 	"slices"
-	"strconv"
 
 	"github.com/microsoft/typescript-go/internal/ast"
 	"github.com/microsoft/typescript-go/internal/binder"
@@ -27,13 +26,12 @@ type RuntimeSyntaxTransformer struct {
 	currentNamespace                    *ast.ModuleDeclarationNode
 	resolver                            binder.ReferenceResolver
 	emitResolver                        printer.EmitResolver
-	getEmitModuleFormatOfFile           func(file ast.HasFileName) core.ModuleKind
 }
 
 func NewRuntimeSyntaxTransformer(opt *transformers.TransformOptions) *transformers.Transformer {
 	compilerOptions := opt.CompilerOptions
 	emitContext := opt.Context
-	tx := &RuntimeSyntaxTransformer{compilerOptions: compilerOptions, resolver: opt.Resolver, emitResolver: opt.EmitResolver, getEmitModuleFormatOfFile: opt.GetEmitModuleFormatOfFile}
+	tx := &RuntimeSyntaxTransformer{compilerOptions: compilerOptions, resolver: opt.Resolver, emitResolver: opt.EmitResolver}
 	return tx.NewTransformer(tx.visit, emitContext)
 }
 
@@ -99,8 +97,6 @@ func (tx *RuntimeSyntaxTransformer) visit(node *ast.Node) *ast.Node {
 		node = nil
 	case ast.KindEnumDeclaration:
 		node = tx.visitEnumDeclaration(node.AsEnumDeclaration())
-	case ast.KindSharedStructDeclaration:
-		node = tx.visitSharedStructDeclaration(node.AsSharedStructDeclaration())
 	case ast.KindModuleDeclaration:
 		node = tx.visitModuleDeclaration(node.AsModuleDeclaration())
 	case ast.KindClassDeclaration:
@@ -623,96 +619,6 @@ func (tx *RuntimeSyntaxTransformer) visitVariableStatement(node *ast.VariableSta
 		return statement
 	}
 	return tx.Visitor().VisitEachChild(node.AsNode())
-}
-
-// The runtime function that a shared struct declaration is lowered to a call of.
-const sharedStructRuntimeFunctionName = transformers.OwnRuntimeSharedStructHelper
-
-// Lowers a shared struct declaration
-//
-//	export shared struct Name { a: T; readonly b: U }
-//
-// to a runtime call that lists the field names in declaration order:
-//
-//	export const Name = __sharedStruct("Name", ["a", "b"]);
-//
-// With `--ownRuntime` the module imports `__sharedStruct` from the runtime (see
-// transformers.CreateOwnRuntimeStatements) and the call uses that binding; otherwise it is a free
-// identifier that the environment must provide.
-//
-// TODO(own-shared): lower to a SharedArrayBuffer layout with typed accessors instead.
-func (tx *RuntimeSyntaxTransformer) visitSharedStructDeclaration(node *ast.SharedStructDeclaration) *ast.Node {
-	f := tx.Factory()
-	helper := f.NewIdentifier(sharedStructRuntimeFunctionName)
-	usesOwnRuntime := transformers.UsesOwnRuntime(tx.EmitContext(), tx.compilerOptions, tx.currentSourceFile.AsSourceFile(), tx.getEmitModuleFormatOfFile)
-	if usesOwnRuntime {
-		helper = f.NewUnscopedHelperName(sharedStructRuntimeFunctionName)
-	}
-	var fieldNames []*ast.Expression
-	for _, member := range node.Members.Nodes {
-		if fieldName := tx.getSharedStructFieldName(member); fieldName != nil {
-			fieldNames = append(fieldNames, fieldName)
-		}
-	}
-	name := node.Name()
-	args := []*ast.Expression{
-		f.NewStringLiteral(name.Text(), ast.TokenFlagsNone),
-		f.NewArrayLiteralExpression(f.NewNodeList(fieldNames), false /*multiLine*/),
-	}
-	if usesOwnRuntime && tx.emitResolver != nil {
-		// The indexes of the reference fields, which the runtime releases when it frees a block, and
-		// the fields' kinds if any is other than a number or a reference.
-		var refs []*ast.Expression
-		kinds := ""
-		if original := tx.EmitContext().MostOriginal(node.AsNode()); original != nil && original.Flags&ast.NodeFlagsSynthesized == 0 {
-			cell := tx.emitResolver.GetOwnCellType(original)
-			for k, kind := range cell.Kinds {
-				if kind == printer.OwnFieldRef {
-					refs = append(refs, f.NewNumericLiteral(strconv.Itoa(k), ast.TokenFlagsNone))
-				}
-			}
-			kinds = cell.KindLetters()
-		}
-		args = append(args, f.NewArrayLiteralExpression(f.NewNodeList(refs), false /*multiLine*/))
-		if kinds != "" {
-			args = append(args, f.NewStringLiteral(kinds, ast.TokenFlagsNone))
-		}
-	}
-	call := f.NewCallExpression(
-		helper,
-		nil, /*questionDotToken*/
-		nil, /*typeArguments*/
-		f.NewNodeList(args),
-		ast.NodeFlagsNone,
-	)
-	declaration := f.NewVariableDeclaration(name, nil /*exclamationToken*/, nil /*typeNode*/, call)
-	tx.EmitContext().SetOriginal(declaration, node.AsNode())
-	statement := f.NewVariableStatement(
-		transformers.ExtractModifiers(tx.EmitContext(), node.Modifiers(), ast.ModifierFlagsExport),
-		f.NewVariableDeclarationList(f.NewNodeList([]*ast.Node{declaration}), ast.NodeFlagsConst),
-	)
-	tx.EmitContext().SetOriginal(statement, node.AsNode())
-	tx.EmitContext().AssignCommentAndSourceMapRanges(statement, node.AsNode())
-	// Handle `export` inside a namespace like any other exported variable.
-	return tx.visitVariableStatement(statement.AsVariableStatement())
-}
-
-// Gets an expression for the name of a shared struct field: `"a"` for `a: T` and `"a"` and `1` for
-// `"a": T` and `1: T`. Members that are not fields (a parse error) are skipped.
-func (tx *RuntimeSyntaxTransformer) getSharedStructFieldName(member *ast.Node) *ast.Expression {
-	if !ast.IsPropertySignatureDeclaration(member) {
-		return nil
-	}
-	name := member.Name()
-	switch name.Kind {
-	case ast.KindIdentifier, ast.KindStringLiteral, ast.KindNoSubstitutionTemplateLiteral:
-		return tx.Factory().NewStringLiteral(name.Text(), ast.TokenFlagsNone)
-	case ast.KindNumericLiteral:
-		return tx.Factory().NewNumericLiteral(name.Text(), ast.TokenFlagsNone)
-	case ast.KindComputedPropertyName:
-		return tx.Visitor().VisitNode(name.Expression())
-	}
-	return nil
 }
 
 // createNamespaceExportExpression creates an assignment to a namespace member for use as a

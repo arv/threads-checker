@@ -1,0 +1,237 @@
+//// [tests/cases/compiler/ownLayoutSelfReferential.ts] ////
+
+=== threads.d.mts ===
+// The parts of the threads runtime (threads.mjs, from github.com/arv/threads) this test uses.
+// Programs import their API from "./threads.mjs"; the compiler adds the imports of the helpers it
+// emits (`__sharedStruct`, `__register`, ...) when `ownRuntime` is set.
+
+declare const cellBrand: unique symbol;
+>cellBrand : Symbol(cellBrand, Decl(threads.d.mts, 4, 13))
+
+declare const fieldBrand: unique symbol;
+>fieldBrand : Symbol(fieldBrand, Decl(threads.d.mts, 5, 13))
+
+/** A cell: shared and mutable. Any number of threads may hold the same one. */
+export interface Cell {
+>Cell : Symbol(Cell, Decl(threads.d.mts, 5, 40))
+
+  readonly [cellBrand]: true;
+>[cellBrand] : Symbol(Cell[cellBrand], Decl(threads.d.mts, 8, 23))
+>cellBrand : Symbol(cellBrand, Decl(threads.d.mts, 4, 13))
+}
+
+/** A field of a shared struct, declared with `f64` or `ref<T>()`. */
+export interface Field<T> {
+>Field : Symbol(Field, Decl(threads.d.mts, 10, 1))
+>T : Symbol(T, Decl(threads.d.mts, 13, 23))
+
+  readonly [fieldBrand]: T;
+>[fieldBrand] : Symbol(Field[fieldBrand], Decl(threads.d.mts, 13, 27))
+>fieldBrand : Symbol(fieldBrand, Decl(threads.d.mts, 5, 13))
+>T : Symbol(T, Decl(threads.d.mts, 13, 23))
+}
+/** A number field: an f64 in shared memory. */
+export declare const f64: Field<number>;
+>f64 : Symbol(f64, Decl(threads.d.mts, 17, 20))
+>Field : Symbol(Field, Decl(threads.d.mts, 10, 1))
+
+/** A reference field: a shared struct or a SharedArray, or null. */
+export declare function ref<T>(): Field<T | null>;
+>ref : Symbol(ref, Decl(threads.d.mts, 17, 40))
+>T : Symbol(T, Decl(threads.d.mts, 19, 28))
+>Field : Symbol(Field, Decl(threads.d.mts, 10, 1))
+>T : Symbol(T, Decl(threads.d.mts, 19, 28))
+
+/** What `struct(...)` returns: `new S()` makes a zeroed struct in shared memory. */
+export interface StructType<T> {
+>StructType : Symbol(StructType, Decl(threads.d.mts, 19, 50))
+>T : Symbol(T, Decl(threads.d.mts, 22, 28))
+
+  new (): T & Cell;
+>T : Symbol(T, Decl(threads.d.mts, 22, 28))
+>Cell : Symbol(Cell, Decl(threads.d.mts, 5, 40))
+
+  readonly fields: readonly string[];
+>fields : Symbol(StructType.fields, Decl(threads.d.mts, 23, 19))
+}
+/** The value type of a struct type: `type Body = Struct<typeof Body>`. */
+export type Struct<S> = S extends StructType<infer T> ? T & Cell : never;
+>Struct : Symbol(Struct, Decl(threads.d.mts, 25, 1))
+>S : Symbol(S, Decl(threads.d.mts, 27, 19))
+>S : Symbol(S, Decl(threads.d.mts, 27, 19))
+>StructType : Symbol(StructType, Decl(threads.d.mts, 19, 50))
+>T : Symbol(T, Decl(threads.d.mts, 27, 50))
+>T : Symbol(T, Decl(threads.d.mts, 27, 50))
+>Cell : Symbol(Cell, Decl(threads.d.mts, 5, 40))
+
+/** Declares a shared struct: fields at fixed places in shared memory. */
+export declare function struct<F extends Record<string, Field<any>>>(
+>struct : Symbol(struct, Decl(threads.d.mts, 27, 73), Decl(threads.d.mts, 32, 85))
+>F : Symbol(F, Decl(threads.d.mts, 30, 31))
+>Record : Symbol(Record, Decl(lib.es5.d.ts, --, --))
+>Field : Symbol(Field, Decl(threads.d.mts, 10, 1))
+
+  fields: F,
+>fields : Symbol(fields, Decl(threads.d.mts, 30, 69))
+>F : Symbol(F, Decl(threads.d.mts, 30, 31))
+
+): StructType<{ -readonly [K in keyof F]: F[K] extends Field<infer V> ? V : never }>;
+>StructType : Symbol(StructType, Decl(threads.d.mts, 19, 50))
+>K : Symbol(K, Decl(threads.d.mts, 32, 27))
+>F : Symbol(F, Decl(threads.d.mts, 30, 31))
+>F : Symbol(F, Decl(threads.d.mts, 30, 31))
+>K : Symbol(K, Decl(threads.d.mts, 32, 27))
+>Field : Symbol(Field, Decl(threads.d.mts, 10, 1))
+>V : Symbol(V, Decl(threads.d.mts, 32, 66))
+>V : Symbol(V, Decl(threads.d.mts, 32, 66))
+
+export declare function struct<T>(fields: { [K in keyof T]-?: Field<T[K]> }): StructType<T>;
+>struct : Symbol(struct, Decl(threads.d.mts, 27, 73), Decl(threads.d.mts, 32, 85))
+>T : Symbol(T, Decl(threads.d.mts, 33, 31))
+>fields : Symbol(fields, Decl(threads.d.mts, 33, 34))
+>K : Symbol(K, Decl(threads.d.mts, 33, 45))
+>T : Symbol(T, Decl(threads.d.mts, 33, 31))
+>Field : Symbol(Field, Decl(threads.d.mts, 10, 1))
+>T : Symbol(T, Decl(threads.d.mts, 33, 31))
+>K : Symbol(K, Decl(threads.d.mts, 33, 45))
+>StructType : Symbol(StructType, Decl(threads.d.mts, 19, 50))
+>T : Symbol(T, Decl(threads.d.mts, 33, 31))
+
+/**
+ * A fixed-length array in shared memory, of numbers or of shared structs stored inline. With
+ * `ownRuntime` the compiler turns `a[i]` and `a.length` into typed-array accesses.
+ */
+export interface SharedArray<T> extends Cell {
+>SharedArray : Symbol(SharedArray, Decl(threads.d.mts, 33, 92), Decl(threads.d.mts, 43, 20))
+>T : Symbol(T, Decl(threads.d.mts, 39, 29))
+>Cell : Symbol(Cell, Decl(threads.d.mts, 5, 40))
+
+  readonly length: number;
+>length : Symbol(SharedArray.length, Decl(threads.d.mts, 39, 46))
+
+  [index: number]: T;
+>index : Symbol(index, Decl(threads.d.mts, 41, 3))
+>T : Symbol(T, Decl(threads.d.mts, 39, 29))
+}
+export declare const SharedArray: {
+>SharedArray : Symbol(SharedArray, Decl(threads.d.mts, 33, 92), Decl(threads.d.mts, 43, 20))
+
+  new (type: NumberConstructor, length: number): SharedArray<number>;
+>type : Symbol(type, Decl(threads.d.mts, 44, 7))
+>NumberConstructor : Symbol(NumberConstructor, Decl(lib.es5.d.ts, --, --), Decl(lib.es2015.core.d.ts, --, --))
+>length : Symbol(length, Decl(threads.d.mts, 44, 31))
+>SharedArray : Symbol(SharedArray, Decl(threads.d.mts, 33, 92), Decl(threads.d.mts, 43, 20))
+
+  new <T>(type: StructType<T>, length: number): SharedArray<T & Cell>;
+>T : Symbol(T, Decl(threads.d.mts, 45, 7))
+>type : Symbol(type, Decl(threads.d.mts, 45, 10))
+>StructType : Symbol(StructType, Decl(threads.d.mts, 19, 50))
+>T : Symbol(T, Decl(threads.d.mts, 45, 7))
+>length : Symbol(length, Decl(threads.d.mts, 45, 30))
+>SharedArray : Symbol(SharedArray, Decl(threads.d.mts, 33, 92), Decl(threads.d.mts, 43, 20))
+>T : Symbol(T, Decl(threads.d.mts, 45, 7))
+>Cell : Symbol(Cell, Decl(threads.d.mts, 5, 40))
+
+};
+
+/** Prints a line, synchronously, from any thread. */
+export declare function log(...args: unknown[]): void;
+>log : Symbol(log, Decl(threads.d.mts, 46, 2))
+>args : Symbol(args, Decl(threads.d.mts, 49, 28))
+
+=== tree.mts ===
+import { f64, ref, SharedArray, struct } from "./threads.mjs";
+>f64 : Symbol(f64, Decl(tree.mts, 0, 8))
+>ref : Symbol(ref, Decl(tree.mts, 0, 13))
+>SharedArray : Symbol(SharedArray, Decl(tree.mts, 0, 18))
+>struct : Symbol(struct, Decl(tree.mts, 0, 31))
+
+export interface Tree { value: number; children: SharedArray<Tree> | null }
+>Tree : Symbol(Tree, Decl(tree.mts, 0, 62), Decl(tree.mts, 3, 12))
+>value : Symbol(Tree.value, Decl(tree.mts, 2, 23))
+>children : Symbol(Tree.children, Decl(tree.mts, 2, 38))
+>SharedArray : Symbol(SharedArray, Decl(tree.mts, 0, 18))
+>Tree : Symbol(Tree, Decl(tree.mts, 0, 62), Decl(tree.mts, 3, 12))
+
+export const Tree = struct<Tree>({ value: f64, children: ref<SharedArray<Tree>>() });
+>Tree : Symbol(Tree, Decl(tree.mts, 0, 62), Decl(tree.mts, 3, 12))
+>struct : Symbol(struct, Decl(tree.mts, 0, 31))
+>Tree : Symbol(Tree, Decl(tree.mts, 0, 62), Decl(tree.mts, 3, 12))
+>value : Symbol(value, Decl(tree.mts, 3, 34))
+>f64 : Symbol(f64, Decl(tree.mts, 0, 8))
+>children : Symbol(children, Decl(tree.mts, 3, 46))
+>ref : Symbol(ref, Decl(tree.mts, 0, 13))
+>SharedArray : Symbol(SharedArray, Decl(tree.mts, 0, 18))
+>Tree : Symbol(Tree, Decl(tree.mts, 0, 62), Decl(tree.mts, 3, 12))
+
+export function grow(t: Tree, n: number) {
+>grow : Symbol(grow, Decl(tree.mts, 3, 85))
+>t : Symbol(t, Decl(tree.mts, 5, 21))
+>Tree : Symbol(Tree, Decl(tree.mts, 0, 62), Decl(tree.mts, 3, 12))
+>n : Symbol(n, Decl(tree.mts, 5, 29))
+
+    t.children = new SharedArray(Tree, n);  // field write: an address
+>t.children : Symbol(Tree.children, Decl(tree.mts, 2, 38))
+>t : Symbol(t, Decl(tree.mts, 5, 21))
+>children : Symbol(Tree.children, Decl(tree.mts, 2, 38))
+>SharedArray : Symbol(SharedArray, Decl(tree.mts, 0, 18))
+>Tree : Symbol(Tree, Decl(tree.mts, 0, 62), Decl(tree.mts, 3, 12))
+>n : Symbol(n, Decl(tree.mts, 5, 29))
+
+    t.children[0].value = t.value + 1;      // element of the struct's own array
+>t.children[0].value : Symbol(Tree.value, Decl(tree.mts, 2, 23))
+>t.children : Symbol(Tree.children, Decl(tree.mts, 2, 38))
+>t : Symbol(t, Decl(tree.mts, 5, 21))
+>children : Symbol(Tree.children, Decl(tree.mts, 2, 38))
+>value : Symbol(Tree.value, Decl(tree.mts, 2, 23))
+>t.value : Symbol(Tree.value, Decl(tree.mts, 2, 23))
+>t : Symbol(t, Decl(tree.mts, 5, 21))
+>value : Symbol(Tree.value, Decl(tree.mts, 2, 23))
+
+    return t.children.length;
+>t.children.length : Symbol(SharedArray.length, Decl(threads.d.mts, 39, 46))
+>t.children : Symbol(Tree.children, Decl(tree.mts, 2, 38))
+>t : Symbol(t, Decl(tree.mts, 5, 21))
+>children : Symbol(Tree.children, Decl(tree.mts, 2, 38))
+>length : Symbol(SharedArray.length, Decl(threads.d.mts, 39, 46))
+}
+
+export function sum(t: Tree): number {
+>sum : Symbol(sum, Decl(tree.mts, 9, 1))
+>t : Symbol(t, Decl(tree.mts, 11, 20))
+>Tree : Symbol(Tree, Decl(tree.mts, 0, 62), Decl(tree.mts, 3, 12))
+
+    let total = t.value;
+>total : Symbol(total, Decl(tree.mts, 12, 7))
+>t.value : Symbol(Tree.value, Decl(tree.mts, 2, 23))
+>t : Symbol(t, Decl(tree.mts, 11, 20))
+>value : Symbol(Tree.value, Decl(tree.mts, 2, 23))
+
+    const children = t.children;
+>children : Symbol(children, Decl(tree.mts, 13, 9))
+>t.children : Symbol(Tree.children, Decl(tree.mts, 2, 38))
+>t : Symbol(t, Decl(tree.mts, 11, 20))
+>children : Symbol(Tree.children, Decl(tree.mts, 2, 38))
+
+    if (children) {
+>children : Symbol(children, Decl(tree.mts, 13, 9))
+
+        for (let i = 0; i < children.length; i++) {
+>i : Symbol(i, Decl(tree.mts, 15, 16))
+>i : Symbol(i, Decl(tree.mts, 15, 16))
+>children.length : Symbol(SharedArray.length, Decl(threads.d.mts, 39, 46))
+>children : Symbol(children, Decl(tree.mts, 13, 9))
+>length : Symbol(SharedArray.length, Decl(threads.d.mts, 39, 46))
+>i : Symbol(i, Decl(tree.mts, 15, 16))
+
+            total += sum(children[i]);
+>total : Symbol(total, Decl(tree.mts, 12, 7))
+>sum : Symbol(sum, Decl(tree.mts, 9, 1))
+>children : Symbol(children, Decl(tree.mts, 13, 9))
+>i : Symbol(i, Decl(tree.mts, 15, 16))
+        }
+    }
+    return total;
+>total : Symbol(total, Decl(tree.mts, 12, 7))
+}
+

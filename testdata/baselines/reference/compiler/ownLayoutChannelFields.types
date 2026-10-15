@@ -811,39 +811,3 @@ export function wait(b: Barrier) {
 >lock : Lock
 }
 
-=== syntax.mts ===
-// The syntax's shared structs take channel fields as well.
-import { Channel } from "./threads.mjs";
->Channel : typeof Channel
-
-shared struct Mailbox { count: number; inbox: Channel<string> | null }
->Mailbox : Mailbox
->count : number
->inbox : Channel<string> | null
-
-export function post(m: Mailbox, text: string) {
->post : (m: Mailbox, text: string) => void
->m : Mailbox
->text : string
-
-    (m.inbox ??= new Channel<string>(8)).send(text);
->(m.inbox ??= new Channel<string>(8)).send(text) : void
->(m.inbox ??= new Channel<string>(8)).send : (value: string) => void
->(m.inbox ??= new Channel<string>(8)) : Channel<string>
->m.inbox ??= new Channel<string>(8) : Channel<string>
->m.inbox : Channel<string> | null
->m : Mailbox
->inbox : Channel<string> | null
->new Channel<string>(8) : Channel<string>
->Channel : typeof Channel
->8 : 8
->send : (value: string) => void
->text : string
-
-    m.count++;
->m.count++ : number
->m.count : number
->m : Mailbox
->count : number
-}
-

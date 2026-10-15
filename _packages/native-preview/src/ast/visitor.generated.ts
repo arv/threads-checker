@@ -26,7 +26,6 @@ import type {
     ConstructorDeclaration,
     ConstructorTypeNode,
     ConstructSignatureDeclaration,
-    ConsumeExpression,
     ContinueStatement,
     Decorator,
     DefaultClause,
@@ -142,10 +141,7 @@ import type {
     RestTypeNode,
     ReturnStatement,
     SatisfiesExpression,
-    SendingTypeNode,
     SetAccessorDeclaration,
-    SharedStructDeclaration,
-    SharedTypeNode,
     ShorthandPropertyAssignment,
     SourceFile,
     SpreadAssignment,
@@ -206,7 +202,6 @@ import {
     updateConstructorDeclaration,
     updateConstructorTypeNode,
     updateConstructSignatureDeclaration,
-    updateConsumeExpression,
     updateContinueStatement,
     updateDecorator,
     updateDefaultClause,
@@ -318,10 +313,7 @@ import {
     updateRestTypeNode,
     updateReturnStatement,
     updateSatisfiesExpression,
-    updateSendingTypeNode,
     updateSetAccessorDeclaration,
-    updateSharedStructDeclaration,
-    updateSharedTypeNode,
     updateShorthandPropertyAssignment,
     updateSourceFile,
     updateSpreadAssignment,
@@ -685,12 +677,6 @@ const visitEachChildTable: Record<number, VisitEachChildFunction> = {
         const _members = visitNodes(node.members, visitor);
         return updateInterfaceDeclaration(node, _modifiers, _name, _typeParameters, _heritageClauses, _members);
     },
-    [SyntaxKind.SharedStructDeclaration]: (node: SharedStructDeclaration, visitor: Visitor): SharedStructDeclaration => {
-        const _modifiers = visitNodes(node.modifiers, visitor);
-        const _name = visitNode(node.name, visitor, isIdentifier);
-        const _members = visitNodes(node.members, visitor);
-        return updateSharedStructDeclaration(node, _modifiers, _name, _members);
-    },
     [SyntaxKind.TypeAliasDeclaration]: (node: TypeAliasDeclaration, visitor: Visitor): TypeAliasDeclaration => {
         const _modifiers = visitNodes(node.modifiers, visitor);
         const _name = visitNode(node.name, visitor, isIdentifier);
@@ -1002,10 +988,6 @@ const visitEachChildTable: Record<number, VisitEachChildFunction> = {
         const _expression = visitNode(node.expression, visitor, isExpression);
         return updateAwaitExpression(node, _expression);
     },
-    [SyntaxKind.ConsumeExpression]: (node: ConsumeExpression, visitor: Visitor): ConsumeExpression => {
-        const _expression = visitNode(node.expression, visitor, isExpression);
-        return updateConsumeExpression(node, _expression);
-    },
     [SyntaxKind.TypeAssertionExpression]: (node: TypeAssertion, visitor: Visitor): TypeAssertion => {
         const _type = visitNode(node.type, visitor, isTypeNode);
         const _expression = visitNode(node.expression, visitor, isExpression);
@@ -1029,14 +1011,6 @@ const visitEachChildTable: Record<number, VisitEachChildFunction> = {
     [SyntaxKind.TypeOperator]: (node: TypeOperatorNode, visitor: Visitor): TypeOperatorNode => {
         const _type = visitNode(node.type, visitor, isTypeNode);
         return updateTypeOperatorNode(node, _type);
-    },
-    [SyntaxKind.SendingType]: (node: SendingTypeNode, visitor: Visitor): SendingTypeNode => {
-        const _type = visitNode(node.type, visitor, isTypeNode);
-        return updateSendingTypeNode(node, _type);
-    },
-    [SyntaxKind.SharedType]: (node: SharedTypeNode, visitor: Visitor): SharedTypeNode => {
-        const _type = visitNode(node.type, visitor, isTypeNode);
-        return updateSharedTypeNode(node, _type);
     },
     [SyntaxKind.InferType]: (node: InferTypeNode, visitor: Visitor): InferTypeNode => {
         const _typeParameter = visitNode(node.typeParameter, visitor, isTypeParameterDeclaration);

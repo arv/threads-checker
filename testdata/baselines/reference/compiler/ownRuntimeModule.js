@@ -1,82 +1,93 @@
 //// [tests/cases/compiler/ownRuntimeModule.ts] ////
 
-//// [own.d.mts]
-// Types for the own/shared threads runtime own.mjs (now own.ts in github.com/arv/threads). Programs
-// import their API from "./own.mjs"; the compiler adds the imports of the helpers it emits
-// (`__sharedStruct`, `__register`) when `ownRuntime` is set.
-//
-// `sending T` marks a value whose ownership moves to the receiver: the sender must not use it
-// afterwards. `shared T` marks a value any number of threads may read at once: deeply immutable, or
-// a cell that synchronizes internally (Slots, Barrier, a shared struct).
+//// [threads.d.mts]
+// The parts of the runtime's API that the example uses. Programs import their API from
+// "./threads.mjs"; the compiler adds the imports of the helpers it emits (`__sharedStruct`,
+// `__register`, ...) when `ownRuntime` is set.
 
-/** One slot per thread: a thread publishes into its own slot, and everyone reads every slot. */
-export interface SlotsCell<T> {
-    readonly length: number;
-    /** Publishes `value` in slot `index`, replacing what was there. */
-    set(index: number, value: T): void;
-    /** The value in slot `index`. */
-    get(index: number): shared T;
-    /** The arrays in all slots, concatenated in slot order. */
-    flat(): shared (T extends readonly (infer E)[] ? E : T)[];
-}
-export declare const Slots: new <T>(count: number) => shared SlotsCell<T>;
+declare const cellBrand: unique symbol;
+declare const fieldBrand: unique symbol;
 
-/** A reusable barrier for a fixed number of threads. */
-export interface BarrierCell {
-    /** Blocks until all threads have called `wait`. */
-    wait(): void;
+/** A cell: shared and mutable. Any number of threads may hold the same one. */
+export interface Cell {
+  readonly [cellBrand]: true;
 }
-export declare const Barrier: new (threads: number) => shared BarrierCell;
+
+/** A value whose ownership moves, on a parameter or a result. */
+export type Sending<T> = T;
+
+/** A deeply immutable value, which any number of threads may read. */
+export type Shared<T> = T extends Cell | ((...args: any[]) => any) ? T
+  : T extends object ? { readonly [K in keyof T]: Shared<T[K]> }
+  : T;
 
 /** Freezes a value the caller owns into a deeply immutable value every thread can read. */
-export declare function share<T>(value: sending T): shared T;
+export declare function share<T>(value: Sending<T>): Shared<T>;
 
-/** A thread started inside a `scope`; joining it moves the thread's result back. */
+/** A field of a shared struct. */
+export interface Field<T> {
+  readonly [fieldBrand]: T;
+}
+/** A number field: an f64 in shared memory. */
+export declare const f64: Field<number>;
+
+/** What `struct(...)` returns: `new S()` makes a zeroed struct in shared memory. */
+export interface StructType<T> {
+  new (): T & Cell;
+  readonly fields: readonly string[];
+}
+/** The value type of a struct type: `type Body = Struct<typeof Body>`. */
+export type Struct<S> = S extends StructType<infer T> ? T & Cell : never;
+
+/** Declares a shared struct. */
+export declare function struct<F extends Record<string, Field<any>>>(
+  fields: F,
+): StructType<{ -readonly [K in keyof F]: F[K] extends Field<infer V> ? V : never }>;
+
+/** A thread; joining it moves the thread's result back. */
 export interface Thread<R> {
-    join(): sending R;
+  join(): Sending<R>;
 }
 
 /** Spawns threads that cannot outlive the scope. Every argument is sent to the new thread. */
 export interface Scope {
-    spawn<A extends unknown[], R>(f: (...args: A) => sending R, ...args: sending A): shared Thread<R>;
+  spawn<A extends unknown[], R>(f: (...args: A) => Sending<R>, ...args: Sending<A>): Thread<R>;
 }
-
 /** Runs `body` and joins every thread it spawned before returning. */
-export declare function scope<R>(body: (s: shared Scope) => R): R;
+export declare function scope<R>(body: (s: Scope) => R): R;
 
 /** Splits an owned array into `parts` owned, disjoint chunks of nearly equal size. Trusted. */
-export declare function partition<T>(items: sending T[], parts: number): (sending T[])[];
-
+export declare function partition<T>(items: Sending<T[]>, parts: number): Sending<T[]>[];
 /** Takes element `index` out of an array of owned values, so the caller owns it. Trusted. */
-export declare function take<T>(items: (sending T)[], index: number): sending T;
+export declare function take<T>(items: Sending<T>[], index: number): Sending<T>;
+
+/** A reusable barrier for a fixed number of threads. */
+export declare class Barrier implements Cell {
+  readonly [cellBrand]: true;
+  constructor(threads: number);
+  /** Blocks until all threads have called `wait`. */
+  wait(): void;
+}
+
+/** One slot per thread: a thread publishes a shared value into its slot, and everyone reads every slot. */
+export declare class Slots<T> implements Cell {
+  readonly [cellBrand]: true;
+  constructor(count: number);
+  readonly length: number;
+  set(index: number, value: Shared<T>): void;
+  get(index: number): Shared<T> | undefined;
+  /** The arrays in all slots, concatenated in slot order. */
+  flat(): Shared<T extends readonly (infer E)[] ? E[] : T[]>;
+}
 
 /** Prints a line, synchronously, from any thread. */
 export declare function log(...args: unknown[]): void;
 
-/** A shared struct's value as a type: what `new SharedArray(Struct, n)` takes. */
-export interface SharedStructType<T> {
-    new (): T;
-}
-
-/**
- * A fixed-length array in the shared heap, of numbers or of shared structs stored inline. Threads
- * share it with no copying. With `ownRuntime` the compiler lays it out in the shared heap and turns
- * `a[i]` and `a.length` into typed-array accesses.
- */
-export interface SharedArray<T> {
-    readonly length: number;
-    [index: number]: T;
-}
-export declare const SharedArray: {
-    new (type: NumberConstructor, length: number): SharedArray<number>;
-    new <T>(type: SharedStructType<T>, length: number): SharedArray<T>;
-};
-
 //// [nbody.mts]
-// The n-body example as an ES module for the own.mjs runtime. With `ownRuntime` set, the compiler
-// imports the runtime helpers this module needs and registers its top-level functions, so that
-// spawned threads can find `worker` by name.
-import { Barrier, type BarrierCell, log, partition, scope, share, Slots, type SlotsCell, take, type Thread } from "./own.mjs";
+// The n-body example as an ES module for the threads.mjs runtime. With `ownRuntime` set, the
+// compiler imports the runtime helpers this module needs and registers its top-level functions, so
+// that spawned threads can find `worker` by name.
+import { Barrier, f64, log, partition, scope, type Sending, share, type Shared, Slots, struct, type Struct, take, type Thread } from "./threads.mjs";
 
 type Body = { x: number; y: number; z: number; vx: number; vy: number; vz: number; m: number };
 type Pos = { x: number; y: number; z: number; m: number };
@@ -84,9 +95,10 @@ type Pos = { x: number; y: number; z: number; m: number };
 const BODIES = 800, STEPS = 30, DT = 0.001, SOFTEN = 0.01;
 
 /** Counts steps across threads. */
-shared struct Progress { steps: number }
+const Progress = struct({ steps: f64 });
+type Progress = Struct<typeof Progress>;
 
-function makeBodies(): sending Body[] {
+function makeBodies(): Sending<Body[]> {
     let seed = 1;
     const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
     const bodies: Body[] = [];
@@ -96,7 +108,7 @@ function makeBodies(): sending Body[] {
     return bodies;
 }
 
-function accelerate(mine: Body[], all: readonly shared Pos[]) {
+function accelerate(mine: Body[], all: Shared<Pos[]>) {
     for (const b of mine) {
         let ax = 0, ay = 0, az = 0;
         for (const o of all) {
@@ -127,7 +139,7 @@ function energy(bodies: Body[]): number {
     return e;
 }
 
-function worker(t: number, mine: sending Body[], board: shared SlotsCell<Pos[]>, barrier: shared BarrierCell, progress: Progress): sending Body[] {
+function worker(t: number, mine: Sending<Body[]>, board: Slots<Pos[]>, barrier: Barrier, progress: Progress): Sending<Body[]> {
     for (let s = 0; s < STEPS; s++) {
         board.set(t, share(mine.map(b => ({ x: b.x, y: b.y, z: b.z, m: b.m }))));
         barrier.wait();
@@ -143,7 +155,7 @@ function simulate(threads: number): number {
     const board = new Slots<Pos[]>(threads), barrier = new Barrier(threads), progress = new Progress();
     return scope(s => {
         const parts = partition(makeBodies(), threads);
-        const ts: (shared Thread<Body[]>)[] = [];
+        const ts: Thread<Body[]>[] = [];
         for (let t = 0; t < threads; t++) ts.push(s.spawn(worker, t, take(parts, t), board, barrier, progress));
         return energy(ts.flatMap(th => th.join()));
     });
@@ -157,11 +169,11 @@ export function main(threadCounts: readonly number[]) {
 
 
 //// [nbody.mjs]
-import { F64 as __F64, capture as __capture, countedRef as __countedRef, newStruct as __newStruct, register as __register, release as __release, sharedStruct as __sharedStruct } from "./own.mjs";
-// The n-body example as an ES module for the own.mjs runtime. With `ownRuntime` set, the compiler
-// imports the runtime helpers this module needs and registers its top-level functions, so that
-// spawned threads can find `worker` by name.
-import { Barrier, log, partition, scope, share, Slots, take } from "./own.mjs";
+import { F64 as __F64, capture as __capture, countedRef as __countedRef, newStruct as __newStruct, register as __register, release as __release, sharedStruct as __sharedStruct } from "./threads.mjs";
+// The n-body example as an ES module for the threads.mjs runtime. With `ownRuntime` set, the
+// compiler imports the runtime helpers this module needs and registers its top-level functions, so
+// that spawned threads can find `worker` by name.
+import { Barrier, f64, log, partition, scope, share, Slots, struct, take } from "./threads.mjs";
 const BODIES = 800, STEPS = 30, DT = 0.001, SOFTEN = 0.01;
 /** Counts steps across threads. */
 const Progress = __sharedStruct("Progress", ["steps"], []);

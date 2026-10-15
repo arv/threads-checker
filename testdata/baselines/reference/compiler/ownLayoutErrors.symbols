@@ -1,262 +1,280 @@
 //// [tests/cases/compiler/ownLayoutErrors.ts] ////
 
-=== own.d.mts ===
-// Types for the own/shared threads runtime own.mjs (now own.ts in github.com/arv/threads). Programs
-// import their API from "./own.mjs"; the compiler adds the imports of the helpers it emits
-// (`__sharedStruct`, `__register`) when `ownRuntime` is set.
-//
-// `sending T` marks a value whose ownership moves to the receiver: the sender must not use it
-// afterwards. `shared T` marks a value any number of threads may read at once: deeply immutable, or
-// a cell that synchronizes internally (Slots, Barrier, a shared struct).
+=== threads.d.mts ===
+// The parts of the threads runtime (threads.mjs, from github.com/arv/threads) this test uses.
+// Programs import their API from "./threads.mjs"; the compiler adds the imports of the helpers it
+// emits (`__sharedStruct`, `__register`, ...) when `ownRuntime` is set.
 
-/** One slot per thread: a thread publishes into its own slot, and everyone reads every slot. */
-export interface SlotsCell<T> {
->SlotsCell : Symbol(SlotsCell, Decl(own.d.mts, 0, 0))
->T : Symbol(T, Decl(own.d.mts, 9, 27))
+declare const cellBrand: unique symbol;
+>cellBrand : Symbol(cellBrand, Decl(threads.d.mts, 4, 13))
 
-    readonly length: number;
->length : Symbol(SlotsCell.length, Decl(own.d.mts, 9, 31))
+declare const fieldBrand: unique symbol;
+>fieldBrand : Symbol(fieldBrand, Decl(threads.d.mts, 5, 13))
 
-    /** Publishes `value` in slot `index`, replacing what was there. */
-    set(index: number, value: T): void;
->set : Symbol(SlotsCell.set, Decl(own.d.mts, 10, 28))
->index : Symbol(index, Decl(own.d.mts, 12, 8))
->value : Symbol(value, Decl(own.d.mts, 12, 22))
->T : Symbol(T, Decl(own.d.mts, 9, 27))
+/** A cell: shared and mutable. Any number of threads may hold the same one. */
+export interface Cell {
+>Cell : Symbol(Cell, Decl(threads.d.mts, 5, 40))
 
-    /** The value in slot `index`. */
-    get(index: number): shared T;
->get : Symbol(SlotsCell.get, Decl(own.d.mts, 12, 39))
->index : Symbol(index, Decl(own.d.mts, 14, 8))
->T : Symbol(T, Decl(own.d.mts, 9, 27))
-
-    /** The arrays in all slots, concatenated in slot order. */
-    flat(): shared (T extends readonly (infer E)[] ? E : T)[];
->flat : Symbol(SlotsCell.flat, Decl(own.d.mts, 14, 33))
->T : Symbol(T, Decl(own.d.mts, 9, 27))
->E : Symbol(E, Decl(own.d.mts, 16, 45))
->E : Symbol(E, Decl(own.d.mts, 16, 45))
->T : Symbol(T, Decl(own.d.mts, 9, 27))
-}
-export declare const Slots: new <T>(count: number) => shared SlotsCell<T>;
->Slots : Symbol(Slots, Decl(own.d.mts, 18, 20))
->T : Symbol(T, Decl(own.d.mts, 18, 33))
->count : Symbol(count, Decl(own.d.mts, 18, 36))
->SlotsCell : Symbol(SlotsCell, Decl(own.d.mts, 0, 0))
->T : Symbol(T, Decl(own.d.mts, 18, 33))
-
-/** A reusable barrier for a fixed number of threads. */
-export interface BarrierCell {
->BarrierCell : Symbol(BarrierCell, Decl(own.d.mts, 18, 74))
-
-    /** Blocks until all threads have called `wait`. */
-    wait(): void;
->wait : Symbol(BarrierCell.wait, Decl(own.d.mts, 21, 30))
-}
-export declare const Barrier: new (threads: number) => shared BarrierCell;
->Barrier : Symbol(Barrier, Decl(own.d.mts, 25, 20))
->threads : Symbol(threads, Decl(own.d.mts, 25, 35))
->BarrierCell : Symbol(BarrierCell, Decl(own.d.mts, 18, 74))
-
-/** Freezes a value the caller owns into a deeply immutable value every thread can read. */
-export declare function share<T>(value: sending T): shared T;
->share : Symbol(share, Decl(own.d.mts, 25, 74))
->T : Symbol(T, Decl(own.d.mts, 28, 30))
->value : Symbol(value, Decl(own.d.mts, 28, 33))
->T : Symbol(T, Decl(own.d.mts, 28, 30))
->T : Symbol(T, Decl(own.d.mts, 28, 30))
-
-/** A thread started inside a `scope`; joining it moves the thread's result back. */
-export interface Thread<R> {
->Thread : Symbol(Thread, Decl(own.d.mts, 28, 61))
->R : Symbol(R, Decl(own.d.mts, 31, 24))
-
-    join(): sending R;
->join : Symbol(Thread.join, Decl(own.d.mts, 31, 28))
->R : Symbol(R, Decl(own.d.mts, 31, 24))
+  readonly [cellBrand]: true;
+>[cellBrand] : Symbol(Cell[cellBrand], Decl(threads.d.mts, 8, 23))
+>cellBrand : Symbol(cellBrand, Decl(threads.d.mts, 4, 13))
 }
 
-/** Spawns threads that cannot outlive the scope. Every argument is sent to the new thread. */
-export interface Scope {
->Scope : Symbol(Scope, Decl(own.d.mts, 33, 1))
+/** A field of a shared struct, declared with `f64` or `ref<T>()`. */
+export interface Field<T> {
+>Field : Symbol(Field, Decl(threads.d.mts, 10, 1))
+>T : Symbol(T, Decl(threads.d.mts, 13, 23))
 
-    spawn<A extends unknown[], R>(f: (...args: A) => sending R, ...args: sending A): shared Thread<R>;
->spawn : Symbol(Scope.spawn, Decl(own.d.mts, 36, 24))
->A : Symbol(A, Decl(own.d.mts, 37, 10))
->R : Symbol(R, Decl(own.d.mts, 37, 30))
->f : Symbol(f, Decl(own.d.mts, 37, 34))
->args : Symbol(args, Decl(own.d.mts, 37, 38))
->A : Symbol(A, Decl(own.d.mts, 37, 10))
->R : Symbol(R, Decl(own.d.mts, 37, 30))
->args : Symbol(args, Decl(own.d.mts, 37, 63))
->A : Symbol(A, Decl(own.d.mts, 37, 10))
->Thread : Symbol(Thread, Decl(own.d.mts, 28, 61))
->R : Symbol(R, Decl(own.d.mts, 37, 30))
+  readonly [fieldBrand]: T;
+>[fieldBrand] : Symbol(Field[fieldBrand], Decl(threads.d.mts, 13, 27))
+>fieldBrand : Symbol(fieldBrand, Decl(threads.d.mts, 5, 13))
+>T : Symbol(T, Decl(threads.d.mts, 13, 23))
 }
+/** A number field: an f64 in shared memory. */
+export declare const f64: Field<number>;
+>f64 : Symbol(f64, Decl(threads.d.mts, 17, 20))
+>Field : Symbol(Field, Decl(threads.d.mts, 10, 1))
 
-/** Runs `body` and joins every thread it spawned before returning. */
-export declare function scope<R>(body: (s: shared Scope) => R): R;
->scope : Symbol(scope, Decl(own.d.mts, 38, 1))
->R : Symbol(R, Decl(own.d.mts, 41, 30))
->body : Symbol(body, Decl(own.d.mts, 41, 33))
->s : Symbol(s, Decl(own.d.mts, 41, 40))
->Scope : Symbol(Scope, Decl(own.d.mts, 33, 1))
->R : Symbol(R, Decl(own.d.mts, 41, 30))
->R : Symbol(R, Decl(own.d.mts, 41, 30))
+/** A reference field: a shared struct or a SharedArray, or null. */
+export declare function ref<T>(): Field<T | null>;
+>ref : Symbol(ref, Decl(threads.d.mts, 17, 40))
+>T : Symbol(T, Decl(threads.d.mts, 19, 28))
+>Field : Symbol(Field, Decl(threads.d.mts, 10, 1))
+>T : Symbol(T, Decl(threads.d.mts, 19, 28))
 
-/** Splits an owned array into `parts` owned, disjoint chunks of nearly equal size. Trusted. */
-export declare function partition<T>(items: sending T[], parts: number): (sending T[])[];
->partition : Symbol(partition, Decl(own.d.mts, 41, 66))
->T : Symbol(T, Decl(own.d.mts, 44, 34))
->items : Symbol(items, Decl(own.d.mts, 44, 37))
->T : Symbol(T, Decl(own.d.mts, 44, 34))
->parts : Symbol(parts, Decl(own.d.mts, 44, 56))
->T : Symbol(T, Decl(own.d.mts, 44, 34))
+/** What `struct(...)` returns: `new S()` makes a zeroed struct in shared memory. */
+export interface StructType<T> {
+>StructType : Symbol(StructType, Decl(threads.d.mts, 19, 50))
+>T : Symbol(T, Decl(threads.d.mts, 22, 28))
 
-/** Takes element `index` out of an array of owned values, so the caller owns it. Trusted. */
-export declare function take<T>(items: (sending T)[], index: number): sending T;
->take : Symbol(take, Decl(own.d.mts, 44, 89))
->T : Symbol(T, Decl(own.d.mts, 47, 29))
->items : Symbol(items, Decl(own.d.mts, 47, 32))
->T : Symbol(T, Decl(own.d.mts, 47, 29))
->index : Symbol(index, Decl(own.d.mts, 47, 53))
->T : Symbol(T, Decl(own.d.mts, 47, 29))
+  new (): T & Cell;
+>T : Symbol(T, Decl(threads.d.mts, 22, 28))
+>Cell : Symbol(Cell, Decl(threads.d.mts, 5, 40))
 
-/** Prints a line, synchronously, from any thread. */
-export declare function log(...args: unknown[]): void;
->log : Symbol(log, Decl(own.d.mts, 47, 80))
->args : Symbol(args, Decl(own.d.mts, 50, 28))
-
-/** A shared struct's value as a type: what `new SharedArray(Struct, n)` takes. */
-export interface SharedStructType<T> {
->SharedStructType : Symbol(SharedStructType, Decl(own.d.mts, 50, 54))
->T : Symbol(T, Decl(own.d.mts, 53, 34))
-
-    new (): T;
->T : Symbol(T, Decl(own.d.mts, 53, 34))
+  readonly fields: readonly string[];
+>fields : Symbol(StructType.fields, Decl(threads.d.mts, 23, 19))
 }
+/** The value type of a struct type: `type Body = Struct<typeof Body>`. */
+export type Struct<S> = S extends StructType<infer T> ? T & Cell : never;
+>Struct : Symbol(Struct, Decl(threads.d.mts, 25, 1))
+>S : Symbol(S, Decl(threads.d.mts, 27, 19))
+>S : Symbol(S, Decl(threads.d.mts, 27, 19))
+>StructType : Symbol(StructType, Decl(threads.d.mts, 19, 50))
+>T : Symbol(T, Decl(threads.d.mts, 27, 50))
+>T : Symbol(T, Decl(threads.d.mts, 27, 50))
+>Cell : Symbol(Cell, Decl(threads.d.mts, 5, 40))
+
+/** Declares a shared struct: fields at fixed places in shared memory. */
+export declare function struct<F extends Record<string, Field<any>>>(
+>struct : Symbol(struct, Decl(threads.d.mts, 27, 73), Decl(threads.d.mts, 32, 85))
+>F : Symbol(F, Decl(threads.d.mts, 30, 31))
+>Record : Symbol(Record, Decl(lib.es5.d.ts, --, --))
+>Field : Symbol(Field, Decl(threads.d.mts, 10, 1))
+
+  fields: F,
+>fields : Symbol(fields, Decl(threads.d.mts, 30, 69))
+>F : Symbol(F, Decl(threads.d.mts, 30, 31))
+
+): StructType<{ -readonly [K in keyof F]: F[K] extends Field<infer V> ? V : never }>;
+>StructType : Symbol(StructType, Decl(threads.d.mts, 19, 50))
+>K : Symbol(K, Decl(threads.d.mts, 32, 27))
+>F : Symbol(F, Decl(threads.d.mts, 30, 31))
+>F : Symbol(F, Decl(threads.d.mts, 30, 31))
+>K : Symbol(K, Decl(threads.d.mts, 32, 27))
+>Field : Symbol(Field, Decl(threads.d.mts, 10, 1))
+>V : Symbol(V, Decl(threads.d.mts, 32, 66))
+>V : Symbol(V, Decl(threads.d.mts, 32, 66))
+
+export declare function struct<T>(fields: { [K in keyof T]-?: Field<T[K]> }): StructType<T>;
+>struct : Symbol(struct, Decl(threads.d.mts, 27, 73), Decl(threads.d.mts, 32, 85))
+>T : Symbol(T, Decl(threads.d.mts, 33, 31))
+>fields : Symbol(fields, Decl(threads.d.mts, 33, 34))
+>K : Symbol(K, Decl(threads.d.mts, 33, 45))
+>T : Symbol(T, Decl(threads.d.mts, 33, 31))
+>Field : Symbol(Field, Decl(threads.d.mts, 10, 1))
+>T : Symbol(T, Decl(threads.d.mts, 33, 31))
+>K : Symbol(K, Decl(threads.d.mts, 33, 45))
+>StructType : Symbol(StructType, Decl(threads.d.mts, 19, 50))
+>T : Symbol(T, Decl(threads.d.mts, 33, 31))
 
 /**
- * A fixed-length array in the shared heap, of numbers or of shared structs stored inline. Threads
- * share it with no copying. With `ownRuntime` the compiler lays it out in the shared heap and turns
- * `a[i]` and `a.length` into typed-array accesses.
+ * A fixed-length array in shared memory, of numbers or of shared structs stored inline. With
+ * `ownRuntime` the compiler turns `a[i]` and `a.length` into typed-array accesses.
  */
-export interface SharedArray<T> {
->SharedArray : Symbol(SharedArray, Decl(own.d.mts, 55, 1), Decl(own.d.mts, 66, 20))
->T : Symbol(T, Decl(own.d.mts, 62, 29))
+export interface SharedArray<T> extends Cell {
+>SharedArray : Symbol(SharedArray, Decl(threads.d.mts, 33, 92), Decl(threads.d.mts, 43, 20))
+>T : Symbol(T, Decl(threads.d.mts, 39, 29))
+>Cell : Symbol(Cell, Decl(threads.d.mts, 5, 40))
 
-    readonly length: number;
->length : Symbol(SharedArray.length, Decl(own.d.mts, 62, 33))
+  readonly length: number;
+>length : Symbol(SharedArray.length, Decl(threads.d.mts, 39, 46))
 
-    [index: number]: T;
->index : Symbol(index, Decl(own.d.mts, 64, 5))
->T : Symbol(T, Decl(own.d.mts, 62, 29))
+  [index: number]: T;
+>index : Symbol(index, Decl(threads.d.mts, 41, 3))
+>T : Symbol(T, Decl(threads.d.mts, 39, 29))
 }
 export declare const SharedArray: {
->SharedArray : Symbol(SharedArray, Decl(own.d.mts, 55, 1), Decl(own.d.mts, 66, 20))
+>SharedArray : Symbol(SharedArray, Decl(threads.d.mts, 33, 92), Decl(threads.d.mts, 43, 20))
 
-    new (type: NumberConstructor, length: number): SharedArray<number>;
->type : Symbol(type, Decl(own.d.mts, 67, 9))
+  new (type: NumberConstructor, length: number): SharedArray<number>;
+>type : Symbol(type, Decl(threads.d.mts, 44, 7))
 >NumberConstructor : Symbol(NumberConstructor, Decl(lib.es5.d.ts, --, --), Decl(lib.es2015.core.d.ts, --, --))
->length : Symbol(length, Decl(own.d.mts, 67, 33))
->SharedArray : Symbol(SharedArray, Decl(own.d.mts, 55, 1), Decl(own.d.mts, 66, 20))
+>length : Symbol(length, Decl(threads.d.mts, 44, 31))
+>SharedArray : Symbol(SharedArray, Decl(threads.d.mts, 33, 92), Decl(threads.d.mts, 43, 20))
 
-    new <T>(type: SharedStructType<T>, length: number): SharedArray<T>;
->T : Symbol(T, Decl(own.d.mts, 68, 9))
->type : Symbol(type, Decl(own.d.mts, 68, 12))
->SharedStructType : Symbol(SharedStructType, Decl(own.d.mts, 50, 54))
->T : Symbol(T, Decl(own.d.mts, 68, 9))
->length : Symbol(length, Decl(own.d.mts, 68, 38))
->SharedArray : Symbol(SharedArray, Decl(own.d.mts, 55, 1), Decl(own.d.mts, 66, 20))
->T : Symbol(T, Decl(own.d.mts, 68, 9))
+  new <T>(type: StructType<T>, length: number): SharedArray<T & Cell>;
+>T : Symbol(T, Decl(threads.d.mts, 45, 7))
+>type : Symbol(type, Decl(threads.d.mts, 45, 10))
+>StructType : Symbol(StructType, Decl(threads.d.mts, 19, 50))
+>T : Symbol(T, Decl(threads.d.mts, 45, 7))
+>length : Symbol(length, Decl(threads.d.mts, 45, 30))
+>SharedArray : Symbol(SharedArray, Decl(threads.d.mts, 33, 92), Decl(threads.d.mts, 43, 20))
+>T : Symbol(T, Decl(threads.d.mts, 45, 7))
+>Cell : Symbol(Cell, Decl(threads.d.mts, 5, 40))
 
 };
 
+/** Prints a line, synchronously, from any thread. */
+export declare function log(...args: unknown[]): void;
+>log : Symbol(log, Decl(threads.d.mts, 46, 2))
+>args : Symbol(args, Decl(threads.d.mts, 49, 28))
+
 === errors.mts ===
-import { SharedArray } from "./own.mjs";
->SharedArray : Symbol(SharedArray, Decl(errors.mts, 0, 8))
+import { f64, ref, SharedArray, struct, type Struct } from "./threads.mjs";
+>f64 : Symbol(f64, Decl(errors.mts, 0, 8))
+>ref : Symbol(ref, Decl(errors.mts, 0, 13))
+>SharedArray : Symbol(SharedArray, Decl(errors.mts, 0, 18))
+>struct : Symbol(struct, Decl(errors.mts, 0, 31))
+>Struct : Symbol(Struct, Decl(errors.mts, 0, 39))
 
-export shared struct Good { a: number; b: Good; c: SharedArray<number>; d: SharedArray<Good> }
->Good : Symbol(Good, Decl(errors.mts, 0, 40))
->a : Symbol(Good.a, Decl(errors.mts, 2, 27))
->b : Symbol(Good.b, Decl(errors.mts, 2, 38))
->Good : Symbol(Good, Decl(errors.mts, 0, 40))
->c : Symbol(Good.c, Decl(errors.mts, 2, 47))
->SharedArray : Symbol(SharedArray, Decl(errors.mts, 0, 8))
->d : Symbol(Good.d, Decl(errors.mts, 2, 71))
->SharedArray : Symbol(SharedArray, Decl(errors.mts, 0, 8))
->Good : Symbol(Good, Decl(errors.mts, 0, 40))
+export const Item = struct({ v: f64 });
+>Item : Symbol(Item, Decl(errors.mts, 2, 12), Decl(errors.mts, 2, 39))
+>struct : Symbol(struct, Decl(errors.mts, 0, 31))
+>v : Symbol(v, Decl(errors.mts, 2, 28))
+>f64 : Symbol(f64, Decl(errors.mts, 0, 8))
 
-export shared struct Bad {
->Bad : Symbol(Bad, Decl(errors.mts, 2, 94))
+export type Item = Struct<typeof Item>;
+>Item : Symbol(Item, Decl(errors.mts, 2, 12), Decl(errors.mts, 2, 39))
+>Struct : Symbol(Struct, Decl(errors.mts, 0, 39))
+>Item : Symbol(Item, Decl(errors.mts, 2, 12), Decl(errors.mts, 2, 39))
+
+export interface Good { a: number; b: Good | null; c: SharedArray<number> | null; d: SharedArray<Item> | null }
+>Good : Symbol(Good, Decl(errors.mts, 3, 39), Decl(errors.mts, 5, 12))
+>a : Symbol(Good.a, Decl(errors.mts, 4, 23))
+>b : Symbol(Good.b, Decl(errors.mts, 4, 34))
+>Good : Symbol(Good, Decl(errors.mts, 3, 39), Decl(errors.mts, 5, 12))
+>c : Symbol(Good.c, Decl(errors.mts, 4, 50))
+>SharedArray : Symbol(SharedArray, Decl(errors.mts, 0, 18))
+>d : Symbol(Good.d, Decl(errors.mts, 4, 81))
+>SharedArray : Symbol(SharedArray, Decl(errors.mts, 0, 18))
+>Item : Symbol(Item, Decl(errors.mts, 2, 12), Decl(errors.mts, 2, 39))
+
+export const Good = struct<Good>({ a: f64, b: ref<Good>(), c: ref<SharedArray<number>>(), d: ref<SharedArray<Item>>() });
+>Good : Symbol(Good, Decl(errors.mts, 3, 39), Decl(errors.mts, 5, 12))
+>struct : Symbol(struct, Decl(errors.mts, 0, 31))
+>Good : Symbol(Good, Decl(errors.mts, 3, 39), Decl(errors.mts, 5, 12))
+>a : Symbol(a, Decl(errors.mts, 5, 34))
+>f64 : Symbol(f64, Decl(errors.mts, 0, 8))
+>b : Symbol(b, Decl(errors.mts, 5, 42))
+>ref : Symbol(ref, Decl(errors.mts, 0, 13))
+>Good : Symbol(Good, Decl(errors.mts, 3, 39), Decl(errors.mts, 5, 12))
+>c : Symbol(c, Decl(errors.mts, 5, 58))
+>ref : Symbol(ref, Decl(errors.mts, 0, 13))
+>SharedArray : Symbol(SharedArray, Decl(errors.mts, 0, 18))
+>d : Symbol(d, Decl(errors.mts, 5, 89))
+>ref : Symbol(ref, Decl(errors.mts, 0, 13))
+>SharedArray : Symbol(SharedArray, Decl(errors.mts, 0, 18))
+>Item : Symbol(Item, Decl(errors.mts, 2, 12), Decl(errors.mts, 2, 39))
+
+// Bad's field types come from its interface (`as never` gets the fields past TypeScript).
+export interface Bad {
+>Bad : Symbol(Bad, Decl(errors.mts, 5, 121), Decl(errors.mts, 16, 12))
 
     s: string | null;
->s : Symbol(Bad.s, Decl(errors.mts, 3, 26))
+>s : Symbol(Bad.s, Decl(errors.mts, 7, 22))
 
     f: boolean | null;
->f : Symbol(Bad.f, Decl(errors.mts, 4, 21))
+>f : Symbol(Bad.f, Decl(errors.mts, 8, 21))
 
     o?: number;
->o : Symbol(Bad.o, Decl(errors.mts, 5, 22))
+>o : Symbol(Bad.o, Decl(errors.mts, 9, 22))
 
     u: number | undefined;
->u : Symbol(Bad.u, Decl(errors.mts, 6, 15))
+>u : Symbol(Bad.u, Decl(errors.mts, 10, 15))
 
     arr: number[];
->arr : Symbol(Bad.arr, Decl(errors.mts, 7, 26))
+>arr : Symbol(Bad.arr, Decl(errors.mts, 11, 26))
 
     obj: { x: number };
->obj : Symbol(Bad.obj, Decl(errors.mts, 8, 18))
->x : Symbol(x, Decl(errors.mts, 9, 10))
+>obj : Symbol(Bad.obj, Decl(errors.mts, 12, 18))
+>x : Symbol(x, Decl(errors.mts, 13, 10))
 
     t: SharedArray<bigint>;
->t : Symbol(Bad.t, Decl(errors.mts, 9, 23))
->SharedArray : Symbol(SharedArray, Decl(errors.mts, 0, 8))
+>t : Symbol(Bad.t, Decl(errors.mts, 13, 23))
+>SharedArray : Symbol(SharedArray, Decl(errors.mts, 0, 18))
 }
+export const Bad = struct<Bad>({ s: f64 as never, f: f64 as never, o: f64, u: f64, arr: f64 as never, obj: f64 as never, t: f64 as never });
+>Bad : Symbol(Bad, Decl(errors.mts, 5, 121), Decl(errors.mts, 16, 12))
+>struct : Symbol(struct, Decl(errors.mts, 0, 31))
+>Bad : Symbol(Bad, Decl(errors.mts, 5, 121), Decl(errors.mts, 16, 12))
+>s : Symbol(s, Decl(errors.mts, 16, 32))
+>f64 : Symbol(f64, Decl(errors.mts, 0, 8))
+>f : Symbol(f, Decl(errors.mts, 16, 49))
+>f64 : Symbol(f64, Decl(errors.mts, 0, 8))
+>o : Symbol(o, Decl(errors.mts, 16, 66))
+>f64 : Symbol(f64, Decl(errors.mts, 0, 8))
+>u : Symbol(u, Decl(errors.mts, 16, 74))
+>f64 : Symbol(f64, Decl(errors.mts, 0, 8))
+>arr : Symbol(arr, Decl(errors.mts, 16, 82))
+>f64 : Symbol(f64, Decl(errors.mts, 0, 8))
+>obj : Symbol(obj, Decl(errors.mts, 16, 101))
+>f64 : Symbol(f64, Decl(errors.mts, 0, 8))
+>t : Symbol(t, Decl(errors.mts, 16, 120))
+>f64 : Symbol(f64, Decl(errors.mts, 0, 8))
 
 export function elements(a: SharedArray<Good>, g: Good, i: number, maybe: Good | undefined) {
->elements : Symbol(elements, Decl(errors.mts, 11, 1))
->a : Symbol(a, Decl(errors.mts, 13, 25))
->SharedArray : Symbol(SharedArray, Decl(errors.mts, 0, 8))
->Good : Symbol(Good, Decl(errors.mts, 0, 40))
->g : Symbol(g, Decl(errors.mts, 13, 46))
->Good : Symbol(Good, Decl(errors.mts, 0, 40))
->i : Symbol(i, Decl(errors.mts, 13, 55))
->maybe : Symbol(maybe, Decl(errors.mts, 13, 66))
->Good : Symbol(Good, Decl(errors.mts, 0, 40))
+>elements : Symbol(elements, Decl(errors.mts, 16, 140))
+>a : Symbol(a, Decl(errors.mts, 18, 25))
+>SharedArray : Symbol(SharedArray, Decl(errors.mts, 0, 18))
+>Good : Symbol(Good, Decl(errors.mts, 3, 39), Decl(errors.mts, 5, 12))
+>g : Symbol(g, Decl(errors.mts, 18, 46))
+>Good : Symbol(Good, Decl(errors.mts, 3, 39), Decl(errors.mts, 5, 12))
+>i : Symbol(i, Decl(errors.mts, 18, 55))
+>maybe : Symbol(maybe, Decl(errors.mts, 18, 66))
+>Good : Symbol(Good, Decl(errors.mts, 3, 39), Decl(errors.mts, 5, 12))
 
     a[i] = g;                                // elements are inline
->a : Symbol(a, Decl(errors.mts, 13, 25))
->i : Symbol(i, Decl(errors.mts, 13, 55))
->g : Symbol(g, Decl(errors.mts, 13, 46))
+>a : Symbol(a, Decl(errors.mts, 18, 25))
+>i : Symbol(i, Decl(errors.mts, 18, 55))
+>g : Symbol(g, Decl(errors.mts, 18, 46))
 
     const n = maybe?.a;                      // optional chaining
->n : Symbol(n, Decl(errors.mts, 15, 9))
->maybe?.a : Symbol(Good.a, Decl(errors.mts, 2, 27))
->maybe : Symbol(maybe, Decl(errors.mts, 13, 66))
->a : Symbol(Good.a, Decl(errors.mts, 2, 27))
+>n : Symbol(n, Decl(errors.mts, 20, 9))
+>maybe?.a : Symbol(Good.a, Decl(errors.mts, 4, 23))
+>maybe : Symbol(maybe, Decl(errors.mts, 18, 66))
+>a : Symbol(Good.a, Decl(errors.mts, 4, 23))
 
     const bad = new SharedArray<bigint>(Good as any, 3);
->bad : Symbol(bad, Decl(errors.mts, 16, 9))
->SharedArray : Symbol(SharedArray, Decl(errors.mts, 0, 8))
->Good : Symbol(Good, Decl(errors.mts, 0, 40))
+>bad : Symbol(bad, Decl(errors.mts, 21, 9))
+>SharedArray : Symbol(SharedArray, Decl(errors.mts, 0, 18))
+>Good : Symbol(Good, Decl(errors.mts, 3, 39), Decl(errors.mts, 5, 12))
 
     return n;
->n : Symbol(n, Decl(errors.mts, 15, 9))
+>n : Symbol(n, Decl(errors.mts, 20, 9))
 }
 
 export function destructure({ a }: Good, list: Good[]) {
->destructure : Symbol(destructure, Decl(errors.mts, 18, 1))
->a : Symbol(a, Decl(errors.mts, 20, 29))
->Good : Symbol(Good, Decl(errors.mts, 0, 40))
->list : Symbol(list, Decl(errors.mts, 20, 40))
->Good : Symbol(Good, Decl(errors.mts, 0, 40))
+>destructure : Symbol(destructure, Decl(errors.mts, 23, 1))
+>a : Symbol(a, Decl(errors.mts, 25, 29))
+>Good : Symbol(Good, Decl(errors.mts, 3, 39), Decl(errors.mts, 5, 12))
+>list : Symbol(list, Decl(errors.mts, 25, 40))
+>Good : Symbol(Good, Decl(errors.mts, 3, 39), Decl(errors.mts, 5, 12))
 
     for (const { b } of list) {}
->b : Symbol(b, Decl(errors.mts, 21, 16))
->list : Symbol(list, Decl(errors.mts, 20, 40))
+>b : Symbol(b, Decl(errors.mts, 26, 16))
+>list : Symbol(list, Decl(errors.mts, 25, 40))
 
     return a;
->a : Symbol(a, Decl(errors.mts, 20, 29))
+>a : Symbol(a, Decl(errors.mts, 25, 29))
 }
 

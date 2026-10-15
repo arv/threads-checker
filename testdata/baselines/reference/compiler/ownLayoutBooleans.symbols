@@ -625,35 +625,3 @@ export function sieve(n: number): number {
 >length : Symbol(SharedArray.length, Decl(threads.d.mts, 85, 46))
 }
 
-=== syntax.mts ===
-// The syntax's shared structs take boolean fields as well.
-shared struct Flags { count: number; on: boolean; off: false }
->Flags : Symbol(Flags, Decl(syntax.mts, 0, 0))
->count : Symbol(Flags.count, Decl(syntax.mts, 1, 21))
->on : Symbol(Flags.on, Decl(syntax.mts, 1, 36))
->off : Symbol(Flags.off, Decl(syntax.mts, 1, 49))
-
-export function toggle(f: Flags): boolean {
->toggle : Symbol(toggle, Decl(syntax.mts, 1, 62))
->f : Symbol(f, Decl(syntax.mts, 2, 23))
->Flags : Symbol(Flags, Decl(syntax.mts, 0, 0))
-
-    f.on = !f.on;
->f.on : Symbol(Flags.on, Decl(syntax.mts, 1, 36))
->f : Symbol(f, Decl(syntax.mts, 2, 23))
->on : Symbol(Flags.on, Decl(syntax.mts, 1, 36))
->f.on : Symbol(Flags.on, Decl(syntax.mts, 1, 36))
->f : Symbol(f, Decl(syntax.mts, 2, 23))
->on : Symbol(Flags.on, Decl(syntax.mts, 1, 36))
-
-    f.count++;
->f.count : Symbol(Flags.count, Decl(syntax.mts, 1, 21))
->f : Symbol(f, Decl(syntax.mts, 2, 23))
->count : Symbol(Flags.count, Decl(syntax.mts, 1, 21))
-
-    return f.on;
->f.on : Symbol(Flags.on, Decl(syntax.mts, 1, 36))
->f : Symbol(f, Decl(syntax.mts, 2, 23))
->on : Symbol(Flags.on, Decl(syntax.mts, 1, 36))
-}
-

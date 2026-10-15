@@ -1,19 +1,44 @@
 // @target: es2022
-// @module: es2022
+// @module: esnext
+// @moduleResolution: bundler
 // @strict: true
 // @lib: es2022
+// @ownRuntime: ./threads.mjs
 // @noEmit: true
 
 // A variable declared in a loop's body is a fresh binding in every iteration: what an earlier
 // iteration sent must not stick to it. A variable declared outside the loop keeps its state across
 // iterations. Lines marked "error" are expected to be reported.
 
+// @filename: threads.d.mts
+// The part of the runtime's plain TypeScript API that this test uses.
+
+declare const cellBrand: unique symbol;
+
+/** A cell: shared and mutable. Any number of threads may hold the same one. */
+export interface Cell {
+  readonly [cellBrand]: true;
+}
+
+/** A value whose ownership moves, on a parameter or a result. To TypeScript it is just T. */
+export type Sending<T> = T;
+
+/** A deeply immutable value, which any number of threads may read. To TypeScript it is deeply readonly. */
+export type Shared<T> = T extends Cell | ((...args: any[]) => any) ? T
+  : T extends object ? { readonly [K in keyof T]: Shared<T[K]> }
+  : T;
+
+/** Freezes a value the caller owns into a deeply immutable value every thread can read. */
+export declare function share<T>(value: Sending<T>): Shared<T>;
+
+// @filename: loops.mts
+import { type Sending, type Shared, share } from "./threads.mjs";
+
 type Pos = { x: number };
 type Positions = { t: number; pos: Pos[] };
-declare function share<T>(x: sending T): shared T;
-declare function send<T>(x: sending T): void;
-declare function recv(): sending Positions | undefined;
-declare function use(xs: readonly shared Pos[]): void;
+declare function send<T>(x: Sending<T>): void;
+declare function recv(): Sending<Positions | undefined>;
+declare function use(xs: Shared<Pos[]>): void;
 
 // The n-body gather: each step builds `slots` from received messages, then shares it.
 export function gather(steps: number, threads: number) {

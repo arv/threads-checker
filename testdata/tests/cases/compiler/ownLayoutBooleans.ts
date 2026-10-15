@@ -212,12 +212,3 @@ export function sieve(n: number): number {
     composite[n - 1] ||= composite[0];
     return primes + composite.length;
 }
-
-// @filename: syntax.mts
-// The syntax's shared structs take boolean fields as well.
-shared struct Flags { count: number; on: boolean; off: false }
-export function toggle(f: Flags): boolean {
-    f.on = !f.on;
-    f.count++;
-    return f.on;
-}

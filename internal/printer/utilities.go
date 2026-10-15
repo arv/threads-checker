@@ -487,7 +487,7 @@ func getContainingNodeArray(node *ast.Node) *ast.NodeList {
 	// }
 
 	switch parent.Kind {
-	case ast.KindTypeLiteral, ast.KindInterfaceDeclaration, ast.KindSharedStructDeclaration:
+	case ast.KindTypeLiteral, ast.KindInterfaceDeclaration:
 		if ast.IsTypeElement(node) {
 			return parent.MemberList()
 		}

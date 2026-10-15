@@ -255,11 +255,6 @@
             "TemplateLiteralTypeSpan",
             "ImportType",
             {
-                "comment": "Ownership type operators (own/shared threads extension)"
-            },
-            "SendingType",
-            "SharedType",
-            {
                 "comment": "Binding patterns"
             },
             "ObjectBindingPattern",
@@ -299,10 +294,6 @@
             "SyntheticExpression",
             "SatisfiesExpression",
             {
-                "comment": "Ownership transfer (own/shared threads extension)"
-            },
-            "ConsumeExpression",
-            {
                 "comment": "Misc"
             },
             "TemplateSpan",
@@ -334,7 +325,6 @@
             "FunctionDeclaration",
             "ClassDeclaration",
             "InterfaceDeclaration",
-            "SharedStructDeclaration",
             "TypeAliasDeclaration",
             "EnumDeclaration",
             "ModuleDeclaration",
@@ -504,7 +494,7 @@
             },
             {
                 "name": "LastTypeNode",
-                "value": "SharedType"
+                "value": "ImportType"
             },
             {
                 "name": "FirstPunctuation",
@@ -2004,31 +1994,6 @@
                 ],
                 "arena": true
             },
-            "SharedStructDeclaration": {
-                "extends": [
-                    "StatementBase",
-                    "DeclarationBase",
-                    "ExportableBase",
-                    "ModifiersBase",
-                    "TypeSyntaxBase"
-                ],
-                "members": [
-                    {
-                        "name": "modifiers",
-                        "inherited": true
-                    },
-                    {
-                        "name": "name",
-                        "type": "Identifier",
-                        "private": true
-                    },
-                    {
-                        "name": "Members",
-                        "type": "TypeElement",
-                        "list": "NodeList"
-                    }
-                ]
-            },
             "TypeAliasDeclaration": {
                 "kind": [
                     "TypeAliasDeclaration",
@@ -3474,17 +3439,6 @@
                     }
                 ]
             },
-            "ConsumeExpression": {
-                "extends": [
-                    "UnaryExpressionBase"
-                ],
-                "members": [
-                    {
-                        "name": "Expression",
-                        "type": "Expression"
-                    }
-                ]
-            },
             "TypeAssertion": {
                 "kind": "TypeAssertionExpression",
                 "extends": [
@@ -3594,30 +3548,6 @@
                     }
                 ],
                 "arena": true
-            },
-            "SendingTypeNode": {
-                "kind": "SendingType",
-                "extends": [
-                    "TypeNodeBase"
-                ],
-                "members": [
-                    {
-                        "name": "Type",
-                        "type": "TypeNode"
-                    }
-                ]
-            },
-            "SharedTypeNode": {
-                "kind": "SharedType",
-                "extends": [
-                    "TypeNodeBase"
-                ],
-                "members": [
-                    {
-                        "name": "Type",
-                        "type": "TypeNode"
-                    }
-                ]
             },
             "InferTypeNode": {
                 "kind": "InferType",

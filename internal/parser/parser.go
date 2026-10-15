@@ -83,7 +83,6 @@ type Parser struct {
 	statementHasAwaitIdentifier bool
 	hasDeprecatedTag            bool
 	hasParseError               bool
-	inExpressionTypeArguments   bool // speculatively parsing the type arguments of `f<T>(...)`
 
 	identifiers                map[string]string
 	identifierCount            int
@@ -1119,10 +1118,6 @@ func (p *Parser) parseStatement() *ast.Statement {
 		if p.isStartOfDeclaration() {
 			return p.parseDeclaration()
 		}
-	case ast.KindIdentifier:
-		if p.isStartOfSharedStructDeclaration() {
-			return p.parseDeclaration()
-		}
 	}
 	return p.parseExpressionOrLabeledStatement()
 }
@@ -1185,10 +1180,6 @@ func (p *Parser) parseDeclarationWorker(pos int, jsdoc jsdocScannerInfo, modifie
 			return p.parseNamespaceExportDeclaration(pos, jsdoc, modifiers)
 		default:
 			return p.parseExportDeclaration(pos, jsdoc, modifiers)
-		}
-	case ast.KindIdentifier:
-		if p.isStartOfSharedStructDeclaration() {
-			return p.parseSharedStructDeclaration(pos, jsdoc, modifiers)
 		}
 	}
 	if modifiers != nil {
@@ -2690,10 +2681,6 @@ func (p *Parser) parseTypeOperatorOrHigher() *ast.TypeNode {
 		return p.parseTypeOperator(operator)
 	case ast.KindInferKeyword:
 		return p.parseInferType()
-	case ast.KindIdentifier:
-		if p.isStartOfOwnershipTypeOperator() {
-			return p.parseOwnershipTypeOperator()
-		}
 	}
 	return doInContext(p, ast.NodeFlagsDisallowConditionalTypesContext, false, (*Parser).parsePostfixTypeOrHigher)
 }
@@ -4714,8 +4701,6 @@ func (p *Parser) parseUnaryExpressionOrHigher() *ast.Expression {
 		end := simpleUnaryExpression.End()
 		if simpleUnaryExpression.Kind == ast.KindTypeAssertionExpression {
 			p.parseErrorAt(pos, end, diagnostics.A_type_assertion_expression_is_not_allowed_in_the_left_hand_side_of_an_exponentiation_expression_Consider_enclosing_the_expression_in_parentheses)
-		} else if simpleUnaryExpression.Kind == ast.KindConsumeExpression {
-			p.parseErrorAt(pos, end, diagnostics.An_unary_expression_with_the_0_operator_is_not_allowed_in_the_left_hand_side_of_an_exponentiation_expression_Consider_enclosing_the_expression_in_parentheses, consumeKeywordText)
 		} else {
 			debug.Assert(isKeywordOrPunctuation(unaryOperator))
 			p.parseErrorAt(pos, end, diagnostics.An_unary_expression_with_the_0_operator_is_not_allowed_in_the_left_hand_side_of_an_exponentiation_expression_Consider_enclosing_the_expression_in_parentheses, scanner.TokenToString(unaryOperator))
@@ -4730,8 +4715,6 @@ func (p *Parser) isUpdateExpression() bool {
 		return false
 	case ast.KindLessThanToken:
 		return p.languageVariant == core.LanguageVariantJSX
-	case ast.KindIdentifier:
-		return !p.isStartOfConsumeExpression()
 	}
 	return true
 }
@@ -5103,12 +5086,7 @@ func (p *Parser) parseSimpleUnaryExpression() *ast.Expression {
 		if p.isAwaitExpression() {
 			return p.parseAwaitExpression()
 		}
-		return p.parseUpdateExpression()
-	case ast.KindIdentifier:
-		if p.isStartOfConsumeExpression() {
-			return p.parseConsumeExpression()
-		}
-		return p.parseUpdateExpression()
+		fallthrough
 	default:
 		return p.parseUpdateExpression()
 	}
@@ -5277,10 +5255,7 @@ func (p *Parser) tryParseTypeArgumentsInExpression() *ast.NodeList {
 	state := p.mark()
 	if p.reScanLessThanToken() == ast.KindLessThanToken {
 		p.nextToken()
-		saveInExpressionTypeArguments := p.inExpressionTypeArguments
-		p.inExpressionTypeArguments = true
 		typeArguments := p.parseDelimitedList(PCTypeArguments, (*Parser).parseType)
-		p.inExpressionTypeArguments = saveInExpressionTypeArguments
 		// If it doesn't have the closing `>` then it's definitely not an type argument list.
 		if p.reScanGreaterThanToken() == ast.KindGreaterThanToken {
 			p.nextToken()
@@ -6191,8 +6166,6 @@ func (p *Parser) scanStartOfDeclaration() bool {
 		case ast.KindStaticKeyword:
 			p.nextToken()
 			continue
-		case ast.KindIdentifier:
-			return p.isStartOfSharedStructDeclaration()
 		}
 		return false
 	}

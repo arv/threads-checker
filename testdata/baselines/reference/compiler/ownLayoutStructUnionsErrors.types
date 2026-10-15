@@ -197,31 +197,3 @@ export function viaStructTypeParam(S: typeof A | typeof B) {
 >2 : 2
 }
 
-// Through `shared struct` declarations.
-shared struct SA { u: number }
->SA : SA
->u : number
-
-shared struct SB { v: number; u: number }
->SB : SB
->v : number
->u : number
-
-export function viaSharedStruct() {
->viaSharedStruct : () => number
-
-    const m = new (flag ? SA : SB)();
->m : SA | SB
->new (flag ? SA : SB)() : SA | SB
->(flag ? SA : SB) : (new () => SA) | (new () => SB)
->flag ? SA : SB : (new () => SA) | (new () => SB)
->flag : boolean
->SA : new () => SA
->SB : new () => SB
-
-    return m.u;                             // error
->m.u : number
->m : SA | SB
->u : number
-}
-

@@ -205,11 +205,3 @@ export function labels(n: number): number {
     for (let i = 0; i < n; i++) chars += names[i].length;
     return chars + names.length;
 }
-
-// @filename: syntax.mts
-// The syntax's shared structs take string fields as well, string literal types included.
-shared struct Task { id: number; state: "todo" | "done"; title: string }
-export function finish(t: Task): string {
-    t.state = "done";
-    return t.title + ": " + t.state;
-}
