@@ -1,0 +1,41 @@
+bodies.mts(29,10): error TS96009: 'xs' cannot be returned as 'Sending<T>': it may be referenced by the caller.
+
+
+==== threads.d.mts (0 errors) ====
+    /** A value whose ownership moves, on a parameter or a result. To TypeScript it is just T. */
+    export type Sending<T> = T;
+    
+==== bodies.mts (1 errors) ====
+    import type { Sending } from "./threads.mjs";
+    
+    export type Body = { x: number; vx: number; m: number };
+    declare function makeBodies(): Sending<Body[]>;
+    
+    export function move(mine: Body[]) {
+      for (const b of mine) b.x += b.vx;
+    }
+    function local(mine: Body[]) {
+      move(mine);
+    }
+    export class Mover {
+      static move(mine: Body[]) {
+        move(mine);
+      }
+    }
+    
+    export function step(): Sending<Body[]> {
+      const bodies = makeBodies();
+      move(bodies);
+      local(bodies);
+      Mover.move(bodies);
+      return bodies;
+    }
+    
+    // Still an error: the caller keeps its own array.
+    export function giveBack(xs: Body[]): Sending<Body[]> {
+      move(xs);
+      return xs;
+             ~~
+!!! error TS96009: 'xs' cannot be returned as 'Sending<T>': it may be referenced by the caller.
+    }
+    

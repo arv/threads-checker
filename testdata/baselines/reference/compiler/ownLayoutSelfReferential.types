@@ -1,0 +1,190 @@
+//// [tests/cases/compiler/ownLayoutSelfReferential.ts] ////
+
+=== threads.d.mts ===
+// The parts of the threads runtime (threads.mjs, from github.com/arv/threads) this test uses.
+// Programs import their API from "./threads.mjs"; the compiler adds the imports of the helpers it
+// emits (`__sharedStruct`, `__register`, ...) when `ownRuntime` is set.
+
+declare const cellBrand: unique symbol;
+>cellBrand : unique symbol
+
+declare const fieldBrand: unique symbol;
+>fieldBrand : unique symbol
+
+/** A cell: shared and mutable. Any number of threads may hold the same one. */
+export interface Cell {
+  readonly [cellBrand]: true;
+>[cellBrand] : true
+>cellBrand : unique symbol
+>true : true
+}
+
+/** A field of a shared struct, declared with `f64` or `ref<T>()`. */
+export interface Field<T> {
+  readonly [fieldBrand]: T;
+>[fieldBrand] : T
+>fieldBrand : unique symbol
+}
+/** A number field: an f64 in shared memory. */
+export declare const f64: Field<number>;
+>f64 : Field<number>
+
+/** A reference field: a shared struct or a SharedArray, or null. */
+export declare function ref<T>(): Field<T | null>;
+>ref : <T>() => Field<T | null>
+
+/** What `struct(...)` returns: `new S()` makes a zeroed struct in shared memory. */
+export interface StructType<T> {
+  new (): T & Cell;
+  readonly fields: readonly string[];
+>fields : readonly string[]
+}
+/** The value type of a struct type: `type Body = Struct<typeof Body>`. */
+export type Struct<S> = S extends StructType<infer T> ? T & Cell : never;
+>Struct : Struct<S>
+
+/** Declares a shared struct: fields at fixed places in shared memory. */
+export declare function struct<F extends Record<string, Field<any>>>(
+>struct : { <F extends Record<string, Field<any>>>(fields: F): StructType<{ -readonly [K in keyof F]: F[K] extends Field<infer V> ? V : never; }>; <T>(fields: { [K in keyof T]-?: Field<T[K]>; }): StructType<T>; }
+
+  fields: F,
+>fields : F
+
+): StructType<{ -readonly [K in keyof F]: F[K] extends Field<infer V> ? V : never }>;
+export declare function struct<T>(fields: { [K in keyof T]-?: Field<T[K]> }): StructType<T>;
+>struct : { <F extends Record<string, Field<any>>>(fields: F): StructType<{ -readonly [K in keyof F]: F[K] extends Field<infer V> ? V : never; }>; <T>(fields: { [K in keyof T]-?: Field<T[K]>; }): StructType<T>; }
+>fields : { [K in keyof T]-?: Field<T[K]>; }
+
+/**
+ * A fixed-length array in shared memory, of numbers or of shared structs stored inline. With
+ * `ownRuntime` the compiler turns `a[i]` and `a.length` into typed-array accesses.
+ */
+export interface SharedArray<T> extends Cell {
+  readonly length: number;
+>length : number
+
+  [index: number]: T;
+>index : number
+}
+export declare const SharedArray: {
+>SharedArray : { new (type: NumberConstructor, length: number): SharedArray<number>; new <T>(type: StructType<T>, length: number): SharedArray<T & Cell>; }
+
+  new (type: NumberConstructor, length: number): SharedArray<number>;
+>type : NumberConstructor
+>length : number
+
+  new <T>(type: StructType<T>, length: number): SharedArray<T & Cell>;
+>type : StructType<T>
+>length : number
+
+};
+
+/** Prints a line, synchronously, from any thread. */
+export declare function log(...args: unknown[]): void;
+>log : (...args: unknown[]) => void
+>args : unknown[]
+
+=== tree.mts ===
+import { f64, ref, SharedArray, struct } from "./threads.mjs";
+>f64 : import("./threads.mjs").Field<number>
+>ref : <T>() => import("./threads.mjs").Field<T | null>
+>SharedArray : { new (type: NumberConstructor, length: number): SharedArray<number>; new <T>(type: import("./threads.mjs").StructType<T>, length: number): SharedArray<T & import("./threads.mjs").Cell>; }
+>struct : { <F extends Record<string, import("./threads.mjs").Field<any>>>(fields: F): import("./threads.mjs").StructType<{ -readonly [K in keyof F]: F[K] extends import("./threads.mjs").Field<infer V> ? V : never; }>; <T>(fields: { [K in keyof T]-?: import("./threads.mjs").Field<T[K]>; }): import("./threads.mjs").StructType<T>; }
+
+export interface Tree { value: number; children: SharedArray<Tree> | null }
+>value : number
+>children : SharedArray<Tree> | null
+
+export const Tree = struct<Tree>({ value: f64, children: ref<SharedArray<Tree>>() });
+>Tree : import("./threads.mjs").StructType<Tree>
+>struct<Tree>({ value: f64, children: ref<SharedArray<Tree>>() }) : import("./threads.mjs").StructType<Tree>
+>struct : { <F extends Record<string, import("./threads.mjs").Field<any>>>(fields: F): import("./threads.mjs").StructType<{ -readonly [K in keyof F]: F[K] extends import("./threads.mjs").Field<infer V> ? V : never; }>; <T>(fields: { [K in keyof T]-?: import("./threads.mjs").Field<T[K]>; }): import("./threads.mjs").StructType<T>; }
+>{ value: f64, children: ref<SharedArray<Tree>>() } : { value: import("./threads.mjs").Field<number>; children: import("./threads.mjs").Field<SharedArray<Tree> | null>; }
+>value : import("./threads.mjs").Field<number>
+>f64 : import("./threads.mjs").Field<number>
+>children : import("./threads.mjs").Field<SharedArray<Tree> | null>
+>ref<SharedArray<Tree>>() : import("./threads.mjs").Field<SharedArray<Tree> | null>
+>ref : <T>() => import("./threads.mjs").Field<T | null>
+
+export function grow(t: Tree, n: number) {
+>grow : (t: Tree, n: number) => number
+>t : Tree
+>n : number
+
+    t.children = new SharedArray(Tree, n);  // field write: an address
+>t.children = new SharedArray(Tree, n) : SharedArray<Tree & import("./threads.mjs").Cell>
+>t.children : SharedArray<Tree> | null
+>t : Tree
+>children : SharedArray<Tree> | null
+>new SharedArray(Tree, n) : SharedArray<Tree & import("./threads.mjs").Cell>
+>SharedArray : { new (type: NumberConstructor, length: number): SharedArray<number>; new <T>(type: import("./threads.mjs").StructType<T>, length: number): SharedArray<T & import("./threads.mjs").Cell>; }
+>Tree : import("./threads.mjs").StructType<Tree>
+>n : number
+
+    t.children[0].value = t.value + 1;      // element of the struct's own array
+>t.children[0].value = t.value + 1 : number
+>t.children[0].value : number
+>t.children[0] : Tree
+>t.children : SharedArray<Tree>
+>t : Tree
+>children : SharedArray<Tree>
+>0 : 0
+>value : number
+>t.value + 1 : number
+>t.value : number
+>t : Tree
+>value : number
+>1 : 1
+
+    return t.children.length;
+>t.children.length : number
+>t.children : SharedArray<Tree>
+>t : Tree
+>children : SharedArray<Tree>
+>length : number
+}
+
+export function sum(t: Tree): number {
+>sum : (t: Tree) => number
+>t : Tree
+
+    let total = t.value;
+>total : number
+>t.value : number
+>t : Tree
+>value : number
+
+    const children = t.children;
+>children : SharedArray<Tree> | null
+>t.children : SharedArray<Tree> | null
+>t : Tree
+>children : SharedArray<Tree> | null
+
+    if (children) {
+>children : SharedArray<Tree> | null
+
+        for (let i = 0; i < children.length; i++) {
+>i : number
+>0 : 0
+>i < children.length : boolean
+>i : number
+>children.length : number
+>children : SharedArray<Tree>
+>length : number
+>i++ : number
+>i : number
+
+            total += sum(children[i]);
+>total += sum(children[i]) : number
+>total : number
+>sum(children[i]) : number
+>sum : (t: Tree) => number
+>children[i] : Tree
+>children : SharedArray<Tree>
+>i : number
+        }
+    }
+    return total;
+>total : number
+}
+
