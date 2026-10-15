@@ -1,0 +1,101 @@
+//// [tests/cases/compiler/ownSharedExportedCalls.ts] ////
+
+=== threads.d.mts ===
+/** A value whose ownership moves, on a parameter or a result. To TypeScript it is just T. */
+export type Sending<T> = T;
+>Sending : T
+
+=== bodies.mts ===
+import type { Sending } from "./threads.mjs";
+>Sending : T
+
+export type Body = { x: number; vx: number; m: number };
+>Body : Body
+>x : number
+>vx : number
+>m : number
+
+declare function makeBodies(): Sending<Body[]>;
+>makeBodies : () => Sending<Body[]>
+
+export function move(mine: Body[]) {
+>move : (mine: Body[]) => void
+>mine : Body[]
+
+  for (const b of mine) b.x += b.vx;
+>b : Body
+>mine : Body[]
+>b.x += b.vx : number
+>b.x : number
+>b : Body
+>x : number
+>b.vx : number
+>b : Body
+>vx : number
+}
+function local(mine: Body[]) {
+>local : (mine: Body[]) => void
+>mine : Body[]
+
+  move(mine);
+>move(mine) : void
+>move : (mine: Body[]) => void
+>mine : Body[]
+}
+export class Mover {
+>Mover : Mover
+
+  static move(mine: Body[]) {
+>move : (mine: Body[]) => void
+>mine : Body[]
+
+    move(mine);
+>move(mine) : void
+>move : (mine: Body[]) => void
+>mine : Body[]
+  }
+}
+
+export function step(): Sending<Body[]> {
+>step : () => Sending<Body[]>
+
+  const bodies = makeBodies();
+>bodies : Body[]
+>makeBodies() : Body[]
+>makeBodies : () => Sending<Body[]>
+
+  move(bodies);
+>move(bodies) : void
+>move : (mine: Body[]) => void
+>bodies : Body[]
+
+  local(bodies);
+>local(bodies) : void
+>local : (mine: Body[]) => void
+>bodies : Body[]
+
+  Mover.move(bodies);
+>Mover.move(bodies) : void
+>Mover.move : (mine: Body[]) => void
+>Mover : typeof Mover
+>move : (mine: Body[]) => void
+>bodies : Body[]
+
+  return bodies;
+>bodies : Body[]
+}
+
+// Still an error: the caller keeps its own array.
+export function giveBack(xs: Body[]): Sending<Body[]> {
+>giveBack : (xs: Body[]) => Sending<Body[]>
+>xs : Body[]
+
+  move(xs);
+>move(xs) : void
+>move : (mine: Body[]) => void
+>xs : Body[]
+
+  return xs;
+>xs : Body[]
+}
+

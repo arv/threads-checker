@@ -2283,7 +2283,9 @@ func (c *Checker) checkSourceElementWorker(node *ast.Node) {
 	case ast.KindTypeReference:
 		c.checkTypeReferenceNode(node)
 		if c.compilerOptions.OwnRuntime != "" {
-			c.checkSharedArrayElementType(node, c.getTypeFromTypeNode(node))
+			// Deferred: the element may be a struct whose `struct(...)` call is being resolved, as in a
+			// field `ref<SharedArray<S>>()` of S itself.
+			c.checkNodeDeferred(node)
 		}
 	case ast.KindTypePredicate:
 		c.checkTypePredicate(node)
@@ -2525,6 +2527,8 @@ func (c *Checker) checkDeferredNode(node *ast.Node) {
 		c.checkAssertionDeferred(node)
 	case ast.KindVoidExpression:
 		c.checkExpression(node.Expression())
+	case ast.KindTypeReference:
+		c.checkSharedArrayElementType(node, c.getTypeFromTypeNode(node))
 	case ast.KindBinaryExpression:
 		if ast.IsInstanceOfExpression(node) {
 			c.resolveUntypedCall(node)

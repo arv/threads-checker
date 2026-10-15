@@ -1,0 +1,105 @@
+//// [tests/cases/compiler/ownSharedExportedCalls.ts] ////
+
+=== threads.d.mts ===
+/** A value whose ownership moves, on a parameter or a result. To TypeScript it is just T. */
+export type Sending<T> = T;
+>Sending : Symbol(Sending, Decl(threads.d.mts, 0, 0))
+>T : Symbol(T, Decl(threads.d.mts, 1, 20))
+>T : Symbol(T, Decl(threads.d.mts, 1, 20))
+
+=== bodies.mts ===
+import type { Sending } from "./threads.mjs";
+>Sending : Symbol(Sending, Decl(bodies.mts, 0, 13))
+
+export type Body = { x: number; vx: number; m: number };
+>Body : Symbol(Body, Decl(bodies.mts, 0, 45))
+>x : Symbol(x, Decl(bodies.mts, 2, 20))
+>vx : Symbol(vx, Decl(bodies.mts, 2, 31))
+>m : Symbol(m, Decl(bodies.mts, 2, 43))
+
+declare function makeBodies(): Sending<Body[]>;
+>makeBodies : Symbol(makeBodies, Decl(bodies.mts, 2, 56))
+>Sending : Symbol(Sending, Decl(bodies.mts, 0, 13))
+>Body : Symbol(Body, Decl(bodies.mts, 0, 45))
+
+export function move(mine: Body[]) {
+>move : Symbol(move, Decl(bodies.mts, 3, 47))
+>mine : Symbol(mine, Decl(bodies.mts, 5, 21))
+>Body : Symbol(Body, Decl(bodies.mts, 0, 45))
+
+  for (const b of mine) b.x += b.vx;
+>b : Symbol(b, Decl(bodies.mts, 6, 12))
+>mine : Symbol(mine, Decl(bodies.mts, 5, 21))
+>b.x : Symbol(x, Decl(bodies.mts, 2, 20))
+>b : Symbol(b, Decl(bodies.mts, 6, 12))
+>x : Symbol(x, Decl(bodies.mts, 2, 20))
+>b.vx : Symbol(vx, Decl(bodies.mts, 2, 31))
+>b : Symbol(b, Decl(bodies.mts, 6, 12))
+>vx : Symbol(vx, Decl(bodies.mts, 2, 31))
+}
+function local(mine: Body[]) {
+>local : Symbol(local, Decl(bodies.mts, 7, 1))
+>mine : Symbol(mine, Decl(bodies.mts, 8, 15))
+>Body : Symbol(Body, Decl(bodies.mts, 0, 45))
+
+  move(mine);
+>move : Symbol(move, Decl(bodies.mts, 3, 47))
+>mine : Symbol(mine, Decl(bodies.mts, 8, 15))
+}
+export class Mover {
+>Mover : Symbol(Mover, Decl(bodies.mts, 10, 1))
+
+  static move(mine: Body[]) {
+>move : Symbol(Mover.move, Decl(bodies.mts, 11, 20))
+>mine : Symbol(mine, Decl(bodies.mts, 12, 14))
+>Body : Symbol(Body, Decl(bodies.mts, 0, 45))
+
+    move(mine);
+>move : Symbol(move, Decl(bodies.mts, 3, 47))
+>mine : Symbol(mine, Decl(bodies.mts, 12, 14))
+  }
+}
+
+export function step(): Sending<Body[]> {
+>step : Symbol(step, Decl(bodies.mts, 15, 1))
+>Sending : Symbol(Sending, Decl(bodies.mts, 0, 13))
+>Body : Symbol(Body, Decl(bodies.mts, 0, 45))
+
+  const bodies = makeBodies();
+>bodies : Symbol(bodies, Decl(bodies.mts, 18, 7))
+>makeBodies : Symbol(makeBodies, Decl(bodies.mts, 2, 56))
+
+  move(bodies);
+>move : Symbol(move, Decl(bodies.mts, 3, 47))
+>bodies : Symbol(bodies, Decl(bodies.mts, 18, 7))
+
+  local(bodies);
+>local : Symbol(local, Decl(bodies.mts, 7, 1))
+>bodies : Symbol(bodies, Decl(bodies.mts, 18, 7))
+
+  Mover.move(bodies);
+>Mover.move : Symbol(Mover.move, Decl(bodies.mts, 11, 20))
+>Mover : Symbol(Mover, Decl(bodies.mts, 10, 1))
+>move : Symbol(Mover.move, Decl(bodies.mts, 11, 20))
+>bodies : Symbol(bodies, Decl(bodies.mts, 18, 7))
+
+  return bodies;
+>bodies : Symbol(bodies, Decl(bodies.mts, 18, 7))
+}
+
+// Still an error: the caller keeps its own array.
+export function giveBack(xs: Body[]): Sending<Body[]> {
+>giveBack : Symbol(giveBack, Decl(bodies.mts, 23, 1))
+>xs : Symbol(xs, Decl(bodies.mts, 26, 25))
+>Body : Symbol(Body, Decl(bodies.mts, 0, 45))
+>Sending : Symbol(Sending, Decl(bodies.mts, 0, 13))
+>Body : Symbol(Body, Decl(bodies.mts, 0, 45))
+
+  move(xs);
+>move : Symbol(move, Decl(bodies.mts, 3, 47))
+>xs : Symbol(xs, Decl(bodies.mts, 26, 25))
+
+  return xs;
+>xs : Symbol(xs, Decl(bodies.mts, 26, 25))
+}
+

@@ -1632,9 +1632,11 @@ func (a *ownAnalyzer) isSharedSymbol(sym *ast.Symbol) bool {
 
 func (a *ownAnalyzer) computeIsSharedSymbol(sym *ast.Symbol) bool {
 	c := a.c
-	target := sym
-	if sym.Flags&ast.SymbolFlagsAlias != 0 {
-		target = c.resolveAlias(sym)
+	// A module's own exported declarations resolve, inside the module, to a local symbol that only
+	// stands for the export: what it is (a function, a class) is on the exported symbol.
+	target := c.getExportSymbolOfValueSymbolIfExported(sym)
+	if target.Flags&ast.SymbolFlagsAlias != 0 {
+		target = c.resolveAlias(target)
 		if target == nil || target == c.unknownSymbol {
 			return true
 		}
