@@ -44,7 +44,6 @@ type ownLayoutState struct {
 	runtimeTypes    map[string]*Type                    // the runtime module's interfaces and classes, by name (ownmarkers.go)
 	structs         map[*Type]*ast.Node                 // the `struct(...)` calls, by the type of their structs' values
 	structCalls     map[*ast.Node]*ownStructInfo        // the same, by call
-	structDecls     map[*ast.Symbol]*ownStructInfo      // the `shared struct` declarations
 	structUnions    map[*Type]*ownStructInfo            // the layouts of unions of shared structs (nil if not all are)
 	integers        ownIntegerState                     // what flows into i32s and u8s (ownintegers.go)
 }
@@ -66,8 +65,8 @@ func (c *Checker) isOwnRuntimeFile(file *ast.SourceFile) bool {
 	return file != nil && c.ownLayout.runtimeFiles[file.FileName()]
 }
 
-// The shared struct whose instances have type t, if any (not the struct's constructor): a `shared
-// struct` declaration, or a `struct(...)` call (whose values' type may be intersected with Cell).
+// The shared struct whose instances have type t, if any (not the struct's constructor): that of a
+// `struct(...)` call (whose values' type may be intersected with Cell).
 func (c *Checker) getOwnStructOfType(t *Type) *ownStructInfo {
 	if t == nil {
 		return nil
@@ -83,12 +82,6 @@ func (c *Checker) getOwnStructOfType(t *Type) *ownStructInfo {
 	if t.flags&TypeFlagsObject == 0 {
 		return nil
 	}
-	if t.symbol != nil && core.Some(t.symbol.Declarations, ast.IsSharedStructDeclaration) {
-		if c.getDeclaredTypeOfSymbol(t.symbol) != t {
-			return nil
-		}
-		return c.getOwnStructOfDeclaration(t.symbol)
-	}
 	if c.compilerOptions.OwnRuntime == "" {
 		return nil
 	}
@@ -96,30 +89,6 @@ func (c *Checker) getOwnStructOfType(t *Type) *ownStructInfo {
 		return c.getOwnStructOfCall(call)
 	}
 	return nil
-}
-
-// The layout of a `shared struct` declaration: its fields in declaration order, and their kinds.
-func (c *Checker) getOwnStructOfDeclaration(s *ast.Symbol) *ownStructInfo {
-	if info, ok := c.ownLayout.structDecls[s]; ok {
-		return info
-	}
-	decl := core.Find(s.Declarations, ast.IsSharedStructDeclaration)
-	info := &ownStructInfo{decl: decl, name: s.Name}
-	if c.ownLayout.structDecls == nil {
-		c.ownLayout.structDecls = map[*ast.Symbol]*ownStructInfo{}
-	}
-	c.ownLayout.structDecls[s] = info // before its fields: a field may refer to the struct itself
-	for _, member := range decl.Members() {
-		if ast.IsPropertySignatureDeclaration(member) && member.Name() != nil {
-			info.fields = append(info.fields, member.Name().Text())
-			kind := printer.OwnFieldF64
-			if symbol := c.getSymbolOfDeclaration(member); symbol != nil {
-				kind = c.getOwnFieldKind(c.getTypeOfSymbol(symbol))
-			}
-			info.kinds = append(info.kinds, kind)
-		}
-	}
-	return info
 }
 
 // The element type of a SharedArray type, if t is one.
@@ -297,51 +266,15 @@ func (c *Checker) isOwnCellType(t *Type) bool {
 	})
 }
 
-// The layout type of an expression (or of the instances of a shared struct declaration), for the
-// emit resolver.
+// The layout type of an expression, for the emit resolver.
 func (c *Checker) getOwnCellTypeOfExpression(expr *ast.Node) printer.OwnCellType {
 	if c.compilerOptions.OwnRuntime == "" {
 		return printer.OwnCellType{}
 	}
-	if ast.IsSharedStructDeclaration(expr) {
-		if symbol := c.getSymbolOfDeclaration(expr); symbol != nil {
-			return c.getOwnCellType(c.getDeclaredTypeOfSymbol(symbol))
-		}
-		return printer.OwnCellType{}
-	}
-
 	if !ast.IsExpression(expr) {
 		return printer.OwnCellType{}
 	}
 	return c.getOwnCellType(c.getTypeOfExpression(expr))
-}
-
-// The constructor of a shared struct: `new S()` makes a zeroed instance.
-func (c *Checker) getTypeOfSharedStructValue(symbol *ast.Symbol) *Type {
-	instance := c.getDeclaredTypeOfSymbol(symbol)
-	signature := c.newSignature(SignatureFlagsNone, nil /*declaration*/, nil /*typeParameters*/, nil /*thisParameter*/, nil /*parameters*/, instance, nil /*resolvedTypePredicate*/, 0 /*minArgumentCount*/)
-	return c.newAnonymousType(symbol, ast.SymbolTable{}, nil, []*Signature{signature}, nil)
-}
-
-// Checks the fields of a shared struct for the layout: numbers, booleans, strings, and reference
-// fields (a shared struct or a SharedArray, possibly with null or undefined).
-func (c *Checker) checkSharedStructLayout(node *ast.Node) {
-	if c.compilerOptions.OwnRuntime == "" || node.Flags&ast.NodeFlagsAmbient != 0 {
-		return
-	}
-	for _, member := range node.Members() {
-		if !ast.IsPropertySignatureDeclaration(member) {
-			continue
-		}
-		if c.isOwnFieldType(c.getTypeOfSymbol(c.getSymbolOfDeclaration(member))) {
-			continue
-		}
-		location := member.Type()
-		if location == nil {
-			location = member.Name()
-		}
-		c.error(location, diagnostics.A_shared_struct_field_must_be_a_number_a_boolean_a_string_a_shared_struct_a_SharedArray_or_a_Channel)
-	}
 }
 
 // Checks the element type of a SharedArray type reference: numbers (or i32s or u8s), booleans,
@@ -381,8 +314,7 @@ func (c *Checker) isOwnReducibleTo(source *Type, target *Type) bool {
 }
 
 // Reports whether t is the type of a shared struct's values (`T & Cell`, as `new S()` and `Struct<S>`
-// give it, or a `shared struct` declaration's instances) or of a shared struct itself (StructType<T>,
-// or a `shared struct` declaration's constructor).
+// give it) or of a shared struct itself (StructType<T>).
 func (c *Checker) isOwnStructLike(t *Type) bool {
 	if t.flags&TypeFlagsIntersection != 0 {
 		cell := c.getOwnRuntimeType("Cell")
@@ -390,9 +322,6 @@ func (c *Checker) isOwnStructLike(t *Type) bool {
 	}
 	if t.flags&TypeFlagsObject == 0 {
 		return false
-	}
-	if t.symbol != nil && core.Some(t.symbol.Declarations, ast.IsSharedStructDeclaration) {
-		return true
 	}
 	target := t.Target()
 	return target != nil && target.symbol != nil && target.symbol.Name == "StructType" && c.getOwnRuntimeExportName(target.symbol) != ""

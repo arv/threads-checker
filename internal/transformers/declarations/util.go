@@ -113,7 +113,6 @@ func isEnclosingDeclaration(node *ast.Node) bool {
 		ast.IsModuleDeclaration(node) ||
 		ast.IsClassDeclaration(node) ||
 		ast.IsInterfaceDeclaration(node) ||
-		ast.IsSharedStructDeclaration(node) ||
 		ast.IsFunctionLike(node) ||
 		ast.IsIndexSignatureDeclaration(node) ||
 		ast.IsMappedTypeNode(node) ||

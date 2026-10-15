@@ -11,13 +11,15 @@ import (
 	"github.com/microsoft/typescript-go/internal/scanner"
 )
 
-// Ownership (region) analysis for the "own and shared threads" extension.
+// Ownership (region) analysis for the "own and shared threads" extension (only with `--ownRuntime`).
+// The markers are those of the plain TypeScript API (ownmarkers.go): `Sending<T>`, `Shared<T>`,
+// `consume(x)`, and the runtime's Cell types.
 //
 // The analysis is intraprocedural and flow-sensitive, in the style of Swift's region-based isolation
 // (SE-0414). Every value an expression evaluates to is either SHARED (it has no region: primitives,
-// values declared `shared T`, shared struct instances, code) or lives in a REGION, a set of objects
+// values declared `Shared<T>`, cells such as shared struct instances, code) or lives in a REGION, a set of objects
 // that may reference each other. Regions are the classes of a union-find. A region can be SENT (it
-// was handed to another owner through a `sending` parameter, `share(...)` and the like); using a
+// was handed to another owner through a `Sending<T>` parameter, `share(...)` and the like); using a
 // variable whose region was sent is an error. Two kinds of regions can never be sent: CALLER regions
 // (ordinary parameters and `this`, which the caller may still reference) and OUTER regions (variables
 // captured from an enclosing scope).
@@ -26,11 +28,11 @@ import (
 //   - A call to an ordinary function merges the regions of all of its non-shared arguments, its
 //     receiver and (for closures) the callee, since the callee may link them together. Its result is
 //     in that merged region.
-//   - Sharedness comes from `shared` type nodes only (the checker erases them), followed through type
+//   - Sharedness comes from `Shared<T>` type nodes only (an alias to TypeScript), followed through type
 //     aliases, `readonly`, parentheses and unions with null/undefined, plus `const` declarations whose
 //     initializer is shared. A value read out of a shared value is shared ("deep" sharedness).
 //   - There is no interprocedural inference: a function's parameters are CALLER regions unless declared
-//     `sending`, and calls are summarized by their declared `sending`/`shared` parameter and return
+//     `Sending<T>`, and calls are summarized by their declared `Sending`/`Shared` parameter and return
 //     types only. Library functions declared with those types (`take`, `partition`, ...) are trusted.
 //   - Values declared in the default library (`Math`, `JSON`, `console`, ...) and code (functions,
 //     classes, enums, namespaces) referenced by name are treated as shared. This is not sound for
@@ -47,11 +49,11 @@ import (
 //   - Not tracked: aliases through a reference field (`n.next` is untracked) and through a call
 //     (`identity(x)` is fresh). Passing a counted value to a function does not merge it with the
 //     other arguments, and a closure or an object does not take it into its region.
-//   - Only a `sending` parameter that is not a rest parameter sends (moves) a counted value: a
-//     channel's `send`. A thread's arguments (`spawn(f, ...args: sending A)`, `go`) share it, so one
+//   - Only a `Sending<T>` parameter that is not a rest parameter sends (moves) a counted value: a
+//     channel's `send`. A thread's arguments (`spawn(f, ...args: Sending<A>)`, `go`) share it, so one
 //     SharedArray can go to every thread, and a share-like function does not consume it.
 //   - Parameters, `this` and captured variables are CALLER and OUTER regions as usual, so a counted
-//     parameter can be sent only if it is declared `sending`.
+//     parameter can be sent only if it is declared `Sending<T>`.
 
 const ownMaxLoopIterations = 4
 
@@ -91,7 +93,7 @@ type ownSend struct {
 	site    *ast.Node // the sent expression
 	callee  string    // what it was sent to
 	via     string    // the variable (or expression) through which it was sent
-	consume bool      // consumed rather than sent: `consume x`, or a share-like function
+	consume bool      // consumed rather than sent: `consume(x)`, or a share-like function
 }
 
 type ownRegionInfo struct {
@@ -329,25 +331,6 @@ func (s *ownState) signature() string {
 
 // Entry point
 
-// Reports whether any file of the program may use the own/shared threads syntax, or the program uses
-// its runtime (`--ownRuntime`), whose markers are plain TypeScript. The analysis does not run
-// otherwise.
-func (c *Checker) programUsesOwnershipSyntax() bool {
-	if c.ownershipSyntaxState == 0 {
-		c.ownershipSyntaxState = 2
-		if c.compilerOptions.OwnRuntime != "" {
-			c.ownershipSyntaxState = 1 // the plain API's markers have no syntax to look for
-		}
-		for _, file := range c.files {
-			if file.Flags&ast.NodeFlagsPossiblyContainsOwnershipSyntax != 0 {
-				c.ownershipSyntaxState = 1
-				break
-			}
-		}
-	}
-	return c.ownershipSyntaxState == 1
-}
-
 // Runs the ownership analysis on the top-level statements and every function body of a file.
 func (c *Checker) checkOwnership(file *ast.SourceFile) {
 	a := &ownAnalyzer{
@@ -514,7 +497,7 @@ func (f *ownFunction) parameterValue(p *ast.Node, s *ownState) ownValue {
 	sym := a.c.getSymbolOfDeclaration(p)
 	counted := sym != nil && a.isCountedType(a.c.getTypeOfSymbol(sym))
 	if t := a.parameterTypeNode(p); t != nil && a.isSendingTypeNode(t) {
-		// `sending T`: the function owns the argument.
+		// `Sending<T>`: the function owns the argument.
 		return ownRegionValue(a.newRegionOf(counted, s))
 	}
 	if sym != nil && a.isSharedSymbol(sym) {
@@ -891,7 +874,7 @@ func (f *ownFunction) checkReturn(expr *ast.Node, v ownValue, s *ownState) {
 		f.result.returnsFresh = false
 	}
 	if f.returnsSending && borrowed {
-		f.a.report(ownReportKey{expr, ownReportReturn}, expr, diagnostics.X_0_cannot_be_returned_as_sending_Colon_it_may_be_referenced_by_the_caller, ownExpressionName(expr))
+		f.a.report(ownReportKey{expr, ownReportReturn}, expr, diagnostics.X_0_cannot_be_returned_as_Sending_T_Colon_it_may_be_referenced_by_the_caller, ownExpressionName(expr))
 	}
 }
 
@@ -923,8 +906,6 @@ func (f *ownFunction) eval(node *ast.Node, s *ownState) ownValue {
 			return ownSharedValue
 		}
 		return v
-	case ast.KindConsumeExpression:
-		return f.evalConsume(node, node.Expression(), s)
 	case ast.KindTemplateExpression:
 		for _, span := range node.AsTemplateExpression().TemplateSpans.Nodes {
 			f.eval(span.Expression(), s)
@@ -1091,8 +1072,8 @@ func (f *ownFunction) checkUse(node *ast.Node, name string, v ownValue, s *ownSt
 	return false
 }
 
-// `consume x` hands x's value over to the enclosing expression and ends x's lifetime: later uses of
-// x are errors. The value itself is only sent if it is then passed to a `sending` parameter.
+// `consume(x)` hands x's value over to the enclosing expression and ends x's lifetime: later uses of
+// x are errors. The value itself is only sent if it is then passed to a `Sending<T>` parameter.
 func (f *ownFunction) evalConsume(node *ast.Node, operand *ast.Node, s *ownState) ownValue {
 	operand = ast.SkipParentheses(operand)
 	v := f.eval(operand, s)
@@ -1237,7 +1218,7 @@ func (f *ownFunction) checkWrite(target *ast.Node, object *ast.Node, obj ownValu
 }
 
 // The value of `o.p` or `o[i]` given the value of `o`: shared if `o` is shared (sharedness is deep),
-// if the member is declared `shared`, or if it is a primitive; otherwise in `o`'s region.
+// if the member is declared `Shared<T>`, or if it is a primitive; otherwise in `o`'s region.
 func (f *ownFunction) readMember(node *ast.Node, object *ast.Node, obj ownValue, s *ownState) ownValue {
 	a := f.a
 	if obj.kind != ownInRegion {
@@ -1425,18 +1406,14 @@ func (f *ownFunction) evalNew(node *ast.Node, s *ownState) ownValue {
 	a := f.a
 	n := node.AsNewExpression()
 	counted := a.isCountedType(a.c.getTypeOfExpression(node))
-	if a.isSharedStructReference(n.Expression) || counted {
-		// `new S(...)` of a shared struct: the instance is shared, or (with `--ownRuntime`) a fresh
-		// counted value, as is a new SharedArray.
+	if counted {
+		// `new S()` of a shared struct, or a new SharedArray: a fresh counted value.
 		if n.Arguments != nil {
 			for _, arg := range n.Arguments.Nodes {
 				f.eval(arg, s)
 			}
 		}
-		if counted {
-			return ownRegionValue(a.newRegionOf(true, s))
-		}
-		return ownSharedValue
+		return ownRegionValue(a.newRegionOf(true, s))
 	}
 	var regions []ownRegion
 	if v := f.eval(n.Expression, s); v.kind == ownInRegion {
@@ -1499,7 +1476,7 @@ func (f *ownFunction) unionAll(regions []ownRegion, s *ownState) ownRegion {
 	return r
 }
 
-// Passes an argument to a `sending` parameter. A counted value is sent (moved) only by a parameter
+// Passes an argument to a `Sending<T>` parameter. A counted value is sent (moved) only by a parameter
 // that is not a rest parameter: a thread's arguments share it, and a share-like function leaves it
 // as it is.
 func (f *ownFunction) sendArgument(v ownValue, expr *ast.Node, param *ast.Node, callee string, consuming bool, s *ownState) {
@@ -1509,7 +1486,7 @@ func (f *ownFunction) sendArgument(v ownValue, expr *ast.Node, param *ast.Node, 
 	f.send(v, expr, callee, consuming, s)
 }
 
-// Sends a value: passes it to a `sending` parameter (or a share-like function, which consumes it).
+// Sends a value: passes it to a `Sending<T>` parameter (or a share-like function, which consumes it).
 func (f *ownFunction) send(v ownValue, expr *ast.Node, callee string, consuming bool, s *ownState) {
 	if v.kind != ownInRegion {
 		return
@@ -1518,7 +1495,7 @@ func (f *ownFunction) send(v ownValue, expr *ast.Node, callee string, consuming 
 	name := ownExpressionName(expr)
 	switch {
 	case inf.flags&ownRegionCaller != 0:
-		f.a.report(ownReportKey{expr, ownReportSend}, expr, diagnostics.X_0_cannot_be_sent_Colon_it_may_be_referenced_by_the_caller_Declare_the_parameter_sending_to_take_ownership, name)
+		f.a.report(ownReportKey{expr, ownReportSend}, expr, diagnostics.X_0_cannot_be_sent_Colon_it_may_be_referenced_by_the_caller_Declare_the_parameter_Sending_T_to_take_ownership, name)
 	case inf.flags&ownRegionOuter != 0:
 		f.a.report(ownReportKey{expr, ownReportSend}, expr, diagnostics.X_0_cannot_be_sent_Colon_it_is_captured_from_an_outer_scope, name)
 	case inf.sent != nil && !inf.maybe:
@@ -1560,13 +1537,11 @@ func ownLineOf(node *ast.Node) int {
 	return scanner.GetECMALineOfPosition(file, scanner.SkipTrivia(file.Text(), node.Pos())) + 1
 }
 
-// A short name for an expression in a message: the variable for `x` and `consume x`, otherwise the
+// A short name for an expression in a message: the variable for `x` and `consume(x)`, otherwise the
 // (abbreviated) source text.
 func ownExpressionName(expr *ast.Node) string {
 	expr = ast.SkipParentheses(expr)
-	if ast.IsConsumeExpression(expr) {
-		expr = ast.SkipParentheses(expr.Expression())
-	} else if ast.IsCallExpression(expr) && len(expr.Arguments()) == 1 && ast.IsIdentifier(expr.Expression()) && expr.Expression().Text() == "consume" {
+	if ast.IsCallExpression(expr) && len(expr.Arguments()) == 1 && ast.IsIdentifier(expr.Expression()) && expr.Expression().Text() == "consume" {
 		expr = ast.SkipParentheses(expr.Arguments()[0]) // `consume(x)`
 	}
 	if ast.IsIdentifier(expr) {
@@ -1644,7 +1619,7 @@ func (a *ownAnalyzer) normalize(sym *ast.Symbol, v ownValue) ownValue {
 }
 
 // Reports whether a symbol's value is shared regardless of the program point: code, library values,
-// shared structs, variables declared `shared` and variables of primitive types.
+// variables declared `Shared<T>` and variables of primitive types.
 func (a *ownAnalyzer) isSharedSymbol(sym *ast.Symbol) bool {
 	if result, ok := a.shared[sym]; ok {
 		return result
@@ -1673,9 +1648,6 @@ func (a *ownAnalyzer) computeIsSharedSymbol(sym *ast.Symbol) bool {
 	}
 	inLibrary := true
 	for _, decl := range target.Declarations {
-		if ast.IsSharedStructDeclaration(decl) {
-			return true
-		}
 		if file := ast.GetSourceFileOfNode(decl); file == nil || !c.program.IsSourceFileDefaultLibrary(file.Path()) {
 			inLibrary = false
 		}
@@ -1692,7 +1664,7 @@ func (a *ownAnalyzer) computeIsSharedSymbol(sym *ast.Symbol) bool {
 	return a.isPrimitiveOrSharedStructType(c.getTypeOfSymbol(target))
 }
 
-// Reports whether a variable, parameter or property is declared with a `shared` type, or is a
+// Reports whether a variable, parameter or property is declared with a `Shared<T>` type, or is a
 // `const` initialized with a shared value.
 func (a *ownAnalyzer) isDeclaredShared(sym *ast.Symbol) bool {
 	decl := sym.ValueDeclaration
@@ -1732,33 +1704,14 @@ func (a *ownAnalyzer) isStaticallyShared(expr *ast.Node) bool {
 		prop := a.c.getSymbolAtLocation(expr.Name(), true /*ignoreErrors*/)
 		return prop != nil && a.isDeclaredShared(prop)
 	case ast.KindCallExpression, ast.KindNewExpression:
-		if ast.IsNewExpression(expr) && a.isSharedStructReference(expr.Expression()) {
-			return a.c.compilerOptions.OwnRuntime == "" // with `--ownRuntime`, a counted value
-		}
 		sig := a.c.getResolvedSignature(expr, nil, CheckModeNormal)
 		return sig != nil && a.returnKind(sig.declaration) == ownReturnsShared
 	}
 	return false
 }
 
-// Reports whether an expression names a shared struct (whose value constructs shared instances).
-func (a *ownAnalyzer) isSharedStructReference(expr *ast.Node) bool {
-	expr = ast.SkipOuterExpressions(expr, ast.OEKAll)
-	var sym *ast.Symbol
-	switch {
-	case ast.IsIdentifier(expr):
-		sym = a.symbolOfIdentifier(expr)
-	case ast.IsPropertyAccessExpression(expr):
-		sym = a.c.getSymbolAtLocation(expr.Name(), true /*ignoreErrors*/)
-	}
-	if sym != nil && sym.Flags&ast.SymbolFlagsAlias != 0 {
-		sym = a.c.resolveAlias(sym)
-	}
-	return sym != nil && core.Some(sym.Declarations, ast.IsSharedStructDeclaration)
-}
-
 // Reports whether the elements of an array-typed expression are declared shared, as in
-// `xs: (shared T)[]`.
+// `xs: Shared<T>[]`.
 func (a *ownAnalyzer) isElementDeclaredShared(expr *ast.Node) bool {
 	t := a.resolveTypeNode(a.declaredTypeNodeOf(expr))
 	if t == nil {
@@ -1843,7 +1796,7 @@ func (a *ownAnalyzer) resolveTypeNode(t *ast.Node) *ast.Node {
 	return t
 }
 
-// `shared T`, possibly behind parentheses, `readonly` or an alias, or a union of such types with
+// `Shared<T>`, possibly behind parentheses, `readonly` or an alias, or a union of such types with
 // null and undefined.
 func (a *ownAnalyzer) isSharedTypeNode(t *ast.Node) bool {
 	t = a.resolveTypeNode(t)
@@ -1851,8 +1804,6 @@ func (a *ownAnalyzer) isSharedTypeNode(t *ast.Node) bool {
 		return false
 	}
 	switch t.Kind {
-	case ast.KindSharedType:
-		return true
 	case ast.KindTypeReference:
 		return a.c.getOwnTypeMarker(t) == "Shared"
 	case ast.KindUnionType:
@@ -1875,17 +1826,15 @@ func (a *ownAnalyzer) isSharedTypeNode(t *ast.Node) bool {
 
 func (a *ownAnalyzer) isSendingTypeNode(t *ast.Node) bool {
 	t = a.resolveTypeNode(t)
-	return t != nil && (t.Kind == ast.KindSendingType || a.c.getOwnTypeMarker(t) == "Sending")
+	return t != nil && a.c.getOwnTypeMarker(t) == "Sending"
 }
 
-// The T of `sending T`, `shared T`, `Sending<T>` or `Shared<T>`.
+// The T of `Sending<T>` or `Shared<T>`.
 func (a *ownAnalyzer) markedTypeOperand(t *ast.Node) *ast.Node {
 	t = a.resolveTypeNode(t)
 	switch {
 	case t == nil:
 		return nil
-	case t.Kind == ast.KindSendingType || t.Kind == ast.KindSharedType:
-		return t.Type()
 	case ast.IsTypeReferenceNode(t) && len(t.TypeArguments()) == 1:
 		return t.TypeArguments()[0]
 	}
@@ -1955,7 +1904,7 @@ func (a *ownAnalyzer) returnKind(decl *ast.Node) ownReturnKind {
 	case a.isSendingTypeNode(t):
 		return ownReturnsSending
 	case ast.IsUnionTypeNode(a.resolveTypeNode(t)) && core.Some(a.resolveTypeNode(t).AsUnionTypeNode().Types.Nodes, a.isSendingTypeNode):
-		// `sending T | undefined`, as a channel's `recv()` returns.
+		// `Sending<T> | undefined`, as a channel's `recv()` returns.
 		return ownReturnsSending
 	case a.isSharedTypeNode(t):
 		return ownReturnsShared
@@ -1964,7 +1913,7 @@ func (a *ownAnalyzer) returnKind(decl *ast.Node) ownReturnKind {
 }
 
 // The X of a result type `Promise<X>`, which an async function's returns resolve; any other type itself.
-// A result `Promise<sending T>` hands over ownership as `sending T` does (`recvAsync()`, `joinAsync()`).
+// A result `Promise<Sending<T>>` hands over ownership as `Sending<T>` does (`recvAsync()`, `joinAsync()`).
 func (a *ownAnalyzer) unwrapPromiseTypeNode(t *ast.Node) *ast.Node {
 	if r := a.resolveTypeNode(t); r != nil && ast.IsTypeReferenceNode(r) && len(r.TypeArguments()) == 1 {
 		if name := r.AsTypeReferenceNode().TypeName; ast.IsIdentifier(name) && name.Text() == "Promise" {
@@ -1986,7 +1935,7 @@ func (a *ownAnalyzer) returnsSending(fn *ast.Node) bool {
 	return false
 }
 
-// A share-like signature `<T>(x: sending T) => shared T` turns its argument into a shared value; the
+// A share-like signature `<T>(x: Sending<T>) => Shared<T>` turns its argument into a shared value; the
 // argument is then reported as consumed rather than sent.
 func (a *ownAnalyzer) isConsumingSignature(decl *ast.Node) bool {
 	if a.returnKind(decl) != ownReturnsShared {
@@ -2042,8 +1991,8 @@ func (a *ownAnalyzer) isArrayExpression(expr *ast.Node) bool {
 }
 
 // Reports whether an expression is a shared value in the sense of the extension, which is immutable:
-// it must be declared shared (a variable, parameter or member declared `shared T`, a call returning
-// `shared T`, or something read out of such a value). A shared value that is shared for another
+// it must be declared shared (a variable, parameter or member declared `Shared<T>`, a call returning
+// `Shared<T>`, or something read out of such a value). A shared value that is shared for another
 // reason (a primitive, code, a library value, or an uninitialized variable) is not reported, and
 // shared struct instances are mutable cells.
 func (a *ownAnalyzer) isImmutableShared(expr *ast.Node) bool {
@@ -2102,13 +2051,6 @@ func (a *ownAnalyzer) isPrimitiveOrSharedStructType(t *Type) bool {
 		// SharedArrays (with `--ownRuntime`) are cells in the shared heap, like shared structs, and so
 		// is every Cell of the plain API.
 		return true
-	}
-	if t.symbol != nil {
-		for _, decl := range t.symbol.Declarations {
-			if ast.IsSharedStructDeclaration(decl) {
-				return true
-			}
-		}
 	}
 	return false
 }
@@ -2186,7 +2128,7 @@ func isOwnValueReference(id *ast.Node) bool {
 		ast.KindClassDeclaration, ast.KindClassExpression, ast.KindTypeParameter, ast.KindImportSpecifier,
 		ast.KindExportSpecifier, ast.KindImportClause, ast.KindNamespaceImport, ast.KindImportEqualsDeclaration,
 		ast.KindInterfaceDeclaration, ast.KindTypeAliasDeclaration, ast.KindEnumDeclaration, ast.KindModuleDeclaration,
-		ast.KindSharedStructDeclaration, ast.KindJsxAttribute, ast.KindNamespaceExport:
+		ast.KindJsxAttribute, ast.KindNamespaceExport:
 		return parent.Name() != id
 	case ast.KindBindingElement:
 		return parent.Name() != id && parent.PropertyName() != id

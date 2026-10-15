@@ -288,7 +288,6 @@ type (
 	ClassExpressionNode               = Node
 	HeritageClauseNode                = Node
 	InterfaceDeclarationNode          = Node
-	SharedStructDeclarationNode       = Node
 	TypeAliasDeclarationNode          = Node
 	EnumMemberNode                    = Node
 	EnumDeclarationNode               = Node
@@ -352,15 +351,12 @@ type (
 	TypeOfExpressionNode              = Node
 	VoidExpressionNode                = Node
 	AwaitExpressionNode               = Node
-	ConsumeExpressionNode             = Node
 	TypeAssertionNode                 = Node
 	KeywordTypeNodeNode               = Node
 	UnionTypeNodeNode                 = Node
 	IntersectionTypeNodeNode          = Node
 	ConditionalTypeNodeNode           = Node
 	TypeOperatorNodeNode              = Node
-	SendingTypeNodeNode               = Node
-	SharedTypeNodeNode                = Node
 	InferTypeNodeNode                 = Node
 	ArrayTypeNodeNode                 = Node
 	IndexedAccessTypeNodeNode         = Node
@@ -2244,55 +2240,6 @@ func (node *InterfaceDeclaration) Name() *DeclarationName {
 
 func IsInterfaceDeclaration(node *Node) bool {
 	return node.Kind == KindInterfaceDeclaration
-}
-
-// ──────────────────────────────────────────────────────────────────────
-// SharedStructDeclaration
-// ──────────────────────────────────────────────────────────────────────
-
-type SharedStructDeclaration struct {
-	StatementBase
-	DeclarationBase
-	ExportableBase
-	ModifiersBase
-	TypeSyntaxBase
-	name    *IdentifierNode
-	Members *TypeElementList
-}
-
-func (f *NodeFactory) NewSharedStructDeclaration(modifiers *ModifierList, name *IdentifierNode, members *TypeElementList) *Node {
-	data := &SharedStructDeclaration{}
-	data.modifiers = modifiers
-	data.name = name
-	data.Members = members
-	return f.newNode(KindSharedStructDeclaration, data)
-}
-
-func (f *NodeFactory) UpdateSharedStructDeclaration(node *SharedStructDeclaration, modifiers *ModifierList, name *IdentifierNode, members *TypeElementList) *Node {
-	if modifiers != node.modifiers || name != node.name || members != node.Members {
-		return updateNode(f.NewSharedStructDeclaration(modifiers, name, members), node.AsNode(), f.hooks)
-	}
-	return node.AsNode()
-}
-
-func (node *SharedStructDeclaration) ForEachChild(v Visitor) bool {
-	return visitModifiers(v, node.modifiers) || visit(v, node.name) || visitNodeList(v, node.Members)
-}
-
-func (node *SharedStructDeclaration) VisitEachChild(v *NodeVisitor) *Node {
-	return v.Factory.UpdateSharedStructDeclaration(node, v.visitModifiers(node.modifiers), v.visitNode(node.name), v.visitNodes(node.Members))
-}
-
-func (node *SharedStructDeclaration) Clone(f NodeFactoryCoercible) *Node {
-	return cloneNode(f.AsNodeFactory().NewSharedStructDeclaration(node.Modifiers(), node.name, node.Members), node.AsNode(), f.AsNodeFactory().hooks)
-}
-
-func (node *SharedStructDeclaration) Name() *DeclarationName {
-	return node.name
-}
-
-func IsSharedStructDeclaration(node *Node) bool {
-	return node.Kind == KindSharedStructDeclaration
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -5103,44 +5050,6 @@ func IsAwaitExpression(node *Node) bool {
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// ConsumeExpression
-// ──────────────────────────────────────────────────────────────────────
-
-type ConsumeExpression struct {
-	UnaryExpressionBase
-	Expression *Expression
-}
-
-func (f *NodeFactory) NewConsumeExpression(expression *Expression) *Node {
-	data := &ConsumeExpression{}
-	data.Expression = expression
-	return f.newNode(KindConsumeExpression, data)
-}
-
-func (f *NodeFactory) UpdateConsumeExpression(node *ConsumeExpression, expression *Expression) *Node {
-	if expression != node.Expression {
-		return updateNode(f.NewConsumeExpression(expression), node.AsNode(), f.hooks)
-	}
-	return node.AsNode()
-}
-
-func (node *ConsumeExpression) ForEachChild(v Visitor) bool {
-	return visit(v, node.Expression)
-}
-
-func (node *ConsumeExpression) VisitEachChild(v *NodeVisitor) *Node {
-	return v.Factory.UpdateConsumeExpression(node, v.visitNode(node.Expression))
-}
-
-func (node *ConsumeExpression) Clone(f NodeFactoryCoercible) *Node {
-	return cloneNode(f.AsNodeFactory().NewConsumeExpression(node.Expression), node.AsNode(), f.AsNodeFactory().hooks)
-}
-
-func IsConsumeExpression(node *Node) bool {
-	return node.Kind == KindConsumeExpression
-}
-
-// ──────────────────────────────────────────────────────────────────────
 // TypeAssertion
 // ──────────────────────────────────────────────────────────────────────
 
@@ -5367,82 +5276,6 @@ func (node *TypeOperatorNode) Clone(f NodeFactoryCoercible) *Node {
 
 func IsTypeOperatorNode(node *Node) bool {
 	return node.Kind == KindTypeOperator
-}
-
-// ──────────────────────────────────────────────────────────────────────
-// SendingTypeNode
-// ──────────────────────────────────────────────────────────────────────
-
-type SendingTypeNode struct {
-	TypeNodeBase
-	Type *TypeNode
-}
-
-func (f *NodeFactory) NewSendingTypeNode(typeNode *TypeNode) *Node {
-	data := &SendingTypeNode{}
-	data.Type = typeNode
-	return f.newNode(KindSendingType, data)
-}
-
-func (f *NodeFactory) UpdateSendingTypeNode(node *SendingTypeNode, typeNode *TypeNode) *Node {
-	if typeNode != node.Type {
-		return updateNode(f.NewSendingTypeNode(typeNode), node.AsNode(), f.hooks)
-	}
-	return node.AsNode()
-}
-
-func (node *SendingTypeNode) ForEachChild(v Visitor) bool {
-	return visit(v, node.Type)
-}
-
-func (node *SendingTypeNode) VisitEachChild(v *NodeVisitor) *Node {
-	return v.Factory.UpdateSendingTypeNode(node, v.visitNode(node.Type))
-}
-
-func (node *SendingTypeNode) Clone(f NodeFactoryCoercible) *Node {
-	return cloneNode(f.AsNodeFactory().NewSendingTypeNode(node.Type), node.AsNode(), f.AsNodeFactory().hooks)
-}
-
-func IsSendingTypeNode(node *Node) bool {
-	return node.Kind == KindSendingType
-}
-
-// ──────────────────────────────────────────────────────────────────────
-// SharedTypeNode
-// ──────────────────────────────────────────────────────────────────────
-
-type SharedTypeNode struct {
-	TypeNodeBase
-	Type *TypeNode
-}
-
-func (f *NodeFactory) NewSharedTypeNode(typeNode *TypeNode) *Node {
-	data := &SharedTypeNode{}
-	data.Type = typeNode
-	return f.newNode(KindSharedType, data)
-}
-
-func (f *NodeFactory) UpdateSharedTypeNode(node *SharedTypeNode, typeNode *TypeNode) *Node {
-	if typeNode != node.Type {
-		return updateNode(f.NewSharedTypeNode(typeNode), node.AsNode(), f.hooks)
-	}
-	return node.AsNode()
-}
-
-func (node *SharedTypeNode) ForEachChild(v Visitor) bool {
-	return visit(v, node.Type)
-}
-
-func (node *SharedTypeNode) VisitEachChild(v *NodeVisitor) *Node {
-	return v.Factory.UpdateSharedTypeNode(node, v.visitNode(node.Type))
-}
-
-func (node *SharedTypeNode) Clone(f NodeFactoryCoercible) *Node {
-	return cloneNode(f.AsNodeFactory().NewSharedTypeNode(node.Type), node.AsNode(), f.AsNodeFactory().hooks)
-}
-
-func IsSharedTypeNode(node *Node) bool {
-	return node.Kind == KindSharedType
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -8912,8 +8745,6 @@ func (n *Node) ForEachChild(v Visitor) bool {
 		return n.data.(*HeritageClause).ForEachChild(v)
 	case KindInterfaceDeclaration:
 		return n.data.(*InterfaceDeclaration).ForEachChild(v)
-	case KindSharedStructDeclaration:
-		return n.data.(*SharedStructDeclaration).ForEachChild(v)
 	case KindTypeAliasDeclaration, KindJSTypeAliasDeclaration:
 		return n.data.(*TypeAliasDeclaration).ForEachChild(v)
 	case KindEnumMember:
@@ -9020,8 +8851,6 @@ func (n *Node) ForEachChild(v Visitor) bool {
 		return n.data.(*VoidExpression).ForEachChild(v)
 	case KindAwaitExpression:
 		return n.data.(*AwaitExpression).ForEachChild(v)
-	case KindConsumeExpression:
-		return n.data.(*ConsumeExpression).ForEachChild(v)
 	case KindTypeAssertionExpression:
 		return n.data.(*TypeAssertion).ForEachChild(v)
 	case KindUnionType:
@@ -9032,10 +8861,6 @@ func (n *Node) ForEachChild(v Visitor) bool {
 		return n.data.(*ConditionalTypeNode).ForEachChild(v)
 	case KindTypeOperator:
 		return n.data.(*TypeOperatorNode).ForEachChild(v)
-	case KindSendingType:
-		return n.data.(*SendingTypeNode).ForEachChild(v)
-	case KindSharedType:
-		return n.data.(*SharedTypeNode).ForEachChild(v)
 	case KindInferType:
 		return n.data.(*InferTypeNode).ForEachChild(v)
 	case KindArrayType:
@@ -9349,10 +9174,6 @@ func (n *Node) AsInterfaceDeclaration() *InterfaceDeclaration {
 	return n.data.(*InterfaceDeclaration)
 }
 
-func (n *Node) AsSharedStructDeclaration() *SharedStructDeclaration {
-	return n.data.(*SharedStructDeclaration)
-}
-
 func (n *Node) AsTypeAliasDeclaration() *TypeAliasDeclaration {
 	return n.data.(*TypeAliasDeclaration)
 }
@@ -9605,10 +9426,6 @@ func (n *Node) AsAwaitExpression() *AwaitExpression {
 	return n.data.(*AwaitExpression)
 }
 
-func (n *Node) AsConsumeExpression() *ConsumeExpression {
-	return n.data.(*ConsumeExpression)
-}
-
 func (n *Node) AsTypeAssertion() *TypeAssertion {
 	return n.data.(*TypeAssertion)
 }
@@ -9631,14 +9448,6 @@ func (n *Node) AsConditionalTypeNode() *ConditionalTypeNode {
 
 func (n *Node) AsTypeOperatorNode() *TypeOperatorNode {
 	return n.data.(*TypeOperatorNode)
-}
-
-func (n *Node) AsSendingTypeNode() *SendingTypeNode {
-	return n.data.(*SendingTypeNode)
-}
-
-func (n *Node) AsSharedTypeNode() *SharedTypeNode {
-	return n.data.(*SharedTypeNode)
 }
 
 func (n *Node) AsInferTypeNode() *InferTypeNode {

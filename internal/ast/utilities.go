@@ -420,7 +420,6 @@ func isUnaryExpressionKind(kind Kind) bool {
 		KindTypeOfExpression,
 		KindVoidExpression,
 		KindAwaitExpression,
-		KindConsumeExpression,
 		KindTypeAssertionExpression:
 		return true
 	}
@@ -632,7 +631,6 @@ func isDeclarationStatementKind(kind Kind) bool {
 		KindMissingDeclaration,
 		KindClassDeclaration,
 		KindInterfaceDeclaration,
-		KindSharedStructDeclaration,
 		KindTypeAliasDeclaration,
 		KindJSTypeAliasDeclaration,
 		KindEnumDeclaration,
@@ -859,28 +857,6 @@ func WalkUpParenthesizedTypes(node *TypeNode) *Node {
 	return node
 }
 
-// Reports whether node is one of the ownership type operators of the own/shared
-// threads extension: `sending T` or `shared T`.
-func IsOwnershipTypeNode(node *Node) bool {
-	return node != nil && (node.Kind == KindSendingType || node.Kind == KindSharedType)
-}
-
-// Skips `sending` and `shared` type operators, which do not (yet) change the type they wrap.
-func SkipOwnershipTypes(node *TypeNode) *TypeNode {
-	for IsOwnershipTypeNode(node) {
-		node = node.Type()
-	}
-	return node
-}
-
-// Walks up the parents of a `sending` or `shared` type operator to find the containing node.
-func WalkUpOwnershipTypes(node *Node) *Node {
-	for IsOwnershipTypeNode(node) {
-		node = node.Parent
-	}
-	return node
-}
-
 // Walks up the parents of a node to find the containing SourceFile
 func GetSourceFileOfNode(node *Node) *SourceFile {
 	for node != nil {
@@ -1062,7 +1038,7 @@ func CanHaveSymbol(node *Node) bool {
 		KindConstructSignature, KindElementAccessExpression, KindEnumDeclaration, KindEnumMember, KindExportAssignment,
 		KindExportDeclaration, KindExportSpecifier, KindFunctionDeclaration, KindFunctionExpression, KindFunctionType,
 		KindGetAccessor, KindImportClause, KindImportEqualsDeclaration, KindImportSpecifier, KindIndexSignature,
-		KindInterfaceDeclaration, KindSharedStructDeclaration, KindJSTypeAliasDeclaration,
+		KindInterfaceDeclaration, KindJSTypeAliasDeclaration,
 		KindJsxAttribute, KindJsxAttributes, KindJsxSpreadAttribute, KindMappedType, KindMethodDeclaration,
 		KindMethodSignature, KindModuleDeclaration, KindNamedTupleMember, KindNamespaceExport, KindNamespaceExportDeclaration,
 		KindNamespaceImport, KindNewExpression, KindNoSubstitutionTemplateLiteral, KindNumericLiteral, KindObjectLiteralExpression,
@@ -1080,7 +1056,7 @@ func CanHaveIllegalDecorators(node *Node) bool {
 		KindFunctionDeclaration, KindConstructor,
 		KindIndexSignature, KindClassStaticBlockDeclaration,
 		KindMissingDeclaration, KindVariableStatement,
-		KindInterfaceDeclaration, KindSharedStructDeclaration, KindTypeAliasDeclaration,
+		KindInterfaceDeclaration, KindTypeAliasDeclaration,
 		KindEnumDeclaration, KindModuleDeclaration,
 		KindImportEqualsDeclaration, KindImportDeclaration, KindJSImportDeclaration,
 		KindNamespaceExportDeclaration, KindExportDeclaration,
@@ -1122,7 +1098,6 @@ func CanHaveModifiers(node *Node) bool {
 		KindFunctionDeclaration,
 		KindClassDeclaration,
 		KindInterfaceDeclaration,
-		KindSharedStructDeclaration,
 		KindTypeAliasDeclaration,
 		KindEnumDeclaration,
 		KindModuleDeclaration,
@@ -1960,7 +1935,7 @@ func IsExpressionNode(node *Node) bool {
 		KindClassExpression, KindArrowFunction, KindVoidExpression, KindDeleteExpression, KindTypeOfExpression,
 		KindPrefixUnaryExpression, KindPostfixUnaryExpression, KindBinaryExpression, KindConditionalExpression,
 		KindSpreadElement, KindTemplateExpression, KindOmittedExpression, KindJsxElement, KindJsxSelfClosingElement,
-		KindJsxFragment, KindYieldExpression, KindAwaitExpression, KindConsumeExpression:
+		KindJsxFragment, KindYieldExpression, KindAwaitExpression:
 		return true
 	case KindMetaProperty:
 		// `import.defer` in `import.defer(...)` is not an expression
@@ -2232,7 +2207,7 @@ func GetMeaningFromDeclaration(node *Node) SemanticMeaning {
 		KindJSTypeAliasDeclaration,
 		KindTypeLiteral:
 		return SemanticMeaningType
-	case KindEnumMember, KindClassDeclaration, KindSharedStructDeclaration:
+	case KindEnumMember, KindClassDeclaration:
 		return SemanticMeaningValue | SemanticMeaningType
 
 	case KindModuleDeclaration:
@@ -3491,13 +3466,6 @@ func ReplaceModifiers(factory *NodeFactory, node *Node, modifierArray *ModifierL
 			node.AsInterfaceDeclaration().HeritageClauses,
 			node.MemberList(),
 		)
-	case KindSharedStructDeclaration:
-		return factory.UpdateSharedStructDeclaration(
-			node.AsSharedStructDeclaration(),
-			modifierArray,
-			node.Name(),
-			node.MemberList(),
-		)
 	case KindTypeAliasDeclaration:
 		return factory.UpdateTypeAliasDeclaration(
 			node.AsTypeAliasDeclaration(),
@@ -3570,7 +3538,6 @@ func IsLateVisibilityPaintedStatement(node *Node) bool {
 		KindTypeAliasDeclaration,
 		KindJSTypeAliasDeclaration,
 		KindInterfaceDeclaration,
-		KindSharedStructDeclaration,
 		KindEnumDeclaration:
 		return true
 	default:
@@ -3598,7 +3565,7 @@ func GetNonAugmentationDeclaration(symbol *Symbol) *Node {
 
 func IsTypeDeclaration(node *Node) bool {
 	switch node.Kind {
-	case KindTypeParameter, KindClassDeclaration, KindInterfaceDeclaration, KindSharedStructDeclaration, KindTypeAliasDeclaration, KindJSTypeAliasDeclaration, KindEnumDeclaration:
+	case KindTypeParameter, KindClassDeclaration, KindInterfaceDeclaration, KindTypeAliasDeclaration, KindJSTypeAliasDeclaration, KindEnumDeclaration:
 		return true
 	case KindImportClause:
 		return node.IsTypeOnly()

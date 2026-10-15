@@ -579,7 +579,6 @@ var nextCheckerID atomic.Uint32
 
 type Checker struct {
 	id                                          uint32
-	ownershipSyntaxState                        uint8          // 0: not computed, 1: the program uses the own/shared syntax, 2: it does not
 	ownLayout                                   ownLayoutState // typed layouts of the own/shared threads extension (ownlayout.go)
 	program                                     Program
 	compilerOptions                             *core.CompilerOptions
@@ -1881,7 +1880,7 @@ func (c *Checker) checkResolvedBlockScopedVariable(result *ast.Symbol, errorLoca
 	}
 	// Block-scoped variables cannot be used before their definition
 	declaration := core.Find(result.Declarations, func(d *ast.Node) bool {
-		return ast.IsBlockOrCatchScoped(d) || ast.IsClassLike(d) || ast.IsEnumDeclaration(d) || ast.IsSharedStructDeclaration(d)
+		return ast.IsBlockOrCatchScoped(d) || ast.IsClassLike(d) || ast.IsEnumDeclaration(d)
 	})
 	if declaration == nil {
 		panic("checkResolvedBlockScopedVariable could not find block-scoped declaration")
@@ -2201,10 +2200,8 @@ func (c *Checker) checkSourceFile(ctx context.Context, sourceFile *ast.SourceFil
 		if !sourceFile.IsDeclarationFile && !c.isCanceled() {
 			c.checkUnusedRenamedBindingElements()
 		}
-		if !sourceFile.IsDeclarationFile && !c.isCanceled() && c.programUsesOwnershipSyntax() {
-			c.checkOwnership(sourceFile)
-		}
 		if !sourceFile.IsDeclarationFile && !c.isCanceled() && c.compilerOptions.OwnRuntime != "" {
+			c.checkOwnership(sourceFile)
 			c.computeOwnConversions(sourceFile, true /*report*/)
 			c.checkOwnRefCounts(sourceFile)
 		}
@@ -2300,7 +2297,7 @@ func (c *Checker) checkSourceElementWorker(node *ast.Node) {
 		c.checkTupleType(node)
 	case ast.KindUnionType, ast.KindIntersectionType:
 		c.checkUnionOrIntersectionType(node)
-	case ast.KindParenthesizedType, ast.KindOptionalType, ast.KindRestType, ast.KindSendingType, ast.KindSharedType:
+	case ast.KindParenthesizedType, ast.KindOptionalType, ast.KindRestType:
 		node.ForEachChild(c.checkSourceElement)
 	case ast.KindThisType:
 		c.checkThisType(node)
@@ -2362,8 +2359,6 @@ func (c *Checker) checkSourceElementWorker(node *ast.Node) {
 		c.checkClassDeclaration(node)
 	case ast.KindInterfaceDeclaration:
 		c.checkInterfaceDeclaration(node)
-	case ast.KindSharedStructDeclaration:
-		c.checkSharedStructDeclaration(node)
 	case ast.KindTypeAliasDeclaration, ast.KindJSTypeAliasDeclaration:
 		c.checkTypeAliasDeclaration(node)
 	case ast.KindEnumDeclaration:
@@ -5023,19 +5018,6 @@ func (c *Checker) checkInterfaceDeclaration(node *ast.Node) {
 	c.registerForUnusedIdentifiersCheck(node)
 }
 
-// Checks `shared struct Name { field: Type; ... }`. The struct declares an interface-like object type
-// with the struct's fields and a value: a constructor with no parameters (see
-// getTypeOfSharedStructValue). With `--ownRuntime` the fields are also checked for the typed layout
-// (see ownlayout.go).
-func (c *Checker) checkSharedStructDeclaration(node *ast.Node) {
-	c.checkExportsOnMergedDeclarations(node)
-	symbol := c.getSymbolOfDeclaration(node)
-	c.getDeclaredTypeOfSymbol(symbol)
-	c.checkObjectTypeForDuplicateDeclarations(node, false /*checkPrivateNames*/)
-	c.checkSourceElements(node.Members())
-	c.checkSharedStructLayout(node)
-}
-
 type InheritanceInfo struct {
 	prop           *ast.Symbol
 	containingType *Type
@@ -6971,7 +6953,7 @@ func (c *Checker) getDeclarationSpaces(node *ast.Declaration) DeclarationSpaces 
 			return DeclarationSpacesExportNamespace | DeclarationSpacesExportValue
 		}
 		return DeclarationSpacesExportNamespace
-	case ast.KindClassDeclaration, ast.KindEnumDeclaration, ast.KindEnumMember, ast.KindSharedStructDeclaration:
+	case ast.KindClassDeclaration, ast.KindEnumDeclaration, ast.KindEnumMember:
 		return DeclarationSpacesExportType | DeclarationSpacesExportValue
 	case ast.KindSourceFile:
 		return DeclarationSpacesExportType | DeclarationSpacesExportValue | DeclarationSpacesExportNamespace
@@ -7806,9 +7788,6 @@ func (c *Checker) checkExpressionWorker(node *ast.Node, checkMode CheckMode) *Ty
 		return c.checkVoidExpression(node)
 	case ast.KindAwaitExpression:
 		return c.checkAwaitExpression(node)
-	case ast.KindConsumeExpression:
-		// TODO(own-shared): ownership analysis. For now `consume x` has the type of `x`.
-		return c.checkExpressionEx(node.Expression(), checkMode)
 	case ast.KindPrefixUnaryExpression:
 		return c.checkPrefixUnaryExpression(node)
 	case ast.KindPostfixUnaryExpression:
@@ -11158,8 +11137,7 @@ func (c *Checker) checkIdentifier(node *ast.Node, checkMode CheckMode) *Type {
 		t != c.autoType && t != c.autoArrayType && (!c.strictNullChecks || t.flags&(TypeFlagsAnyOrUnknown|TypeFlagsVoid) != 0 || IsInTypeQuery(node) || c.isInAmbientOrTypeNode(node) || node.Parent.Kind == ast.KindExportSpecifier) ||
 		ast.IsNonNullExpression(node.Parent) ||
 		ast.IsVariableDeclaration(declaration) && declaration.AsVariableDeclaration().ExclamationToken != nil ||
-		declaration.Flags&ast.NodeFlagsAmbient != 0 ||
-		ast.IsSharedStructDeclaration(declaration) // initialized by its declaration, like a class
+		declaration.Flags&ast.NodeFlagsAmbient != 0
 	var initialType *Type
 	switch {
 	case isAutomaticTypeInNonNull:
@@ -16570,8 +16548,6 @@ func (c *Checker) getTypeOfVariableOrParameterOrPropertyWorker(symbol *ast.Symbo
 		result = c.checkJsxAttribute(declaration, CheckModeNormal)
 	case ast.KindEnumMember:
 		result = c.getTypeOfEnumMember(symbol)
-	case ast.KindSharedStructDeclaration:
-		result = c.getTypeOfSharedStructValue(symbol)
 	default:
 		panic("Unhandled case in getTypeOfVariableOrParameterOrPropertyWorker: " + declaration.Kind.String())
 	}
@@ -22813,9 +22789,6 @@ func (c *Checker) getTypeFromTypeNodeWorker(node *ast.Node) *Type {
 		return c.getTypeFromNamedTupleTypeNode(node)
 	case ast.KindParenthesizedType:
 		return c.getTypeFromTypeNode(node.Type())
-	case ast.KindSendingType, ast.KindSharedType:
-		// TODO(own-shared): ownership and region analysis. For now `sending T` and `shared T` mean `T`.
-		return c.getTypeFromTypeNode(node.Type())
 	case ast.KindRestType:
 		return c.getTypeFromRestTypeNode(node)
 	case ast.KindFunctionType, ast.KindConstructorType, ast.KindTypeLiteral:
@@ -23202,8 +23175,7 @@ func (c *Checker) isResolvedByTypeAlias(node *ast.Node) bool {
 	parent := node.Parent
 	switch parent.Kind {
 	case ast.KindParenthesizedType, ast.KindNamedTupleMember, ast.KindTypeReference, ast.KindUnionType, ast.KindIntersectionType,
-		ast.KindIndexedAccessType, ast.KindConditionalType, ast.KindTypeOperator, ast.KindArrayType, ast.KindTupleType,
-		ast.KindSendingType, ast.KindSharedType:
+		ast.KindIndexedAccessType, ast.KindConditionalType, ast.KindTypeOperator, ast.KindArrayType, ast.KindTupleType:
 		return c.isResolvedByTypeAlias(parent)
 	case ast.KindTypeAliasDeclaration, ast.KindJSTypeAliasDeclaration:
 		return true
@@ -23221,7 +23193,7 @@ func (c *Checker) mayResolveTypeAlias(node *ast.Node) bool {
 		return true
 	case ast.KindTypeOperator:
 		return node.AsTypeOperatorNode().Operator != ast.KindUniqueKeyword && c.mayResolveTypeAlias(node.Type())
-	case ast.KindParenthesizedType, ast.KindOptionalType, ast.KindNamedTupleMember, ast.KindSendingType, ast.KindSharedType:
+	case ast.KindParenthesizedType, ast.KindOptionalType, ast.KindNamedTupleMember:
 		return c.mayResolveTypeAlias(node.Type())
 	case ast.KindRestType:
 		return node.Type().Kind != ast.KindArrayType || c.mayResolveTypeAlias(node.Type().AsArrayTypeNode().ElementType)
@@ -23663,7 +23635,7 @@ func (c *Checker) getAliasForTypeNode(node *ast.Node) *TypeAlias {
 
 func (c *Checker) getAliasSymbolForTypeNode(node *ast.Node) *ast.Symbol {
 	host := node.Parent
-	for ast.IsParenthesizedTypeNode(host) || ast.IsTypeOperatorNode(host) && host.AsTypeOperatorNode().Operator == ast.KindReadonlyKeyword || ast.IsOwnershipTypeNode(host) {
+	for ast.IsParenthesizedTypeNode(host) || ast.IsTypeOperatorNode(host) && host.AsTypeOperatorNode().Operator == ast.KindReadonlyKeyword {
 		host = host.Parent
 	}
 	if isTypeAlias(host) {
@@ -23683,7 +23655,7 @@ func (c *Checker) getOuterTypeParametersOfClassOrInterface(symbol *ast.Symbol) [
 	declaration := symbol.ValueDeclaration
 	if symbol.Flags&(ast.SymbolFlagsClass|ast.SymbolFlagsFunction) == 0 {
 		declaration = core.Find(symbol.Declarations, func(d *ast.Node) bool {
-			if ast.IsInterfaceDeclaration(d) || ast.IsSharedStructDeclaration(d) {
+			if ast.IsInterfaceDeclaration(d) {
 				return true
 			}
 			if !ast.IsVariableDeclaration(d) {
@@ -24091,8 +24063,7 @@ func (c *Checker) isVariadicTupleElement(node *ast.Node) bool {
 }
 
 func (c *Checker) getArrayOrTupleTargetType(node *ast.Node) *Type {
-	// `readonly shared T[]` is a readonly array: `readonly` sees through `sending` and `shared`.
-	readonly := c.isReadonlyTypeOperator(ast.WalkUpOwnershipTypes(node.Parent))
+	readonly := c.isReadonlyTypeOperator(node.Parent)
 	elementType := c.getArrayElementTypeNode(node)
 	if elementType != nil {
 		if readonly {
@@ -24130,7 +24101,7 @@ func (c *Checker) getTypeFromRestTypeNode(node *ast.Node) *Type {
 
 func (c *Checker) getArrayElementTypeNode(node *ast.Node) *ast.Node {
 	switch node.Kind {
-	case ast.KindParenthesizedType, ast.KindSendingType, ast.KindSharedType:
+	case ast.KindParenthesizedType:
 		return c.getArrayElementTypeNode(node.Type())
 	case ast.KindTupleType:
 		if len(node.Elements()) == 1 {

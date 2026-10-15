@@ -429,7 +429,7 @@ Specify an output folder for all emitted files.
 Specify a file that bundles all outputs into one JavaScript file. If 'declaration' is true, also designates a file that bundles all .d.ts output.
 
 [94m--ownRuntime[39m
-Specify the module that files using the own/shared threads syntax import their runtime helpers from, e.g. './own.mjs'.
+Specify the own/shared threads runtime module, e.g. '@arv/threads'.
 
 [94m--preserveConstEnums[39m
 Disable erasing 'const enum' declarations in generated code.

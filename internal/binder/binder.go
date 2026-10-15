@@ -440,7 +440,7 @@ func (b *Binder) declareSymbolAndAddToSymbolTable(node *ast.Node, symbolFlags as
 		return b.declareClassMember(node, symbolFlags, symbolExcludes)
 	case ast.KindEnumDeclaration:
 		return b.declareSymbol(ast.GetExports(b.container.Symbol()), b.container.Symbol(), node, symbolFlags, symbolExcludes)
-	case ast.KindTypeLiteral, ast.KindObjectLiteralExpression, ast.KindInterfaceDeclaration, ast.KindSharedStructDeclaration, ast.KindJsxAttributes:
+	case ast.KindTypeLiteral, ast.KindObjectLiteralExpression, ast.KindInterfaceDeclaration, ast.KindJsxAttributes:
 		return b.declareSymbol(ast.GetMembers(b.container.Symbol()), b.container.Symbol(), node, symbolFlags, symbolExcludes)
 	case ast.KindFunctionType, ast.KindConstructorType, ast.KindCallSignature, ast.KindConstructSignature,
 		ast.KindIndexSignature, ast.KindMethodDeclaration, ast.KindMethodSignature, ast.KindConstructor, ast.KindGetAccessor,
@@ -684,10 +684,6 @@ func (b *Binder) bind(node *ast.Node) bool {
 		b.bindClassLikeDeclaration(node)
 	case ast.KindInterfaceDeclaration:
 		b.bindBlockScopedDeclaration(node, ast.SymbolFlagsInterface, ast.SymbolFlagsInterfaceExcludes)
-	case ast.KindSharedStructDeclaration:
-		// A shared struct declares both a type (an interface-like object type with the struct's fields)
-		// and a block-scoped value (the struct's constructor at runtime).
-		b.bindBlockScopedDeclaration(node, ast.SymbolFlagsInterface|ast.SymbolFlagsBlockScopedVariable, ast.SymbolFlagsInterfaceExcludes|ast.SymbolFlagsBlockScopedVariableExcludes)
 	case ast.KindCallExpression:
 		switch ast.GetAssignmentDeclarationKind(node) {
 		case ast.JSDeclarationKindObjectDefinePropertyValue:
@@ -2562,7 +2558,7 @@ func SetValueDeclaration(symbol *ast.Symbol, node *ast.Node) {
 func GetContainerFlags(node *ast.Node) ContainerFlags {
 	switch node.Kind {
 	case ast.KindClassExpression, ast.KindClassDeclaration, ast.KindEnumDeclaration, ast.KindObjectLiteralExpression, ast.KindTypeLiteral,
-		ast.KindJsxAttributes, ast.KindSharedStructDeclaration:
+		ast.KindJsxAttributes:
 		return ContainerFlagsIsContainer
 	case ast.KindInterfaceDeclaration:
 		return ContainerFlagsIsContainer | ContainerFlagsIsInterface

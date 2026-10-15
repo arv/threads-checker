@@ -652,11 +652,6 @@ export interface InterfaceDeclaration extends DeclarationBase, StatementBase, Mo
     readonly heritageClauses?: NodeArray<HeritageClause>;
     readonly members: NodeArray<TypeElement>;
 }
-export interface SharedStructDeclaration extends StatementBase, DeclarationBase, ModifiersBase {
-    readonly kind: SyntaxKind.SharedStructDeclaration;
-    readonly name: Identifier;
-    readonly members: NodeArray<TypeElement>;
-}
 export interface TypeAliasDeclaration extends DeclarationBase, StatementBase, ModifiersBase {
     readonly kind: SyntaxKind.TypeAliasDeclaration;
     readonly name: Identifier;
@@ -941,10 +936,6 @@ export interface AwaitExpression extends UnaryExpressionBase {
     readonly kind: SyntaxKind.AwaitExpression;
     readonly expression: Expression;
 }
-export interface ConsumeExpression extends UnaryExpressionBase {
-    readonly kind: SyntaxKind.ConsumeExpression;
-    readonly expression: Expression;
-}
 export interface TypeAssertion extends UnaryExpressionBase {
     readonly kind: SyntaxKind.TypeAssertionExpression;
     readonly type: TypeNode;
@@ -969,14 +960,6 @@ export interface ConditionalTypeNode extends TypeNodeBase {
 export interface TypeOperatorNode extends TypeNodeBase {
     readonly kind: SyntaxKind.TypeOperator;
     readonly operator: SyntaxKind.KeyOfKeyword | SyntaxKind.ReadonlyKeyword | SyntaxKind.UniqueKeyword;
-    readonly type: TypeNode;
-}
-export interface SendingTypeNode extends TypeNodeBase {
-    readonly kind: SyntaxKind.SendingType;
-    readonly type: TypeNode;
-}
-export interface SharedTypeNode extends TypeNodeBase {
-    readonly kind: SyntaxKind.SharedType;
     readonly type: TypeNode;
 }
 export interface InferTypeNode extends TypeNodeBase {

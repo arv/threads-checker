@@ -598,7 +598,7 @@ func (tx *OwnLayoutTransformer) visitConciseBody(node *ast.Node, fn *ast.Node) *
 }
 
 // A function's result, as `__moved(E)` where it moves into the runtime with its count (a callback
-// whose runtime type has a `sending` result, see the checker's isOwnMovedReturn).
+// whose runtime type has a `Sending<T>` result, see the checker's isOwnMovedReturn).
 func (tx *OwnLayoutTransformer) moved(result *ast.Node, expression *ast.Node) *ast.Node {
 	if original := tx.original(expression); original != nil && tx.emitResolver.IsOwnMovedReturn(original) {
 		return tx.call(transformers.OwnRuntimeMovedHelper, result)
@@ -969,7 +969,7 @@ func (tx *OwnLayoutTransformer) lower(node *ast.Node, ctx ownContext) *ast.Node 
 
 // `struct({ a: f64, next: ref<T>(), done: bool, n: i32 })` as `__sharedStruct("S", ["a", "next",
 // "done", "n"], [1], "frbi")`: the reference fields' indexes, and the fields' kinds if any is other
-// than a number or a reference (see OwnFieldKind), as a `shared struct` declaration is emitted.
+// than a number or a reference (see OwnFieldKind).
 func (tx *OwnLayoutTransformer) sharedStruct(structCall *printer.OwnStructCall) *ast.Node {
 	fields := core.Map(structCall.Layout.Fields, func(name string) *ast.Node {
 		return tx.Factory().NewStringLiteral(name, ast.TokenFlagsNone)

@@ -229,9 +229,6 @@ const (
 	KindTemplateLiteralType
 	KindTemplateLiteralTypeSpan
 	KindImportType
-	// Ownership type operators (own/shared threads extension)
-	KindSendingType
-	KindSharedType
 	// Binding patterns
 	KindObjectBindingPattern
 	KindArrayBindingPattern
@@ -267,8 +264,6 @@ const (
 	KindMetaProperty
 	KindSyntheticExpression
 	KindSatisfiesExpression
-	// Ownership transfer (own/shared threads extension)
-	KindConsumeExpression
 	// Misc
 	KindTemplateSpan
 	KindSemicolonClassElement
@@ -297,7 +292,6 @@ const (
 	KindFunctionDeclaration
 	KindClassDeclaration
 	KindInterfaceDeclaration
-	KindSharedStructDeclaration
 	KindTypeAliasDeclaration
 	KindEnumDeclaration
 	KindModuleDeclaration
@@ -406,7 +400,7 @@ const (
 	KindFirstFutureReservedWord = KindImplementsKeyword
 	KindLastFutureReservedWord  = KindYieldKeyword
 	KindFirstTypeNode           = KindTypePredicate
-	KindLastTypeNode            = KindSharedType
+	KindLastTypeNode            = KindImportType
 	KindFirstPunctuation        = KindOpenBraceToken
 	KindLastPunctuation         = KindCaretEqualsToken
 	KindFirstToken              = KindUnknown

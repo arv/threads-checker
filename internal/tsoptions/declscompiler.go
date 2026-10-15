@@ -1089,7 +1089,7 @@ var optionsForCompiler = []*CommandLineOption{
 		AffectsEmit:      true,
 		AffectsBuildInfo: true,
 		Category:         diagnostics.Emit,
-		Description:      diagnostics.Specify_the_module_that_files_using_the_own_Slashshared_threads_syntax_import_their_runtime_helpers_from_e_g_Dot_Slashown_mjs,
+		Description:      diagnostics.Specify_the_own_Slashshared_threads_runtime_module_e_g_arv_Slashthreads,
 	},
 	{
 		Name:                    "noEmitHelpers",

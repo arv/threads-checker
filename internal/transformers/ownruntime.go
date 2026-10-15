@@ -11,14 +11,13 @@ import (
 
 // Emit support for the runtime of the "own and shared threads" extension (`--ownRuntime`).
 //
-// With `ownRuntime` set to a module specifier, every ES module that uses the extension's syntax
-// imports the runtime helpers it needs from that module:
+// With `ownRuntime` set to a module specifier, every ES module whose emit uses the runtime's
+// helpers imports them it needs from that module:
 //
 //	import { register as __register, sharedStruct as __sharedStruct } from "./own.mjs";
 //
-// `__sharedStruct` builds the runtime value of a `shared struct` declaration (or of a `struct({...})`
-// call of the plain API), and `__register` is called at the end of every module that uses the
-// extension's syntax or imports the runtime, with all of its top-level functions, so that the runtime
+// `__sharedStruct` builds the runtime value of a `struct({...})` call, and `__register` is called at
+// the end of every module that imports the runtime, with all of its top-level functions, so that the runtime
 // can find them by name in other threads:
 //
 //	__register(import.meta.url, { worker, simulate, main });
@@ -113,7 +112,7 @@ func OwnRuntimeRegisteredFunctions(file *ast.SourceFile) []string {
 	return names
 }
 
-// Reports whether a file imports the runtime module (the plain API, which has no syntax to look for).
+// Reports whether a file imports the runtime module.
 func importsOwnRuntime(file *ast.SourceFile, specifier string) bool {
 	return core.Some(file.Statements.Nodes, func(statement *ast.Node) bool {
 		if !ast.IsImportDeclaration(statement) && !ast.IsExportDeclaration(statement) {
@@ -143,12 +142,12 @@ func ownRuntimeHelpersUsedBy(emitContext *printer.EmitContext, file *ast.SourceF
 
 // Creates the `import { ... } from "<ownRuntime>"` declaration and the `__register(...)` statement
 // for a (transformed) file whose emit may use the `ownRuntime` helpers. Either may be nil if it is
-// not needed. Files that use the extension's syntax register their top-level functions.
+// not needed. Files that import the runtime register their top-level functions.
 func CreateOwnRuntimeStatements(emitContext *printer.EmitContext, options *core.CompilerOptions, file *ast.SourceFile) (importDeclaration *ast.Statement, registration *ast.Statement) {
 	original := emitContext.MostOriginal(file.AsNode()).AsSourceFile()
 	f := emitContext.Factory
 	var functions []string
-	if original.Flags&ast.NodeFlagsPossiblyContainsOwnershipSyntax != 0 || importsOwnRuntime(original, options.OwnRuntime) {
+	if importsOwnRuntime(original, options.OwnRuntime) {
 		functions = OwnRuntimeRegisteredFunctions(original)
 	}
 	helpers := ownRuntimeHelpersUsedBy(emitContext, file)

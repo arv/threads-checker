@@ -52,7 +52,10 @@ new files:
 | `internal/execute/own.go` | `tsgo own check` |
 | `cmd/wasm/main.go` | the playground's compiler in a browser: one program from memory, compiled, checked and with its types erased |
 | `internal/diagnostics/ownership.go` | the messages (codes 96000-96099) |
-| `internal/parser/ownshared.go` | an earlier syntax for the same model (`sending T`, `shared T`, `consume`, `shared struct`), which `examples/own-shared` uses |
+
+The fork adds no syntax: programs are plain TypeScript, and the checker
+recognizes the runtime's exports (`Sending<T>`, `Shared<T>`, `consume`,
+`struct`, ...) by their declarations.
 
 The `ownRuntime` compiler option names the runtime module. The tests are
 `testdata/tests/cases/compiler/own*.ts` and their baselines, run with
