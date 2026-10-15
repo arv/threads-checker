@@ -12,7 +12,7 @@ import (
 // Emit support for the runtime of the "own and shared threads" extension (`--ownRuntime`).
 //
 // With `ownRuntime` set to a module specifier, every ES module whose emit uses the runtime's
-// helpers imports them it needs from that module:
+// helpers imports the ones it uses from that module:
 //
 //	import { register as __register, sharedStruct as __sharedStruct } from "./own.mjs";
 //
