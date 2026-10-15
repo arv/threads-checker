@@ -219,28 +219,3 @@ export function viaStructTypeParam(S: typeof A | typeof B) {
 >u : Symbol(u, Decl(different.mts, 2, 18), Decl(different.mts, 4, 26))
 }
 
-// Through `shared struct` declarations.
-shared struct SA { u: number }
->SA : Symbol(SA, Decl(different.mts, 30, 1))
->u : Symbol(SA.u, Decl(different.mts, 33, 18))
-
-shared struct SB { v: number; u: number }
->SB : Symbol(SB, Decl(different.mts, 33, 30))
->v : Symbol(SB.v, Decl(different.mts, 34, 18))
->u : Symbol(SB.u, Decl(different.mts, 34, 29))
-
-export function viaSharedStruct() {
->viaSharedStruct : Symbol(viaSharedStruct, Decl(different.mts, 34, 41))
-
-    const m = new (flag ? SA : SB)();
->m : Symbol(m, Decl(different.mts, 36, 9))
->flag : Symbol(flag, Decl(different.mts, 6, 5))
->SA : Symbol(SA, Decl(different.mts, 30, 1))
->SB : Symbol(SB, Decl(different.mts, 33, 30))
-
-    return m.u;                             // error
->m.u : Symbol(u, Decl(different.mts, 33, 18), Decl(different.mts, 34, 29))
->m : Symbol(m, Decl(different.mts, 36, 9))
->u : Symbol(u, Decl(different.mts, 33, 18), Decl(different.mts, 34, 29))
-}
-

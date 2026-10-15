@@ -1,14 +1,58 @@
 //// [tests/cases/compiler/ownRuntimeCommonJS.ts] ////
 
-=== ownRuntimeCommonJS.ts ===
-// `ownRuntime` needs ES module output: with CommonJS it is an error, and it is ignored.
+=== threads.d.mts ===
+declare const cellBrand: unique symbol;
+>cellBrand : unique symbol
 
-export shared struct S { v: number }
->S : S
->v : number
+declare const fieldBrand: unique symbol;
+>fieldBrand : unique symbol
 
-export function f(x: sending number[]) { return x; }
->f : (x: sending number[]) => number[]
+export interface Cell {
+  readonly [cellBrand]: true;
+>[cellBrand] : true
+>cellBrand : unique symbol
+>true : true
+}
+export type Sending<T> = T;
+>Sending : T
+
+export interface Field<T> {
+  readonly [fieldBrand]: T;
+>[fieldBrand] : T
+>fieldBrand : unique symbol
+}
+export declare const f64: Field<number>;
+>f64 : Field<number>
+
+export interface StructType<T> {
+  new (): T & Cell;
+  readonly fields: readonly string[];
+>fields : readonly string[]
+}
+export declare function struct<F extends Record<string, Field<any>>>(
+>struct : <F extends Record<string, Field<any>>>(fields: F) => StructType<{ -readonly [K in keyof F]: F[K] extends Field<infer V> ? V : never; }>
+
+  fields: F,
+>fields : F
+
+): StructType<{ -readonly [K in keyof F]: F[K] extends Field<infer V> ? V : never }>;
+
+=== main.ts ===
+import { f64, type Sending, struct } from "./threads.mjs";
+>f64 : import("./threads.mjs").Field<number>
+>Sending : any
+>struct : <F extends Record<string, import("./threads.mjs").Field<any>>>(fields: F) => import("./threads.mjs").StructType<{ -readonly [K in keyof F]: F[K] extends import("./threads.mjs").Field<infer V> ? V : never; }>
+
+export const S = struct({ v: f64 });
+>S : import("./threads.mjs").StructType<{ v: number; }>
+>struct({ v: f64 }) : import("./threads.mjs").StructType<{ v: number; }>
+>struct : <F extends Record<string, import("./threads.mjs").Field<any>>>(fields: F) => import("./threads.mjs").StructType<{ -readonly [K in keyof F]: F[K] extends import("./threads.mjs").Field<infer V> ? V : never; }>
+>{ v: f64 } : { v: import("./threads.mjs").Field<number>; }
+>v : import("./threads.mjs").Field<number>
+>f64 : import("./threads.mjs").Field<number>
+
+export function f(x: Sending<number[]>) { return x; }
+>f : (x: Sending<number[]>) => number[]
 >x : number[]
 >x : number[]
 

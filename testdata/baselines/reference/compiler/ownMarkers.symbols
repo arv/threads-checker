@@ -495,7 +495,7 @@ type Box = Struct<typeof Box>;
 >Struct : Symbol(Struct, Decl(markers.mts, 0, 118))
 >Box : Symbol(Box, Decl(markers.mts, 9, 5), Decl(markers.mts, 9, 76))
 
-// Typed layouts and reference counting, as with `shared struct`.
+// Typed layouts and reference counting.
 export function makeList(n: number): Node | null {
 >makeList : Symbol(makeList, Decl(markers.mts, 10, 30))
 >n : Symbol(n, Decl(markers.mts, 13, 25))

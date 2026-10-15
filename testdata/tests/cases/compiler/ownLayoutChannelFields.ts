@@ -347,12 +347,3 @@ export function wait(b: Barrier) {
         changed.notifyAll();
     } else while (b.round === round) changed.wait(lock);
 }
-
-// @filename: syntax.mts
-// The syntax's shared structs take channel fields as well.
-import { Channel } from "./threads.mjs";
-shared struct Mailbox { count: number; inbox: Channel<string> | null }
-export function post(m: Mailbox, text: string) {
-    (m.inbox ??= new Channel<string>(8)).send(text);
-    m.count++;
-}

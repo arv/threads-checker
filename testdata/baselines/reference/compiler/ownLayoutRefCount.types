@@ -1,135 +1,153 @@
 //// [tests/cases/compiler/ownLayoutRefCount.ts] ////
 
-=== own.d.mts ===
-// Types for the own/shared threads runtime own.mjs (now own.ts in github.com/arv/threads). Programs
-// import their API from "./own.mjs"; the compiler adds the imports of the helpers it emits
-// (`__sharedStruct`, `__register`) when `ownRuntime` is set.
-//
-// `sending T` marks a value whose ownership moves to the receiver: the sender must not use it
-// afterwards. `shared T` marks a value any number of threads may read at once: deeply immutable, or
-// a cell that synchronizes internally (Slots, Barrier, a shared struct).
+=== threads.d.mts ===
+// The parts of the threads runtime's plain TypeScript API (threads.d.ts in github.com/arv/threads)
+// that this test uses. Programs import their API from "./threads.mjs"; the compiler adds the imports
+// of the helpers it emits (`__sharedStruct`, `__register`, ...) when `ownRuntime` is set.
 
-/** One slot per thread: a thread publishes into its own slot, and everyone reads every slot. */
-export interface SlotsCell<T> {
-    readonly length: number;
+declare const cellBrand: unique symbol;
+>cellBrand : unique symbol
+
+declare const fieldBrand: unique symbol;
+>fieldBrand : unique symbol
+
+/** A cell: shared and mutable. Any number of threads may hold the same one. */
+export interface Cell {
+  readonly [cellBrand]: true;
+>[cellBrand] : true
+>cellBrand : unique symbol
+>true : true
+}
+
+/** A value whose ownership moves, on a parameter or a result. To TypeScript it is just T. */
+export type Sending<T> = T;
+>Sending : T
+
+/** A deeply immutable value, which any number of threads may read. */
+export type Shared<T> = T extends Cell | ((...args: any[]) => any) ? T
+>Shared : Shared<T>
+>args : any[]
+
+  : T extends object ? { readonly [K in keyof T]: Shared<T[K]> }
+  : T;
+
+/** A field of a shared struct. */
+export interface Field<T> {
+  readonly [fieldBrand]: T;
+>[fieldBrand] : T
+>fieldBrand : unique symbol
+}
+/** A number field: an f64 in shared memory. */
+export declare const f64: Field<number>;
+>f64 : Field<number>
+
+/** A reference field: a shared struct, a SharedArray or a Channel, or null. */
+export declare function ref<T>(): Field<T | null>;
+>ref : <T>() => Field<T | null>
+
+/** What `struct(...)` returns: `new S()` makes a zeroed struct in shared memory. */
+export interface StructType<T> {
+  new (): T & Cell;
+  readonly fields: readonly string[];
+>fields : readonly string[]
+}
+/** The value type of a struct type: `type Body = Struct<typeof Body>`. */
+export type Struct<S> = S extends StructType<infer T> ? T & Cell : never;
+>Struct : Struct<S>
+
+/** Declares a shared struct; one that refers to its own type is declared with an interface. */
+export declare function struct<F extends Record<string, Field<any>>>(
+>struct : { <F extends Record<string, Field<any>>>(fields: F): StructType<{ -readonly [K in keyof F]: F[K] extends Field<infer V> ? V : never; }>; <T>(fields: { [K in keyof T]-?: Field<T[K]>; }): StructType<T>; }
+
+  fields: F,
+>fields : F
+
+): StructType<{ -readonly [K in keyof F]: F[K] extends Field<infer V> ? V : never }>;
+export declare function struct<T>(fields: { [K in keyof T]-?: Field<T[K]> }): StructType<T>;
+>struct : { <F extends Record<string, Field<any>>>(fields: F): StructType<{ -readonly [K in keyof F]: F[K] extends Field<infer V> ? V : never; }>; <T>(fields: { [K in keyof T]-?: Field<T[K]>; }): StructType<T>; }
+>fields : { [K in keyof T]-?: Field<T[K]>; }
+
+/** A fixed-length array in shared memory, of numbers or of shared structs stored inline. */
+export interface SharedArray<T> extends Cell {
+  readonly length: number;
 >length : number
 
-    /** Publishes `value` in slot `index`, replacing what was there. */
-    set(index: number, value: T): void;
->set : (index: number, value: T) => void
+  [index: number]: T;
 >index : number
->value : T
-
-    /** The value in slot `index`. */
-    get(index: number): shared T;
->get : (index: number) => shared T
->index : number
-
-    /** The arrays in all slots, concatenated in slot order. */
-    flat(): shared (T extends readonly (infer E)[] ? E : T)[];
->flat : () => shared (T extends readonly (infer E)[] ? E : T)[]
 }
-export declare const Slots: new <T>(count: number) => shared SlotsCell<T>;
->Slots : new <T>(count: number) => shared SlotsCell<T>
->count : number
+export declare const SharedArray: {
+>SharedArray : { new (type: NumberConstructor, length: number): SharedArray<number>; new <T>(type: StructType<T>, length: number): SharedArray<T & Cell>; }
 
-/** A reusable barrier for a fixed number of threads. */
-export interface BarrierCell {
-    /** Blocks until all threads have called `wait`. */
-    wait(): void;
->wait : () => void
+  new (type: NumberConstructor, length: number): SharedArray<number>;
+>type : NumberConstructor
+>length : number
+
+  new <T>(type: StructType<T>, length: number): SharedArray<T & Cell>;
+>type : StructType<T>
+>length : number
+
+};
+
+/** A thread; joining it moves the thread's result back. */
+export interface Thread<R> extends Cell {
+  join(): Sending<R>;
+>join : () => Sending<R>
 }
-export declare const Barrier: new (threads: number) => shared BarrierCell;
->Barrier : new (threads: number) => shared BarrierCell
->threads : number
-
-/** Freezes a value the caller owns into a deeply immutable value every thread can read. */
-export declare function share<T>(value: sending T): shared T;
->share : <T>(value: sending T) => shared T
->value : T
-
-/** A thread started inside a `scope`; joining it moves the thread's result back. */
-export interface Thread<R> {
-    join(): sending R;
->join : () => sending R
-}
-
 /** Spawns threads that cannot outlive the scope. Every argument is sent to the new thread. */
-export interface Scope {
-    spawn<A extends unknown[], R>(f: (...args: A) => sending R, ...args: sending A): shared Thread<R>;
->spawn : <A extends unknown[], R>(f: (...args: A) => sending R, ...args: sending A) => shared Thread<R>
->f : (...args: A) => sending R
+export interface Scope extends Cell {
+  spawn<A extends unknown[], R>(f: (...args: A) => Sending<R>, ...args: Sending<A>): Thread<R>;
+>spawn : <A extends unknown[], R>(f: (...args: A) => Sending<R>, ...args: Sending<A>) => Thread<R>
+>f : (...args: A) => Sending<R>
 >args : A
 >args : A
 }
-
 /** Runs `body` and joins every thread it spawned before returning. */
-export declare function scope<R>(body: (s: shared Scope) => R): R;
->scope : <R>(body: (s: shared Scope) => R) => R
->body : (s: shared Scope) => R
+export declare function scope<R>(body: (s: Scope) => R): R;
+>scope : <R>(body: (s: Scope) => R) => R
+>body : (s: Scope) => R
 >s : Scope
-
-/** Splits an owned array into `parts` owned, disjoint chunks of nearly equal size. Trusted. */
-export declare function partition<T>(items: sending T[], parts: number): (sending T[])[];
->partition : <T>(items: sending T[], parts: number) => (sending T[])[]
->items : T[]
->parts : number
-
-/** Takes element `index` out of an array of owned values, so the caller owns it. Trusted. */
-export declare function take<T>(items: (sending T)[], index: number): sending T;
->take : <T>(items: (sending T)[], index: number) => sending T
->items : T[]
->index : number
 
 /** Prints a line, synchronously, from any thread. */
 export declare function log(...args: unknown[]): void;
 >log : (...args: unknown[]) => void
 >args : unknown[]
 
-/** A shared struct's value as a type: what `new SharedArray(Struct, n)` takes. */
-export interface SharedStructType<T> {
-    new (): T;
-}
-
-/**
- * A fixed-length array in the shared heap, of numbers or of shared structs stored inline. Threads
- * share it with no copying. With `ownRuntime` the compiler lays it out in the shared heap and turns
- * `a[i]` and `a.length` into typed-array accesses.
- */
-export interface SharedArray<T> {
-    readonly length: number;
->length : number
-
-    [index: number]: T;
->index : number
-}
-export declare const SharedArray: {
->SharedArray : { new (type: NumberConstructor, length: number): SharedArray<number>; new <T>(type: SharedStructType<T>, length: number): SharedArray<T>; }
-
-    new (type: NumberConstructor, length: number): SharedArray<number>;
->type : NumberConstructor
->length : number
-
-    new <T>(type: SharedStructType<T>, length: number): SharedArray<T>;
->type : SharedStructType<T>
->length : number
-
-};
-
-
 === list.mts ===
-import { log, scope } from "./own.mjs";
+import { f64, log, ref, scope, struct, type Struct } from "./threads.mjs";
+>f64 : import("./threads.mjs").Field<number>
 >log : (...args: unknown[]) => void
->scope : <R>(body: (s: shared import("./own.mjs").Scope) => R) => R
+>ref : <T>() => import("./threads.mjs").Field<T | null>
+>scope : <R>(body: (s: import("./threads.mjs").Scope) => R) => R
+>struct : { <F extends Record<string, import("./threads.mjs").Field<any>>>(fields: F): import("./threads.mjs").StructType<{ -readonly [K in keyof F]: F[K] extends import("./threads.mjs").Field<infer V> ? V : never; }>; <T>(fields: { [K in keyof T]-?: import("./threads.mjs").Field<T[K]>; }): import("./threads.mjs").StructType<T>; }
+>Struct : any
 
-export shared struct Node { value: number; next: Node | null }
->Node : Node
+export interface Node { value: number; next: Node | null }
 >value : number
 >next : Node | null
 
-export shared struct Box { item: Node | null }
->Box : Box
->item : Node | null
+export const Node = struct<Node>({ value: f64, next: ref<Node>() });
+>Node : import("./threads.mjs").StructType<Node>
+>struct<Node>({ value: f64, next: ref<Node>() }) : import("./threads.mjs").StructType<Node>
+>struct : { <F extends Record<string, import("./threads.mjs").Field<any>>>(fields: F): import("./threads.mjs").StructType<{ -readonly [K in keyof F]: F[K] extends import("./threads.mjs").Field<infer V> ? V : never; }>; <T>(fields: { [K in keyof T]-?: import("./threads.mjs").Field<T[K]>; }): import("./threads.mjs").StructType<T>; }
+>{ value: f64, next: ref<Node>() } : { value: import("./threads.mjs").Field<number>; next: import("./threads.mjs").Field<Node | null>; }
+>value : import("./threads.mjs").Field<number>
+>f64 : import("./threads.mjs").Field<number>
+>next : import("./threads.mjs").Field<Node | null>
+>ref<Node>() : import("./threads.mjs").Field<Node | null>
+>ref : <T>() => import("./threads.mjs").Field<T | null>
+
+export const Box = struct({ item: ref<Node>() });
+>Box : import("./threads.mjs").StructType<{ item: Node | null; }>
+>struct({ item: ref<Node>() }) : import("./threads.mjs").StructType<{ item: Node | null; }>
+>struct : { <F extends Record<string, import("./threads.mjs").Field<any>>>(fields: F): import("./threads.mjs").StructType<{ -readonly [K in keyof F]: F[K] extends import("./threads.mjs").Field<infer V> ? V : never; }>; <T>(fields: { [K in keyof T]-?: import("./threads.mjs").Field<T[K]>; }): import("./threads.mjs").StructType<T>; }
+>{ item: ref<Node>() } : { item: import("./threads.mjs").Field<Node | null>; }
+>item : import("./threads.mjs").Field<Node | null>
+>ref<Node>() : import("./threads.mjs").Field<Node | null>
+>ref : <T>() => import("./threads.mjs").Field<T | null>
+
+export type Box = Struct<typeof Box>;
+>Box : { item: Node | null; } & import("./threads.mjs").Cell
+>Box : import("./threads.mjs").StructType<{ item: Node | null; }>
 
 // The linked list: building it (`head` is reassigned, so it is owned, and `node` is new), and
 // returning it (the owned local's count moves out).
@@ -150,28 +168,28 @@ export function makeList(n: number): Node | null {
 >i : number
 
         const node = new Node();
->node : Node
->new Node() : Node
->Node : new () => Node
+>node : Node & import("./threads.mjs").Cell
+>new Node() : Node & import("./threads.mjs").Cell
+>Node : import("./threads.mjs").StructType<Node>
 
         node.value = i;
 >node.value = i : number
 >node.value : number
->node : Node
+>node : Node & import("./threads.mjs").Cell
 >value : number
 >i : number
 
         node.next = head;                    // a borrow stored in a reference field: retained
 >node.next = head : Node | null
 >node.next : Node | null
->node : Node
+>node : Node & import("./threads.mjs").Cell
 >next : Node | null
 >head : Node | null
 
         head = node;                         // the new value is retained before the old is released
->head = node : Node
+>head = node : Node & import("./threads.mjs").Cell
 >head : Node | null
->node : Node
+>node : Node & import("./threads.mjs").Cell
     }
     return head;
 >head : Node | null
@@ -222,19 +240,19 @@ export function created(value: number): Node {
 >value : number
 
     const node = new Node();
->node : Node
->new Node() : Node
->Node : new () => Node
+>node : Node & import("./threads.mjs").Cell
+>new Node() : Node & import("./threads.mjs").Cell
+>Node : import("./threads.mjs").StructType<Node>
 
     node.value = value;
 >node.value = value : number
 >node.value : number
->node : Node
+>node : Node & import("./threads.mjs").Cell
 >value : number
 >value : number
 
     return node;
->node : Node
+>node : Node & import("./threads.mjs").Cell
 }
 export function either(c: boolean, p: Node): Node {
 >either : (c: boolean, p: Node) => Node
@@ -245,15 +263,15 @@ export function either(c: boolean, p: Node): Node {
 >c ? p : new Node() : Node
 >c : boolean
 >p : Node
->new Node() : Node
->Node : new () => Node
+>new Node() : Node & import("./threads.mjs").Cell
+>Node : import("./threads.mjs").StructType<Node>
 }
 
 // A field overwritten in a loop: a quiescent point at the end of each iteration (and before
 // `continue`). A numeric loop gets none.
 export function replace(box: Box, rounds: number) {
 >replace : (box: Box, rounds: number) => number
->box : Box
+>box : { item: Node | null; } & import("./threads.mjs").Cell
 >rounds : number
 
     for (let i = 0; i < rounds; i++) {
@@ -275,7 +293,7 @@ export function replace(box: Box, rounds: number) {
         box.item = created(i);
 >box.item = created(i) : Node
 >box.item : Node | null
->box : Box
+>box : { item: Node | null; } & import("./threads.mjs").Cell
 >item : Node | null
 >created(i) : Node
 >created : (value: number) => Node
@@ -312,21 +330,21 @@ declare function identity<T>(x: T): T;       // generic: its result is a borrow
 export function locals(p: Node, box: Box) {
 >locals : (p: Node, box: Box) => number
 >p : Node
->box : Box
+>box : { item: Node | null; } & import("./threads.mjs").Cell
 
     const a = p;                             // a stable borrow: borrowed, no counting
 >a : Node
 >p : Node
 
     const b = new Node();                    // owned: released when the block ends
->b : Node
->new Node() : Node
->Node : new () => Node
+>b : Node & import("./threads.mjs").Cell
+>new Node() : Node & import("./threads.mjs").Cell
+>Node : import("./threads.mjs").StructType<Node>
 
     const c = box.item;                      // an unstable borrow: retained
 >c : Node | null
 >box.item : Node | null
->box : Box
+>box : { item: Node | null; } & import("./threads.mjs").Cell
 >item : Node | null
 
     let d: Node | null = null;               // reassigned: owned
@@ -338,10 +356,10 @@ export function locals(p: Node, box: Box) {
 >p : Node
 
     d = new Node();
->d = new Node() : Node
+>d = new Node() : Node & import("./threads.mjs").Cell
 >d : Node | null
->new Node() : Node
->Node : new () => Node
+>new Node() : Node & import("./threads.mjs").Cell
+>Node : import("./threads.mjs").StructType<Node>
 
     let e: Node | undefined;                 // never assigned: 0
 >e : Node | undefined
@@ -372,7 +390,7 @@ export function locals(p: Node, box: Box) {
 >a : Node
 >value : number
 >b.value : number
->b : Node
+>b : Node & import("./threads.mjs").Cell
 >value : number
 >(c === null ? 0 : c.value) : number
 >c === null ? 0 : c.value : number
@@ -405,8 +423,8 @@ export function parameters(n: Node | null, fallback: Node = new Node(), optional
 >parameters : (n: Node | null, fallback?: Node, optional?: Node, none?: Node | null) => number
 >n : Node | null
 >fallback : Node
->new Node() : Node
->Node : new () => Node
+>new Node() : Node & import("./threads.mjs").Cell
+>Node : import("./threads.mjs").StructType<Node>
 >optional : Node | undefined
 >none : Node | null
 
@@ -503,14 +521,14 @@ function use(n: Node | null): number { return n === null ? 0 : n.value; }
 
 export function stores(box: Box, p: Node) {
 >stores : (box: Box, p: Node) => void
->box : Box
+>box : { item: Node | null; } & import("./threads.mjs").Cell
 >p : Node
 
     use(box.item);                           // an unstable borrow passed to a function: retained around the call
 >use(box.item) : number
 >use : (n: Node | null) => number
 >box.item : Node | null
->box : Box
+>box : { item: Node | null; } & import("./threads.mjs").Cell
 >item : Node | null
 
     use(p);                                  // a stable borrow: as it is
@@ -521,14 +539,14 @@ export function stores(box: Box, p: Node) {
     box.item = p;                            // a borrow: retained
 >box.item = p : Node
 >box.item : Node | null
->box : Box
+>box : { item: Node | null; } & import("./threads.mjs").Cell
 >item : Node | null
 >p : Node
 
     box.item = created(1);                   // owned: stored as it is
 >box.item = created(1) : Node
 >box.item : Node | null
->box : Box
+>box : { item: Node | null; } & import("./threads.mjs").Cell
 >item : Node | null
 >created(1) : Node
 >created : (value: number) => Node
@@ -537,13 +555,13 @@ export function stores(box: Box, p: Node) {
     box.item = null;
 >box.item = null : null
 >box.item : Node | null
->box : Box
+>box : { item: Node | null; } & import("./threads.mjs").Cell
 >item : Node | null
 
     box.item ??= p;
 >box.item ??= p : Node
 >box.item : Node | null
->box : Box
+>box : { item: Node | null; } & import("./threads.mjs").Cell
 >item : Node | null
 >p : Node
 
@@ -553,7 +571,7 @@ export function stores(box: Box, p: Node) {
 >p : Node
 >next : Node | null
 >box.item : Node
->box : Box
+>box : { item: Node | null; } & import("./threads.mjs").Cell
 >item : Node
 
     box.item!.value = use(p);                // an unstable object and a call in the value: retained first
@@ -561,7 +579,7 @@ export function stores(box: Box, p: Node) {
 >box.item!.value : number
 >box.item! : Node
 >box.item : Node
->box : Box
+>box : { item: Node | null; } & import("./threads.mjs").Cell
 >item : Node
 >value : number
 >use(p) : number
@@ -572,14 +590,14 @@ export function stores(box: Box, p: Node) {
 >log(box.item) : void
 >log : (...args: unknown[]) => void
 >box.item : Node
->box : Box
+>box : { item: Node | null; } & import("./threads.mjs").Cell
 >item : Node
 }
 
 // Rules 7 and 8: spawn takes a counted argument, and a closure holds what it captures.
 export function threads(box: Box) {
 >threads : (box: Box) => () => number
->box : Box
+>box : { item: Node | null; } & import("./threads.mjs").Cell
 
     const list = makeList(3);
 >list : Node | null
@@ -589,25 +607,25 @@ export function threads(box: Box) {
 
     scope(s => {
 >scope(s => {        s.spawn(sum, list);        s.spawn(stores, box, created(4));    }) : void
->scope : <R>(body: (s: shared import("./own.mjs").Scope) => R) => R
->s => {        s.spawn(sum, list);        s.spawn(stores, box, created(4));    } : (s: import("./own.mjs").Scope) => void
->s : import("./own.mjs").Scope
+>scope : <R>(body: (s: import("./threads.mjs").Scope) => R) => R
+>s => {        s.spawn(sum, list);        s.spawn(stores, box, created(4));    } : (s: import("./threads.mjs").Scope) => void
+>s : import("./threads.mjs").Scope
 
         s.spawn(sum, list);
->s.spawn(sum, list) : import("./own.mjs").Thread<number>
->s.spawn : <A extends unknown[], R>(f: (...args: A) => sending R, ...args: sending A) => shared import("./own.mjs").Thread<R>
->s : import("./own.mjs").Scope
->spawn : <A extends unknown[], R>(f: (...args: A) => sending R, ...args: sending A) => shared import("./own.mjs").Thread<R>
+>s.spawn(sum, list) : import("./threads.mjs").Thread<number>
+>s.spawn : <A extends unknown[], R>(f: (...args: A) => import("./threads.mjs").Sending<R>, ...args: import("./threads.mjs").Sending<A>) => import("./threads.mjs").Thread<R>
+>s : import("./threads.mjs").Scope
+>spawn : <A extends unknown[], R>(f: (...args: A) => import("./threads.mjs").Sending<R>, ...args: import("./threads.mjs").Sending<A>) => import("./threads.mjs").Thread<R>
 >sum : (head: Node | null) => number
 >list : Node | null
 
         s.spawn(stores, box, created(4));
->s.spawn(stores, box, created(4)) : import("./own.mjs").Thread<void>
->s.spawn : <A extends unknown[], R>(f: (...args: A) => sending R, ...args: sending A) => shared import("./own.mjs").Thread<R>
->s : import("./own.mjs").Scope
->spawn : <A extends unknown[], R>(f: (...args: A) => sending R, ...args: sending A) => shared import("./own.mjs").Thread<R>
+>s.spawn(stores, box, created(4)) : import("./threads.mjs").Thread<void>
+>s.spawn : <A extends unknown[], R>(f: (...args: A) => import("./threads.mjs").Sending<R>, ...args: import("./threads.mjs").Sending<A>) => import("./threads.mjs").Thread<R>
+>s : import("./threads.mjs").Scope
+>spawn : <A extends unknown[], R>(f: (...args: A) => import("./threads.mjs").Sending<R>, ...args: import("./threads.mjs").Sending<A>) => import("./threads.mjs").Thread<R>
 >stores : (box: Box, p: Node) => void
->box : Box
+>box : { item: Node | null; } & import("./threads.mjs").Cell
 >created(4) : Node
 >created : (value: number) => Node
 >4 : 4

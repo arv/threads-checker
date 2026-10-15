@@ -1,244 +1,240 @@
 //// [tests/cases/compiler/ownLayoutChannels.ts] ////
 
-=== own.d.mts ===
-// Types for the own/shared threads runtime own.mjs (now own.ts in github.com/arv/threads). Programs
-// import their API from "./own.mjs"; the compiler adds the imports of the helpers it emits
-// (`__sharedStruct`, `__register`) when `ownRuntime` is set.
-//
-// `sending T` marks a value whose ownership moves to the receiver: the sender must not use it
-// afterwards. `shared T` marks a value any number of threads may read at once: deeply immutable, or
-// a cell that synchronizes internally (Slots, Barrier, a shared struct).
+=== threads.d.mts ===
+// The parts of the threads runtime's plain TypeScript API (threads.d.ts in github.com/arv/threads)
+// that this test uses. Programs import their API from "./threads.mjs"; the compiler adds the imports
+// of the helpers it emits (`__sharedStruct`, `__register`, ...) when `ownRuntime` is set.
 
-/** One slot per thread: a thread publishes into its own slot, and everyone reads every slot. */
-export interface SlotsCell<T> {
-    readonly length: number;
+declare const cellBrand: unique symbol;
+>cellBrand : unique symbol
+
+declare const fieldBrand: unique symbol;
+>fieldBrand : unique symbol
+
+/** A cell: shared and mutable. Any number of threads may hold the same one. */
+export interface Cell {
+  readonly [cellBrand]: true;
+>[cellBrand] : true
+>cellBrand : unique symbol
+>true : true
+}
+
+/** A value whose ownership moves, on a parameter or a result. To TypeScript it is just T. */
+export type Sending<T> = T;
+>Sending : T
+
+/** A deeply immutable value, which any number of threads may read. */
+export type Shared<T> = T extends Cell | ((...args: any[]) => any) ? T
+>Shared : Shared<T>
+>args : any[]
+
+  : T extends object ? { readonly [K in keyof T]: Shared<T[K]> }
+  : T;
+
+/** A field of a shared struct. */
+export interface Field<T> {
+  readonly [fieldBrand]: T;
+>[fieldBrand] : T
+>fieldBrand : unique symbol
+}
+/** A number field: an f64 in shared memory. */
+export declare const f64: Field<number>;
+>f64 : Field<number>
+
+/** A reference field: a shared struct, a SharedArray or a Channel, or null. */
+export declare function ref<T>(): Field<T | null>;
+>ref : <T>() => Field<T | null>
+
+/** What `struct(...)` returns: `new S()` makes a zeroed struct in shared memory. */
+export interface StructType<T> {
+  new (): T & Cell;
+  readonly fields: readonly string[];
+>fields : readonly string[]
+}
+/** The value type of a struct type: `type Body = Struct<typeof Body>`. */
+export type Struct<S> = S extends StructType<infer T> ? T & Cell : never;
+>Struct : Struct<S>
+
+/** Declares a shared struct; one that refers to its own type is declared with an interface. */
+export declare function struct<F extends Record<string, Field<any>>>(
+>struct : { <F extends Record<string, Field<any>>>(fields: F): StructType<{ -readonly [K in keyof F]: F[K] extends Field<infer V> ? V : never; }>; <T>(fields: { [K in keyof T]-?: Field<T[K]>; }): StructType<T>; }
+
+  fields: F,
+>fields : F
+
+): StructType<{ -readonly [K in keyof F]: F[K] extends Field<infer V> ? V : never }>;
+export declare function struct<T>(fields: { [K in keyof T]-?: Field<T[K]> }): StructType<T>;
+>struct : { <F extends Record<string, Field<any>>>(fields: F): StructType<{ -readonly [K in keyof F]: F[K] extends Field<infer V> ? V : never; }>; <T>(fields: { [K in keyof T]-?: Field<T[K]>; }): StructType<T>; }
+>fields : { [K in keyof T]-?: Field<T[K]>; }
+
+/** A fixed-length array in shared memory, of numbers or of shared structs stored inline. */
+export interface SharedArray<T> extends Cell {
+  readonly length: number;
 >length : number
 
-    /** Publishes `value` in slot `index`, replacing what was there. */
-    set(index: number, value: T): void;
->set : (index: number, value: T) => void
->index : number
->value : T
-
-    /** The value in slot `index`. */
-    get(index: number): shared T;
->get : (index: number) => shared T
->index : number
-
-    /** The arrays in all slots, concatenated in slot order. */
-    flat(): shared (T extends readonly (infer E)[] ? E : T)[];
->flat : () => shared (T extends readonly (infer E)[] ? E : T)[]
-}
-export declare const Slots: new <T>(count: number) => shared SlotsCell<T>;
->Slots : new <T>(count: number) => shared SlotsCell<T>
->count : number
-
-/** A reusable barrier for a fixed number of threads. */
-export interface BarrierCell {
-    /** Blocks until all threads have called `wait`. */
-    wait(): void;
->wait : () => void
-}
-export declare const Barrier: new (threads: number) => shared BarrierCell;
->Barrier : new (threads: number) => shared BarrierCell
->threads : number
-
-/** Freezes a value the caller owns into a deeply immutable value every thread can read. */
-export declare function share<T>(value: sending T): shared T;
->share : <T>(value: sending T) => shared T
->value : T
-
-/** A thread started inside a `scope`; joining it moves the thread's result back. */
-export interface Thread<R> {
-    join(): sending R;
->join : () => sending R
-}
-
-/** Spawns threads that cannot outlive the scope. Every argument is sent to the new thread. */
-export interface Scope {
-    spawn<A extends unknown[], R>(f: (...args: A) => sending R, ...args: sending A): shared Thread<R>;
->spawn : <A extends unknown[], R>(f: (...args: A) => sending R, ...args: sending A) => shared Thread<R>
->f : (...args: A) => sending R
->args : A
->args : A
-}
-
-/** Runs `body` and joins every thread it spawned before returning. */
-export declare function scope<R>(body: (s: shared Scope) => R): R;
->scope : <R>(body: (s: shared Scope) => R) => R
->body : (s: shared Scope) => R
->s : Scope
-
-/** Splits an owned array into `parts` owned, disjoint chunks of nearly equal size. Trusted. */
-export declare function partition<T>(items: sending T[], parts: number): (sending T[])[];
->partition : <T>(items: sending T[], parts: number) => (sending T[])[]
->items : T[]
->parts : number
-
-/** Takes element `index` out of an array of owned values, so the caller owns it. Trusted. */
-export declare function take<T>(items: (sending T)[], index: number): sending T;
->take : <T>(items: (sending T)[], index: number) => sending T
->items : T[]
->index : number
-
-/** Prints a line, synchronously, from any thread. */
-export declare function log(...args: unknown[]): void;
->log : (...args: unknown[]) => void
->args : unknown[]
-
-/** A shared struct's value as a type: what `new SharedArray(Struct, n)` takes. */
-export interface SharedStructType<T> {
-    new (): T;
-}
-
-/**
- * A fixed-length array in the shared heap, of numbers or of shared structs stored inline. Threads
- * share it with no copying. With `ownRuntime` the compiler lays it out in the shared heap and turns
- * `a[i]` and `a.length` into typed-array accesses.
- */
-export interface SharedArray<T> {
-    readonly length: number;
->length : number
-
-    [index: number]: T;
+  [index: number]: T;
 >index : number
 }
 export declare const SharedArray: {
->SharedArray : { new (type: NumberConstructor, length: number): SharedArray<number>; new <T>(type: SharedStructType<T>, length: number): SharedArray<T>; }
+>SharedArray : { new (type: NumberConstructor, length: number): SharedArray<number>; new <T>(type: StructType<T>, length: number): SharedArray<T & Cell>; }
 
-    new (type: NumberConstructor, length: number): SharedArray<number>;
+  new (type: NumberConstructor, length: number): SharedArray<number>;
 >type : NumberConstructor
 >length : number
 
-    new <T>(type: SharedStructType<T>, length: number): SharedArray<T>;
->type : SharedStructType<T>
+  new <T>(type: StructType<T>, length: number): SharedArray<T & Cell>;
+>type : StructType<T>
 >length : number
 
 };
 
+/** A channel: values move through it from thread to thread, in order. */
+export declare class Channel<T> implements Cell {
+>Channel : Channel<T>
 
-=== chan.d.mts ===
-/** A channel: values move through it from one thread to another, in order. */
-export interface ChannelCell<T> {
-    /** Moves `value` into the channel. */
-    send(value: sending T): void;
->send : (value: sending T) => void
+  readonly [cellBrand]: true;
+>[cellBrand] : true
+>cellBrand : unique symbol
+>true : true
+
+  /** Holds up to `capacity` values; 0, the default, is unbuffered. */
+  constructor(capacity?: number);
+>capacity : number | undefined
+
+  /** Moves `value` in. */
+  send(value: Sending<T>): void;
+>send : (value: Sending<T>) => void
 >value : T
 
-    /** The next value, which the caller now owns; undefined once the channel is closed and empty. */
-    recv(): sending T | undefined;
->recv : () => sending T | undefined
+  /** The next value, which the caller now owns; undefined once closed and empty. */
+  recv(): Sending<T> | undefined;
+>recv : () => Sending<T> | undefined
 
-    /** No more sends. */
-    close(): void;
+  /** No more sends. */
+  close(): void;
 >close : () => void
 
-    /** The values until the channel is closed and empty. */
-    [Symbol.iterator](): Iterator<T>;
+  [Symbol.iterator](): Iterator<T>;
 >[Symbol.iterator] : () => Iterator<T>
 >Symbol.iterator : unique symbol
 >Symbol : SymbolConstructor
 >iterator : unique symbol
 }
-/** A channel holding up to `capacity` values; 0 (the default) is unbuffered. */
-export declare const Channel: new <T>(capacity?: number) => shared ChannelCell<T>;
->Channel : new <T>(capacity?: number) => shared ChannelCell<T>
->capacity : number | undefined
-
-/** Starts `f` on a thread of its own. Every argument is sent. */
-export declare function go<A extends unknown[]>(f: (...args: A) => void, ...args: sending A): void;
->go : <A extends unknown[]>(f: (...args: A) => void, ...args: sending A) => void
+/** Starts `f` on a thread of its own, a goroutine. Every argument is sent. */
+export declare function go<A extends unknown[]>(f: (...args: A) => void, ...args: Sending<A>): void;
+>go : <A extends unknown[]>(f: (...args: A) => void, ...args: Sending<A>) => void
 >f : (...args: A) => void
 >args : A
 >args : A
 
 /** Waits until one of the channels has a value or is closed: its index and the value. */
-export declare function select<T>(...channels: (shared ChannelCell<T>)[]): [index: number, value: T | undefined];
->select : <T>(...channels: (shared ChannelCell<T>)[]) => [index: number, value: T | undefined]
->channels : ChannelCell<T>[]
+export declare function select<T>(...channels: Channel<T>[]): [index: number, value: T | undefined];
+>select : <T>(...channels: Channel<T>[]) => [index: number, value: T | undefined]
+>channels : Channel<T>[]
 
 === channels.mts ===
-import { SharedArray } from "./own.mjs";
->SharedArray : { new (type: NumberConstructor, length: number): SharedArray<number>; new <T>(type: import("./own.mjs").SharedStructType<T>, length: number): SharedArray<T>; }
+import { Channel, f64, go, ref, SharedArray, type Sending, struct, type Struct } from "./threads.mjs";
+>Channel : typeof Channel
+>f64 : import("./threads.mjs").Field<number>
+>go : <A extends unknown[]>(f: (...args: A) => void, ...args: Sending<A>) => void
+>ref : <T>() => import("./threads.mjs").Field<T | null>
+>SharedArray : { new (type: NumberConstructor, length: number): SharedArray<number>; new <T>(type: import("./threads.mjs").StructType<T>, length: number): SharedArray<T & import("./threads.mjs").Cell>; }
+>Sending : any
+>struct : { <F extends Record<string, import("./threads.mjs").Field<any>>>(fields: F): import("./threads.mjs").StructType<{ -readonly [K in keyof F]: F[K] extends import("./threads.mjs").Field<infer V> ? V : never; }>; <T>(fields: { [K in keyof T]-?: import("./threads.mjs").Field<T[K]>; }): import("./threads.mjs").StructType<T>; }
+>Struct : any
 
-import { Channel, type ChannelCell, go } from "./chan.mjs";
->Channel : new <T>(capacity?: number) => shared ChannelCell<T>
->ChannelCell : any
->go : <A extends unknown[]>(f: (...args: A) => void, ...args: sending A) => void
-
-export shared struct Node { value: number; next: Node | null }
->Node : Node
+export interface Node { value: number; next: Node | null }
 >value : number
 >next : Node | null
 
-export shared struct Box { item: Node | null }
->Box : Box
->item : Node | null
+export const Node = struct<Node>({ value: f64, next: ref<Node>() });
+>Node : import("./threads.mjs").StructType<Node>
+>struct<Node>({ value: f64, next: ref<Node>() }) : import("./threads.mjs").StructType<Node>
+>struct : { <F extends Record<string, import("./threads.mjs").Field<any>>>(fields: F): import("./threads.mjs").StructType<{ -readonly [K in keyof F]: F[K] extends import("./threads.mjs").Field<infer V> ? V : never; }>; <T>(fields: { [K in keyof T]-?: import("./threads.mjs").Field<T[K]>; }): import("./threads.mjs").StructType<T>; }
+>{ value: f64, next: ref<Node>() } : { value: import("./threads.mjs").Field<number>; next: import("./threads.mjs").Field<Node | null>; }
+>value : import("./threads.mjs").Field<number>
+>f64 : import("./threads.mjs").Field<number>
+>next : import("./threads.mjs").Field<Node | null>
+>ref<Node>() : import("./threads.mjs").Field<Node | null>
+>ref : <T>() => import("./threads.mjs").Field<T | null>
+
+export const Box = struct({ item: ref<Node>() });
+>Box : import("./threads.mjs").StructType<{ item: Node | null; }>
+>struct({ item: ref<Node>() }) : import("./threads.mjs").StructType<{ item: Node | null; }>
+>struct : { <F extends Record<string, import("./threads.mjs").Field<any>>>(fields: F): import("./threads.mjs").StructType<{ -readonly [K in keyof F]: F[K] extends import("./threads.mjs").Field<infer V> ? V : never; }>; <T>(fields: { [K in keyof T]-?: import("./threads.mjs").Field<T[K]>; }): import("./threads.mjs").StructType<T>; }
+>{ item: ref<Node>() } : { item: import("./threads.mjs").Field<Node | null>; }
+>item : import("./threads.mjs").Field<Node | null>
+>ref<Node>() : import("./threads.mjs").Field<Node | null>
+>ref : <T>() => import("./threads.mjs").Field<T | null>
+
+export type Box = Struct<typeof Box>;
+>Box : { item: Node | null; } & import("./threads.mjs").Cell
+>Box : import("./threads.mjs").StructType<{ item: Node | null; }>
 
 // Sends: the message takes a count of its own, and the sender's count is released as usual.
-export function sends(ch: shared ChannelCell<Node>, box: Box, mine: sending Node) {
->sends : (ch: shared ChannelCell<Node>, box: Box, mine: sending Node) => void
->ch : ChannelCell<Node>
->box : Box
+export function sends(ch: Channel<Node>, box: Box, mine: Sending<Node>) {
+>sends : (ch: Channel<Node>, box: Box, mine: Sending<Node>) => void
+>ch : Channel<Node>
+>box : { item: Node | null; } & import("./threads.mjs").Cell
 >mine : Node
 
     const n = new Node();
->n : Node
->new Node() : Node
->Node : new () => Node
+>n : Node & import("./threads.mjs").Cell
+>new Node() : Node & import("./threads.mjs").Cell
+>Node : import("./threads.mjs").StructType<Node>
 
     ch.send(n);                              // an owned local
 >ch.send(n) : void
 >ch.send : (value: Node) => void
->ch : ChannelCell<Node>
+>ch : Channel<Node>
 >send : (value: Node) => void
->n : Node
+>n : Node & import("./threads.mjs").Cell
 
     ch.send(new Node());                     // an owned temporary, released after the statement
 >ch.send(new Node()) : void
 >ch.send : (value: Node) => void
->ch : ChannelCell<Node>
+>ch : Channel<Node>
 >send : (value: Node) => void
->new Node() : Node
->Node : new () => Node
+>new Node() : Node & import("./threads.mjs").Cell
+>Node : import("./threads.mjs").StructType<Node>
 
     ch.send(box.item!);                      // a reference field: retained by `__ref` at once
 >ch.send(box.item!) : void
 >ch.send : (value: Node) => void
->ch : ChannelCell<Node>
+>ch : Channel<Node>
 >send : (value: Node) => void
 >box.item! : Node
 >box.item : Node | null
->box : Box
+>box : { item: Node | null; } & import("./threads.mjs").Cell
 >item : Node | null
 
-    ch.send(mine);                           // a parameter declared `sending`
+    ch.send(mine);                           // a parameter declared `Sending<Node>`
 >ch.send(mine) : void
 >ch.send : (value: Node) => void
->ch : ChannelCell<Node>
+>ch : Channel<Node>
 >send : (value: Node) => void
 >mine : Node
 }
 
 // A thread's arguments share a counted value: the same array goes to every thread.
-export function threads(ch: shared ChannelCell<Node>, arr: SharedArray<number>) {
->threads : (ch: shared ChannelCell<Node>, arr: SharedArray<number>) => number
->ch : ChannelCell<Node>
+export function threads(ch: Channel<Node>, arr: SharedArray<number>) {
+>threads : (ch: Channel<Node>, arr: SharedArray<number>) => number
+>ch : Channel<Node>
 >arr : SharedArray<number>
 
     go(worker, arr, ch);
 >go(worker, arr, ch) : void
->go : <A extends unknown[]>(f: (...args: A) => void, ...args: sending A) => void
->worker : (arr: SharedArray<number>, ch: shared ChannelCell<Node>) => void
+>go : <A extends unknown[]>(f: (...args: A) => void, ...args: Sending<A>) => void
+>worker : (arr: SharedArray<number>, ch: Channel<Node>) => void
 >arr : SharedArray<number>
->ch : ChannelCell<Node>
+>ch : Channel<Node>
 
     go(worker, arr, ch);
 >go(worker, arr, ch) : void
->go : <A extends unknown[]>(f: (...args: A) => void, ...args: sending A) => void
->worker : (arr: SharedArray<number>, ch: shared ChannelCell<Node>) => void
+>go : <A extends unknown[]>(f: (...args: A) => void, ...args: Sending<A>) => void
+>worker : (arr: SharedArray<number>, ch: Channel<Node>) => void
 >arr : SharedArray<number>
->ch : ChannelCell<Node>
+>ch : Channel<Node>
 
     return arr.length;
 >arr.length : number
@@ -247,14 +243,14 @@ export function threads(ch: shared ChannelCell<Node>, arr: SharedArray<number>) 
 }
 
 // A for-of over a channel owns each value it receives, until the iteration ends.
-function worker(arr: SharedArray<number>, ch: shared ChannelCell<Node>) {
->worker : (arr: SharedArray<number>, ch: shared ChannelCell<Node>) => void
+function worker(arr: SharedArray<number>, ch: Channel<Node>) {
+>worker : (arr: SharedArray<number>, ch: Channel<Node>) => void
 >arr : SharedArray<number>
->ch : ChannelCell<Node>
+>ch : Channel<Node>
 
     for (const n of ch) arr[0] += n.value;
 >n : Node
->ch : ChannelCell<Node>
+>ch : Channel<Node>
 >arr[0] += n.value : number
 >arr[0] : number
 >arr : SharedArray<number>
@@ -265,22 +261,22 @@ function worker(arr: SharedArray<number>, ch: shared ChannelCell<Node>) {
 }
 
 // recv() hands over a count: an owned local, a temporary, or a discarded value released at once.
-export function receives(ch: shared ChannelCell<Node>): Node | null {
->receives : (ch: shared ChannelCell<Node>) => Node | null
->ch : ChannelCell<Node>
+export function receives(ch: Channel<Node>): Node | null {
+>receives : (ch: Channel<Node>) => Node | null
+>ch : Channel<Node>
 
     const a = ch.recv()!;
 >a : Node
 >ch.recv()! : Node
 >ch.recv() : Node | undefined
 >ch.recv : () => Node | undefined
->ch : ChannelCell<Node>
+>ch : Channel<Node>
 >recv : () => Node | undefined
 
     ch.recv();
 >ch.recv() : Node | undefined
 >ch.recv : () => Node | undefined
->ch : ChannelCell<Node>
+>ch : Channel<Node>
 >recv : () => Node | undefined
 
     const v = a.value + ch.recv()!.value;
@@ -293,13 +289,13 @@ export function receives(ch: shared ChannelCell<Node>): Node | null {
 >ch.recv()! : Node
 >ch.recv() : Node | undefined
 >ch.recv : () => Node | undefined
->ch : ChannelCell<Node>
+>ch : Channel<Node>
 >recv : () => Node | undefined
 >value : number
 
     for (const n of ch) {
 >n : Node
->ch : ChannelCell<Node>
+>ch : Channel<Node>
 
         if (n.value === v) return n;         // moves the loop variable's count out
 >n.value === v : boolean
@@ -313,19 +309,19 @@ export function receives(ch: shared ChannelCell<Node>): Node | null {
 >ch.recv() ?? null : Node | null
 >ch.recv() : Node | undefined
 >ch.recv : () => Node | undefined
->ch : ChannelCell<Node>
+>ch : Channel<Node>
 >recv : () => Node | undefined
 }
 
 // A stage of a pipeline: what it receives, it sends on (moved).
-export function stage(input: shared ChannelCell<SharedArray<number>>, output: shared ChannelCell<SharedArray<number>>) {
->stage : (input: shared ChannelCell<SharedArray<number>>, output: shared ChannelCell<SharedArray<number>>) => void
->input : ChannelCell<SharedArray<number>>
->output : ChannelCell<SharedArray<number>>
+export function stage(input: Channel<SharedArray<number>>, output: Channel<SharedArray<number>>) {
+>stage : (input: Channel<SharedArray<number>>, output: Channel<SharedArray<number>>) => void
+>input : Channel<SharedArray<number>>
+>output : Channel<SharedArray<number>>
 
     for (const block of input) {
 >block : SharedArray<number>
->input : ChannelCell<SharedArray<number>>
+>input : Channel<SharedArray<number>>
 
         block[0]++;
 >block[0]++ : number
@@ -336,14 +332,14 @@ export function stage(input: shared ChannelCell<SharedArray<number>>, output: sh
         output.send(block);
 >output.send(block) : void
 >output.send : (value: SharedArray<number>) => void
->output : ChannelCell<SharedArray<number>>
+>output : Channel<SharedArray<number>>
 >send : (value: SharedArray<number>) => void
 >block : SharedArray<number>
     }
     output.close();
 >output.close() : void
 >output.close : () => void
->output : ChannelCell<SharedArray<number>>
+>output : Channel<SharedArray<number>>
 >close : () => void
 }
 
@@ -352,21 +348,21 @@ export function pipeline(blocks: number) {
 >blocks : number
 
     const input = new Channel<SharedArray<number>>(4), output = new Channel<SharedArray<number>>(4);
->input : ChannelCell<SharedArray<number>>
->new Channel<SharedArray<number>>(4) : ChannelCell<SharedArray<number>>
->Channel : new <T>(capacity?: number) => shared ChannelCell<T>
+>input : Channel<SharedArray<number>>
+>new Channel<SharedArray<number>>(4) : Channel<SharedArray<number>>
+>Channel : typeof Channel
 >4 : 4
->output : ChannelCell<SharedArray<number>>
->new Channel<SharedArray<number>>(4) : ChannelCell<SharedArray<number>>
->Channel : new <T>(capacity?: number) => shared ChannelCell<T>
+>output : Channel<SharedArray<number>>
+>new Channel<SharedArray<number>>(4) : Channel<SharedArray<number>>
+>Channel : typeof Channel
 >4 : 4
 
     go(stage, input, output);
 >go(stage, input, output) : void
->go : <A extends unknown[]>(f: (...args: A) => void, ...args: sending A) => void
->stage : (input: shared ChannelCell<SharedArray<number>>, output: shared ChannelCell<SharedArray<number>>) => void
->input : ChannelCell<SharedArray<number>>
->output : ChannelCell<SharedArray<number>>
+>go : <A extends unknown[]>(f: (...args: A) => void, ...args: Sending<A>) => void
+>stage : (input: Channel<SharedArray<number>>, output: Channel<SharedArray<number>>) => void
+>input : Channel<SharedArray<number>>
+>output : Channel<SharedArray<number>>
 
     for (let k = 0; k < blocks; k++) {
 >k : number
@@ -380,21 +376,21 @@ export function pipeline(blocks: number) {
         const block = new SharedArray(Number, 16);
 >block : SharedArray<number>
 >new SharedArray(Number, 16) : SharedArray<number>
->SharedArray : { new (type: NumberConstructor, length: number): SharedArray<number>; new <T>(type: import("./own.mjs").SharedStructType<T>, length: number): SharedArray<T>; }
+>SharedArray : { new (type: NumberConstructor, length: number): SharedArray<number>; new <T>(type: import("./threads.mjs").StructType<T>, length: number): SharedArray<T & import("./threads.mjs").Cell>; }
 >Number : NumberConstructor
 >16 : 16
 
         input.send(block);
 >input.send(block) : void
 >input.send : (value: SharedArray<number>) => void
->input : ChannelCell<SharedArray<number>>
+>input : Channel<SharedArray<number>>
 >send : (value: SharedArray<number>) => void
 >block : SharedArray<number>
     }
     input.close();
 >input.close() : void
 >input.close : () => void
->input : ChannelCell<SharedArray<number>>
+>input : Channel<SharedArray<number>>
 >close : () => void
 
     let total = 0;
@@ -403,7 +399,7 @@ export function pipeline(blocks: number) {
 
     for (const block of output) total += block[0];
 >block : SharedArray<number>
->output : ChannelCell<SharedArray<number>>
+>output : Channel<SharedArray<number>>
 >total += block[0] : number
 >total : number
 >block[0] : number

@@ -1,20 +1,38 @@
-ownSharedLoopBindings.ts(43,27): error TS96004: 'slots' cannot be used here: it shares objects with 'slots.flat()', which may have been sent to 'share' on line 43.
-ownSharedLoopBindings.ts(51,23): error TS96004: 'outer' cannot be used here: it shares objects with 'inner', which may have been sent to 'send' on line 52.
-ownSharedLoopBindings.ts(52,14): error TS96002: 'inner' cannot be used here: it may have been sent to 'send' on line 52.
-ownSharedLoopBindings.ts(60,9): error TS96001: 'xs' cannot be used here: it was sent to 'send' on line 59.
+loops.mts(40,27): error TS96004: 'slots' cannot be used here: it shares objects with 'slots.flat()', which may have been sent to 'share' on line 40.
+loops.mts(48,23): error TS96004: 'outer' cannot be used here: it shares objects with 'inner', which may have been sent to 'send' on line 49.
+loops.mts(49,14): error TS96002: 'inner' cannot be used here: it may have been sent to 'send' on line 49.
+loops.mts(57,9): error TS96001: 'xs' cannot be used here: it was sent to 'send' on line 56.
 
 
-==== ownSharedLoopBindings.ts (4 errors) ====
-    // A variable declared in a loop's body is a fresh binding in every iteration: what an earlier
-    // iteration sent must not stick to it. A variable declared outside the loop keeps its state across
-    // iterations. Lines marked "error" are expected to be reported.
+==== threads.d.mts (0 errors) ====
+    // The part of the runtime's plain TypeScript API that this test uses.
+    
+    declare const cellBrand: unique symbol;
+    
+    /** A cell: shared and mutable. Any number of threads may hold the same one. */
+    export interface Cell {
+      readonly [cellBrand]: true;
+    }
+    
+    /** A value whose ownership moves, on a parameter or a result. To TypeScript it is just T. */
+    export type Sending<T> = T;
+    
+    /** A deeply immutable value, which any number of threads may read. To TypeScript it is deeply readonly. */
+    export type Shared<T> = T extends Cell | ((...args: any[]) => any) ? T
+      : T extends object ? { readonly [K in keyof T]: Shared<T[K]> }
+      : T;
+    
+    /** Freezes a value the caller owns into a deeply immutable value every thread can read. */
+    export declare function share<T>(value: Sending<T>): Shared<T>;
+    
+==== loops.mts (4 errors) ====
+    import { type Sending, type Shared, share } from "./threads.mjs";
     
     type Pos = { x: number };
     type Positions = { t: number; pos: Pos[] };
-    declare function share<T>(x: sending T): shared T;
-    declare function send<T>(x: sending T): void;
-    declare function recv(): sending Positions | undefined;
-    declare function use(xs: readonly shared Pos[]): void;
+    declare function send<T>(x: Sending<T>): void;
+    declare function recv(): Sending<Positions | undefined>;
+    declare function use(xs: Shared<Pos[]>): void;
     
     // The n-body gather: each step builds `slots` from received messages, then shares it.
     export function gather(steps: number, threads: number) {
@@ -49,8 +67,8 @@ ownSharedLoopBindings.ts(60,9): error TS96001: 'xs' cannot be used here: it was 
         for (let s = 0; s < steps; s++) {
             const all = share(slots.flat());      // error: sent in an earlier iteration
                               ~~~~~
-!!! error TS96004: 'slots' cannot be used here: it shares objects with 'slots.flat()', which may have been sent to 'share' on line 43.
-!!! related TS96012 ownSharedLoopBindings.ts:43:27: 'slots.flat()' is consumed here.
+!!! error TS96004: 'slots' cannot be used here: it shares objects with 'slots.flat()', which may have been sent to 'share' on line 40.
+!!! related TS96012 loops.mts:40:27: 'slots.flat()' is consumed here.
             use(all);
         }
     }
@@ -60,12 +78,12 @@ ownSharedLoopBindings.ts(60,9): error TS96001: 'xs' cannot be used here: it was 
         for (let s = 0; s < steps; s++) {
             const inner = outer;                  // error: a fresh binding, but `outer` was sent through it
                           ~~~~~
-!!! error TS96004: 'outer' cannot be used here: it shares objects with 'inner', which may have been sent to 'send' on line 52.
-!!! related TS96011 ownSharedLoopBindings.ts:52:14: 'inner' is sent here.
+!!! error TS96004: 'outer' cannot be used here: it shares objects with 'inner', which may have been sent to 'send' on line 49.
+!!! related TS96011 loops.mts:49:14: 'inner' is sent here.
             send(inner);                          // error: in an earlier iteration
                  ~~~~~
-!!! error TS96002: 'inner' cannot be used here: it may have been sent to 'send' on line 52.
-!!! related TS96011 ownSharedLoopBindings.ts:52:14: 'inner' is sent here.
+!!! error TS96002: 'inner' cannot be used here: it may have been sent to 'send' on line 49.
+!!! related TS96011 loops.mts:49:14: 'inner' is sent here.
         }
     }
     
@@ -75,8 +93,8 @@ ownSharedLoopBindings.ts(60,9): error TS96001: 'xs' cannot be used here: it was 
             send(xs);
             xs.push({ x: 1 });                    // error: sent above, in this iteration
             ~~
-!!! error TS96001: 'xs' cannot be used here: it was sent to 'send' on line 59.
-!!! related TS96011 ownSharedLoopBindings.ts:59:14: 'xs' is sent here.
+!!! error TS96001: 'xs' cannot be used here: it was sent to 'send' on line 56.
+!!! related TS96011 loops.mts:56:14: 'xs' is sent here.
         }
     }
     

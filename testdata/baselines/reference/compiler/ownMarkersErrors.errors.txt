@@ -3,7 +3,7 @@ mistakes.mts(16,5): error TS96003: 'copy' cannot be used here: it shares objects
 mistakes.mts(21,5): error TS96010: Cannot change 'table as number[]': it is a shared value, which is immutable.
 mistakes.mts(27,17): error TS96008: 'job' cannot be sent: it is captured from an outer scope.
 mistakes.mts(34,12): error TS96005: 'job' was consumed by 'send' on line 33.
-mistakes.mts(38,13): error TS96007: 'job' cannot be sent: it may be referenced by the caller. Declare the parameter 'sending' to take ownership.
+mistakes.mts(38,13): error TS96007: 'job' cannot be sent: it may be referenced by the caller. Declare the parameter 'Sending<T>' to take ownership.
 mistakes.mts(42,29): error TS96015: A shared struct field must be a number, a boolean, a string, a shared struct, a SharedArray or a Channel.
 mistakes.mts(43,34): error TS96015: A shared struct field must be a number, a boolean, a string, a shared struct, a SharedArray or a Channel.
 
@@ -223,7 +223,7 @@ mistakes.mts(43,34): error TS96015: A shared struct field must be a number, a bo
     export function borrowed(ch: Channel<Job>, job: Job) {
         ch.send(job);                            // error: the caller may still use it
                 ~~~
-!!! error TS96007: 'job' cannot be sent: it may be referenced by the caller. Declare the parameter 'sending' to take ownership.
+!!! error TS96007: 'job' cannot be sent: it may be referenced by the caller. Declare the parameter 'Sending<T>' to take ownership.
     }
     
     // A struct's fields are numbers and references to structs or SharedArrays.

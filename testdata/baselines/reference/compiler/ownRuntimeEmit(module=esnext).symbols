@@ -1,121 +1,251 @@
 //// [tests/cases/compiler/ownRuntimeEmit.ts] ////
 
-=== own.d.mts ===
-export declare function share<T>(x: sending T): shared T;
->share : Symbol(share, Decl(own.d.mts, 0, 0))
->T : Symbol(T, Decl(own.d.mts, 0, 30))
->x : Symbol(x, Decl(own.d.mts, 0, 33))
->T : Symbol(T, Decl(own.d.mts, 0, 30))
->T : Symbol(T, Decl(own.d.mts, 0, 30))
+=== threads.d.mts ===
+declare const cellBrand: unique symbol;
+>cellBrand : Symbol(cellBrand, Decl(threads.d.mts, 0, 13))
+
+declare const fieldBrand: unique symbol;
+>fieldBrand : Symbol(fieldBrand, Decl(threads.d.mts, 1, 13))
+
+export interface Cell {
+>Cell : Symbol(Cell, Decl(threads.d.mts, 1, 40))
+
+  readonly [cellBrand]: true;
+>[cellBrand] : Symbol(Cell[cellBrand], Decl(threads.d.mts, 2, 23))
+>cellBrand : Symbol(cellBrand, Decl(threads.d.mts, 0, 13))
+}
+export type Sending<T> = T;
+>Sending : Symbol(Sending, Decl(threads.d.mts, 4, 1))
+>T : Symbol(T, Decl(threads.d.mts, 5, 20))
+>T : Symbol(T, Decl(threads.d.mts, 5, 20))
+
+export type Shared<T> = T extends Cell | ((...args: any[]) => any) ? T
+>Shared : Symbol(Shared, Decl(threads.d.mts, 5, 27))
+>T : Symbol(T, Decl(threads.d.mts, 6, 19))
+>T : Symbol(T, Decl(threads.d.mts, 6, 19))
+>Cell : Symbol(Cell, Decl(threads.d.mts, 1, 40))
+>args : Symbol(args, Decl(threads.d.mts, 6, 43))
+>T : Symbol(T, Decl(threads.d.mts, 6, 19))
+
+  : T extends object ? { readonly [K in keyof T]: Shared<T[K]> }
+>T : Symbol(T, Decl(threads.d.mts, 6, 19))
+>K : Symbol(K, Decl(threads.d.mts, 7, 35))
+>T : Symbol(T, Decl(threads.d.mts, 6, 19))
+>Shared : Symbol(Shared, Decl(threads.d.mts, 5, 27))
+>T : Symbol(T, Decl(threads.d.mts, 6, 19))
+>K : Symbol(K, Decl(threads.d.mts, 7, 35))
+
+  : T;
+>T : Symbol(T, Decl(threads.d.mts, 6, 19))
+
+export declare function share<T>(value: Sending<T>): Shared<T>;
+>share : Symbol(share, Decl(threads.d.mts, 8, 6))
+>T : Symbol(T, Decl(threads.d.mts, 9, 30))
+>value : Symbol(value, Decl(threads.d.mts, 9, 33))
+>Sending : Symbol(Sending, Decl(threads.d.mts, 4, 1))
+>T : Symbol(T, Decl(threads.d.mts, 9, 30))
+>Shared : Symbol(Shared, Decl(threads.d.mts, 5, 27))
+>T : Symbol(T, Decl(threads.d.mts, 9, 30))
+
+export interface Field<T> {
+>Field : Symbol(Field, Decl(threads.d.mts, 9, 63))
+>T : Symbol(T, Decl(threads.d.mts, 10, 23))
+
+  readonly [fieldBrand]: T;
+>[fieldBrand] : Symbol(Field[fieldBrand], Decl(threads.d.mts, 10, 27))
+>fieldBrand : Symbol(fieldBrand, Decl(threads.d.mts, 1, 13))
+>T : Symbol(T, Decl(threads.d.mts, 10, 23))
+}
+export declare const f64: Field<number>;
+>f64 : Symbol(f64, Decl(threads.d.mts, 13, 20))
+>Field : Symbol(Field, Decl(threads.d.mts, 9, 63))
+
+export interface StructType<T> {
+>StructType : Symbol(StructType, Decl(threads.d.mts, 13, 40))
+>T : Symbol(T, Decl(threads.d.mts, 14, 28))
+
+  new (): T & Cell;
+>T : Symbol(T, Decl(threads.d.mts, 14, 28))
+>Cell : Symbol(Cell, Decl(threads.d.mts, 1, 40))
+
+  readonly fields: readonly string[];
+>fields : Symbol(StructType.fields, Decl(threads.d.mts, 15, 19))
+}
+export type Struct<S> = S extends StructType<infer T> ? T & Cell : never;
+>Struct : Symbol(Struct, Decl(threads.d.mts, 17, 1))
+>S : Symbol(S, Decl(threads.d.mts, 18, 19))
+>S : Symbol(S, Decl(threads.d.mts, 18, 19))
+>StructType : Symbol(StructType, Decl(threads.d.mts, 13, 40))
+>T : Symbol(T, Decl(threads.d.mts, 18, 50))
+>T : Symbol(T, Decl(threads.d.mts, 18, 50))
+>Cell : Symbol(Cell, Decl(threads.d.mts, 1, 40))
+
+export declare function struct<F extends Record<string, Field<any>>>(
+>struct : Symbol(struct, Decl(threads.d.mts, 18, 73))
+>F : Symbol(F, Decl(threads.d.mts, 19, 31))
+>Record : Symbol(Record, Decl(lib.es5.d.ts, --, --))
+>Field : Symbol(Field, Decl(threads.d.mts, 9, 63))
+
+  fields: F,
+>fields : Symbol(fields, Decl(threads.d.mts, 19, 69))
+>F : Symbol(F, Decl(threads.d.mts, 19, 31))
+
+): StructType<{ -readonly [K in keyof F]: F[K] extends Field<infer V> ? V : never }>;
+>StructType : Symbol(StructType, Decl(threads.d.mts, 13, 40))
+>K : Symbol(K, Decl(threads.d.mts, 21, 27))
+>F : Symbol(F, Decl(threads.d.mts, 19, 31))
+>F : Symbol(F, Decl(threads.d.mts, 19, 31))
+>K : Symbol(K, Decl(threads.d.mts, 21, 27))
+>Field : Symbol(Field, Decl(threads.d.mts, 9, 63))
+>V : Symbol(V, Decl(threads.d.mts, 21, 66))
+>V : Symbol(V, Decl(threads.d.mts, 21, 66))
 
 === main.mts ===
-import { share } from "./own.mjs";
->share : Symbol(share, Decl(main.mts, 0, 8))
+import { f64, type Sending, share, struct } from "./threads.mjs";
+>f64 : Symbol(f64, Decl(main.mts, 0, 8))
+>Sending : Symbol(Sending, Decl(main.mts, 0, 13))
+>share : Symbol(share, Decl(main.mts, 0, 27))
+>struct : Symbol(struct, Decl(main.mts, 0, 34))
 
-export shared struct Point { x: number; y: number }
->Point : Symbol(Point, Decl(main.mts, 0, 34))
->x : Symbol(Point.x, Decl(main.mts, 2, 28))
->y : Symbol(Point.y, Decl(main.mts, 2, 39))
+export const Point = struct({ x: f64, y: f64 });
+>Point : Symbol(Point, Decl(main.mts, 2, 12))
+>struct : Symbol(struct, Decl(main.mts, 0, 34))
+>x : Symbol(x, Decl(main.mts, 2, 29))
+>f64 : Symbol(f64, Decl(main.mts, 0, 8))
+>y : Symbol(y, Decl(main.mts, 2, 37))
+>f64 : Symbol(f64, Decl(main.mts, 0, 8))
 
-shared struct Local { n: number }
->Local : Symbol(Local, Decl(main.mts, 2, 51))
->n : Symbol(Local.n, Decl(main.mts, 3, 21))
+const Local = struct({ n: f64 });
+>Local : Symbol(Local, Decl(main.mts, 3, 5))
+>struct : Symbol(struct, Decl(main.mts, 0, 34))
+>n : Symbol(n, Decl(main.mts, 3, 22))
+>f64 : Symbol(f64, Decl(main.mts, 0, 8))
 
-export function exported(p: sending number[]): sending number[] { return p; }
+// Registered: function declarations with a body, exported or not, once for overloads. Not
+// registered: ambient functions, arrow functions, and functions in namespaces or other functions.
+export function exported(p: Sending<number[]>): Sending<number[]> { return p; }
 >exported : Symbol(exported, Decl(main.mts, 3, 33))
->p : Symbol(p, Decl(main.mts, 5, 25))
->p : Symbol(p, Decl(main.mts, 5, 25))
+>p : Symbol(p, Decl(main.mts, 7, 25))
+>Sending : Symbol(Sending, Decl(main.mts, 0, 13))
+>Sending : Symbol(Sending, Decl(main.mts, 0, 13))
+>p : Symbol(p, Decl(main.mts, 7, 25))
 
 function notExported() { return share([1]); }
->notExported : Symbol(notExported, Decl(main.mts, 5, 77))
->share : Symbol(share, Decl(main.mts, 0, 8))
+>notExported : Symbol(notExported, Decl(main.mts, 7, 79))
+>share : Symbol(share, Decl(main.mts, 0, 27))
 
 function overloaded(x: string): string;
->overloaded : Symbol(overloaded, Decl(main.mts, 6, 45), Decl(main.mts, 7, 39), Decl(main.mts, 8, 39))
->x : Symbol(x, Decl(main.mts, 7, 20))
+>overloaded : Symbol(overloaded, Decl(main.mts, 8, 45), Decl(main.mts, 9, 39), Decl(main.mts, 10, 39))
+>x : Symbol(x, Decl(main.mts, 9, 20))
 
 function overloaded(x: number): number;
->overloaded : Symbol(overloaded, Decl(main.mts, 6, 45), Decl(main.mts, 7, 39), Decl(main.mts, 8, 39))
->x : Symbol(x, Decl(main.mts, 8, 20))
+>overloaded : Symbol(overloaded, Decl(main.mts, 8, 45), Decl(main.mts, 9, 39), Decl(main.mts, 10, 39))
+>x : Symbol(x, Decl(main.mts, 10, 20))
 
 function overloaded(x: any) { return x; }
->overloaded : Symbol(overloaded, Decl(main.mts, 6, 45), Decl(main.mts, 7, 39), Decl(main.mts, 8, 39))
->x : Symbol(x, Decl(main.mts, 9, 20))
->x : Symbol(x, Decl(main.mts, 9, 20))
+>overloaded : Symbol(overloaded, Decl(main.mts, 8, 45), Decl(main.mts, 9, 39), Decl(main.mts, 10, 39))
+>x : Symbol(x, Decl(main.mts, 11, 20))
+>x : Symbol(x, Decl(main.mts, 11, 20))
 
 declare function ambient(): void;
->ambient : Symbol(ambient, Decl(main.mts, 9, 41))
+>ambient : Symbol(ambient, Decl(main.mts, 11, 41))
 
 export default function main() { notExported(); return new Local(); }
->main : Symbol(main, Decl(main.mts, 10, 33))
->notExported : Symbol(notExported, Decl(main.mts, 5, 77))
->Local : Symbol(Local, Decl(main.mts, 2, 51))
+>main : Symbol(main, Decl(main.mts, 12, 33))
+>notExported : Symbol(notExported, Decl(main.mts, 7, 79))
+>Local : Symbol(Local, Decl(main.mts, 3, 5))
 
 const arrow = () => 1;
->arrow : Symbol(arrow, Decl(main.mts, 12, 5))
+>arrow : Symbol(arrow, Decl(main.mts, 14, 5))
 
 namespace NS { export function inner() {} }
->NS : Symbol(NS, Decl(main.mts, 12, 22))
->inner : Symbol(inner, Decl(main.mts, 13, 14))
+>NS : Symbol(NS, Decl(main.mts, 14, 22))
+>inner : Symbol(inner, Decl(main.mts, 15, 14))
 
 function outer() { function nested() {} return nested; }
->outer : Symbol(outer, Decl(main.mts, 13, 43))
->nested : Symbol(nested, Decl(main.mts, 14, 18))
->nested : Symbol(nested, Decl(main.mts, 14, 18))
+>outer : Symbol(outer, Decl(main.mts, 15, 43))
+>nested : Symbol(nested, Decl(main.mts, 16, 18))
+>nested : Symbol(nested, Decl(main.mts, 16, 18))
 
 === structOnly.mts ===
-export shared struct Only { v: number }
->Only : Symbol(Only, Decl(structOnly.mts, 0, 0))
->v : Symbol(Only.v, Decl(structOnly.mts, 0, 27))
+// A struct and no functions: the struct's helper is imported, and nothing is registered.
+import { f64, struct } from "./threads.mjs";
+>f64 : Symbol(f64, Decl(structOnly.mts, 1, 8))
+>struct : Symbol(struct, Decl(structOnly.mts, 1, 13))
+
+export const Only = struct({ v: f64 });
+>Only : Symbol(Only, Decl(structOnly.mts, 2, 12))
+>struct : Symbol(struct, Decl(structOnly.mts, 1, 13))
+>v : Symbol(v, Decl(structOnly.mts, 2, 28))
+>f64 : Symbol(f64, Decl(structOnly.mts, 1, 8))
 
 === functionsOnly.mts ===
-export function f(x: sending number[]) { return x; }
->f : Symbol(f, Decl(functionsOnly.mts, 0, 0))
->x : Symbol(x, Decl(functionsOnly.mts, 0, 18))
->x : Symbol(x, Decl(functionsOnly.mts, 0, 18))
+// Only a type-only import, which is elided: the functions are still registered.
+import type { Sending } from "./threads.mjs";
+>Sending : Symbol(Sending, Decl(functionsOnly.mts, 1, 13))
+
+export function f(x: Sending<number[]>) { return x; }
+>f : Symbol(f, Decl(functionsOnly.mts, 1, 45))
+>x : Symbol(x, Decl(functionsOnly.mts, 2, 18))
+>Sending : Symbol(Sending, Decl(functionsOnly.mts, 1, 13))
+>x : Symbol(x, Decl(functionsOnly.mts, 2, 18))
 
 function g() {}
->g : Symbol(g, Decl(functionsOnly.mts, 0, 52))
+>g : Symbol(g, Decl(functionsOnly.mts, 2, 53))
 
 === plain.mts ===
+// Does not import the runtime: nothing is imported or registered.
 export function plain() { return 1; }
 >plain : Symbol(plain, Decl(plain.mts, 0, 0))
 
 === collision.mts ===
-export function __register(x: sending number[]) { return x; }
->__register : Symbol(__register, Decl(collision.mts, 0, 0))
->x : Symbol(x, Decl(collision.mts, 0, 27))
->x : Symbol(x, Decl(collision.mts, 0, 27))
+// Declares the helpers' names itself: the helpers get unique names.
+import { f64, type Sending, struct } from "./threads.mjs";
+>f64 : Symbol(f64, Decl(collision.mts, 1, 8))
+>Sending : Symbol(Sending, Decl(collision.mts, 1, 13))
+>struct : Symbol(struct, Decl(collision.mts, 1, 27))
 
-export shared struct S { v: number }
->S : Symbol(S, Decl(collision.mts, 0, 61))
->v : Symbol(S.v, Decl(collision.mts, 1, 24))
+export function __register(x: Sending<number[]>) { return x; }
+>__register : Symbol(__register, Decl(collision.mts, 1, 58))
+>x : Symbol(x, Decl(collision.mts, 2, 27))
+>Sending : Symbol(Sending, Decl(collision.mts, 1, 13))
+>x : Symbol(x, Decl(collision.mts, 2, 27))
+
+export const S = struct({ v: f64 });
+>S : Symbol(S, Decl(collision.mts, 3, 12))
+>struct : Symbol(struct, Decl(collision.mts, 1, 27))
+>v : Symbol(v, Decl(collision.mts, 3, 25))
+>f64 : Symbol(f64, Decl(collision.mts, 1, 8))
 
 function __sharedStruct() {}
->__sharedStruct : Symbol(__sharedStruct, Decl(collision.mts, 1, 36))
+>__sharedStruct : Symbol(__sharedStruct, Decl(collision.mts, 3, 36))
 
 === nameless.mts ===
-export default function (x: sending number[]) { return x; }
->x : Symbol(x, Decl(nameless.mts, 0, 25))
->x : Symbol(x, Decl(nameless.mts, 0, 25))
+// A default-exported function without a name is not registered.
+import type { Sending } from "./threads.mjs";
+>Sending : Symbol(Sending, Decl(nameless.mts, 1, 13))
+
+export default function (x: Sending<number[]>) { return x; }
+>x : Symbol(x, Decl(nameless.mts, 2, 25))
+>Sending : Symbol(Sending, Decl(nameless.mts, 1, 13))
+>x : Symbol(x, Decl(nameless.mts, 2, 25))
 
 function helper() {}
->helper : Symbol(helper, Decl(nameless.mts, 0, 59))
+>helper : Symbol(helper, Decl(nameless.mts, 2, 60))
 
 === cjs.cts ===
-export function c(x: sending number[]) { return x; }
->c : Symbol(c, Decl(cjs.cts, 0, 0))
->x : Symbol(x, Decl(cjs.cts, 0, 18))
->x : Symbol(x, Decl(cjs.cts, 0, 18))
+// Emitted as CommonJS: nothing is imported or registered.
+import type { Sending } from "./threads.mjs";
+>Sending : Symbol(Sending, Decl(cjs.cts, 1, 13))
+
+export function c(x: Sending<number[]>) { return x; }
+>c : Symbol(c, Decl(cjs.cts, 1, 45))
+>x : Symbol(x, Decl(cjs.cts, 2, 18))
+>Sending : Symbol(Sending, Decl(cjs.cts, 1, 13))
+>x : Symbol(x, Decl(cjs.cts, 2, 18))
 
 === script.ts ===
-declare function send<T>(x: sending T): void;
->send : Symbol(send, Decl(script.ts, 0, 0))
->T : Symbol(T, Decl(script.ts, 0, 22))
->x : Symbol(x, Decl(script.ts, 0, 25))
->T : Symbol(T, Decl(script.ts, 0, 22))
-
-function scriptFunction() { send([1]); }
->scriptFunction : Symbol(scriptFunction, Decl(script.ts, 0, 45))
->send : Symbol(send, Decl(script.ts, 0, 0))
+// A script cannot import the runtime: nothing is registered.
+function scriptFunction() { return [1]; }
+>scriptFunction : Symbol(scriptFunction, Decl(script.ts, 0, 0))
 

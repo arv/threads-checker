@@ -205,15 +205,6 @@ export function sieve(n: number): number {
     return primes + composite.length;
 }
 
-//// [syntax.mts]
-// The syntax's shared structs take boolean fields as well.
-shared struct Flags { count: number; on: boolean; off: false }
-export function toggle(f: Flags): boolean {
-    f.on = !f.on;
-    f.count++;
-    return f.on;
-}
-
 
 //// [booleans.mjs]
 import { F64 as __F64, I32 as __I32, U8 as __U8, newSharedArray as __newSharedArray, outOfBounds as __outOfBounds, register as __register, release as __release, sharedStruct as __sharedStruct } from "./threads.mjs";
@@ -260,13 +251,3 @@ export function sieve(n) {
     }
 }
 __register(import.meta.url, { finish, mark, assign, sieve });
-//// [syntax.mjs]
-import { F64 as __F64, U8 as __U8, register as __register, sharedStruct as __sharedStruct } from "./threads.mjs";
-// The syntax's shared structs take boolean fields as well.
-const Flags = __sharedStruct("Flags", ["count", "on", "off"], [], "fbb");
-export function toggle(f) {
-    __U8[f + 16] = !(__U8[f + 16] !== 0);
-    __F64[(f >> 3) + 1]++;
-    return __U8[f + 16] !== 0;
-}
-__register(import.meta.url, { toggle });

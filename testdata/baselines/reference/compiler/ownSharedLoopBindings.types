@@ -1,9 +1,41 @@
 //// [tests/cases/compiler/ownSharedLoopBindings.ts] ////
 
-=== ownSharedLoopBindings.ts ===
-// A variable declared in a loop's body is a fresh binding in every iteration: what an earlier
-// iteration sent must not stick to it. A variable declared outside the loop keeps its state across
-// iterations. Lines marked "error" are expected to be reported.
+=== threads.d.mts ===
+// The part of the runtime's plain TypeScript API that this test uses.
+
+declare const cellBrand: unique symbol;
+>cellBrand : unique symbol
+
+/** A cell: shared and mutable. Any number of threads may hold the same one. */
+export interface Cell {
+  readonly [cellBrand]: true;
+>[cellBrand] : true
+>cellBrand : unique symbol
+>true : true
+}
+
+/** A value whose ownership moves, on a parameter or a result. To TypeScript it is just T. */
+export type Sending<T> = T;
+>Sending : T
+
+/** A deeply immutable value, which any number of threads may read. To TypeScript it is deeply readonly. */
+export type Shared<T> = T extends Cell | ((...args: any[]) => any) ? T
+>Shared : Shared<T>
+>args : any[]
+
+  : T extends object ? { readonly [K in keyof T]: Shared<T[K]> }
+  : T;
+
+/** Freezes a value the caller owns into a deeply immutable value every thread can read. */
+export declare function share<T>(value: Sending<T>): Shared<T>;
+>share : <T>(value: Sending<T>) => Shared<T>
+>value : T
+
+=== loops.mts ===
+import { type Sending, type Shared, share } from "./threads.mjs";
+>Sending : any
+>Shared : any
+>share : <T>(value: Sending<T>) => Shared<T>
 
 type Pos = { x: number };
 >Pos : Pos
@@ -14,20 +46,16 @@ type Positions = { t: number; pos: Pos[] };
 >t : number
 >pos : Pos[]
 
-declare function share<T>(x: sending T): shared T;
->share : <T>(x: sending T) => shared T
+declare function send<T>(x: Sending<T>): void;
+>send : <T>(x: Sending<T>) => void
 >x : T
 
-declare function send<T>(x: sending T): void;
->send : <T>(x: sending T) => void
->x : T
+declare function recv(): Sending<Positions | undefined>;
+>recv : () => Sending<Positions | undefined>
 
-declare function recv(): sending Positions | undefined;
->recv : () => sending Positions | undefined
-
-declare function use(xs: readonly shared Pos[]): void;
->use : (xs: readonly shared Pos[]) => void
->xs : readonly Pos[]
+declare function use(xs: Shared<Pos[]>): void;
+>use : (xs: Shared<Pos[]>) => void
+>xs : readonly { readonly x: number; }[]
 
 // The n-body gather: each step builds `slots` from received messages, then shares it.
 export function gather(steps: number, threads: number) {
@@ -61,7 +89,7 @@ export function gather(steps: number, threads: number) {
 >m : Positions
 >recv()! : Positions
 >recv() : Positions | undefined
->recv : () => sending Positions | undefined
+>recv : () => Sending<Positions | undefined>
 
             slots[m.t] = m.pos;
 >slots[m.t] = m.pos : Pos[]
@@ -75,9 +103,9 @@ export function gather(steps: number, threads: number) {
 >pos : Pos[]
         }
         const all = share(slots.flat());
->all : Pos[]
->share(slots.flat()) : Pos[]
->share : <T>(x: sending T) => shared T
+>all : readonly { readonly x: number; }[]
+>share(slots.flat()) : readonly { readonly x: number; }[]
+>share : <T>(value: Sending<T>) => Shared<T>
 >slots.flat() : Pos[]
 >slots.flat : <A, D extends number = 1>(this: A, depth?: D | undefined) => FlatArray<A, D>[]
 >slots : Pos[][]
@@ -85,8 +113,8 @@ export function gather(steps: number, threads: number) {
 
         use(all);
 >use(all) : void
->use : (xs: readonly shared Pos[]) => void
->all : Pos[]
+>use : (xs: Shared<Pos[]>) => void
+>all : readonly { readonly x: number; }[]
     }
 }
 
@@ -108,11 +136,11 @@ export function nested(steps: number) {
 >pos : Pos[]
 >recv()! : Positions
 >recv() : Positions | undefined
->recv : () => sending Positions | undefined
+>recv : () => Sending<Positions | undefined>
 
             send(pos);
 >send(pos) : void
->send : <T>(x: sending T) => void
+>send : <T>(x: Sending<T>) => void
 >pos : Pos[]
 
         } while (steps > s);
@@ -136,7 +164,7 @@ export function nested(steps: number) {
 >recv()!.pos : Pos[]
 >recv()! : Positions
 >recv() : Positions | undefined
->recv : () => sending Positions | undefined
+>recv : () => Sending<Positions | undefined>
 >pos : Pos[]
 
             last.push(...next);
@@ -149,7 +177,7 @@ export function nested(steps: number) {
         }
         send(last);
 >send(last) : void
->send : <T>(x: sending T) => void
+>send : <T>(x: Sending<T>) => void
 >last : Pos[]
     }
 }
@@ -172,9 +200,9 @@ export function outside(steps: number) {
 >s : number
 
         const all = share(slots.flat());      // error: sent in an earlier iteration
->all : Pos[]
->share(slots.flat()) : Pos[]
->share : <T>(x: sending T) => shared T
+>all : readonly { readonly x: number; }[]
+>share(slots.flat()) : readonly { readonly x: number; }[]
+>share : <T>(value: Sending<T>) => Shared<T>
 >slots.flat() : Pos[]
 >slots.flat : <A, D extends number = 1>(this: A, depth?: D | undefined) => FlatArray<A, D>[]
 >slots : Pos[][]
@@ -182,8 +210,8 @@ export function outside(steps: number) {
 
         use(all);
 >use(all) : void
->use : (xs: readonly shared Pos[]) => void
->all : Pos[]
+>use : (xs: Shared<Pos[]>) => void
+>all : readonly { readonly x: number; }[]
     }
 }
 
@@ -210,7 +238,7 @@ export function linked(steps: number) {
 
         send(inner);                          // error: in an earlier iteration
 >send(inner) : void
->send : <T>(x: sending T) => void
+>send : <T>(x: Sending<T>) => void
 >inner : Pos[]
     }
 }
@@ -234,7 +262,7 @@ export function sameIteration(steps: number) {
 
         send(xs);
 >send(xs) : void
->send : <T>(x: sending T) => void
+>send : <T>(x: Sending<T>) => void
 >xs : Pos[]
 
         xs.push({ x: 1 });                    // error: sent above, in this iteration

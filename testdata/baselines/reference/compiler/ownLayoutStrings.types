@@ -497,34 +497,3 @@ export function labels(n: number): number {
 >length : number
 }
 
-=== syntax.mts ===
-// The syntax's shared structs take string fields as well, string literal types included.
-shared struct Task { id: number; state: "todo" | "done"; title: string }
->Task : Task
->id : number
->state : "done" | "todo"
->title : string
-
-export function finish(t: Task): string {
->finish : (t: Task) => string
->t : Task
-
-    t.state = "done";
->t.state = "done" : "done"
->t.state : "done" | "todo"
->t : Task
->state : "done" | "todo"
->"done" : "done"
-
-    return t.title + ": " + t.state;
->t.title + ": " + t.state : string
->t.title + ": " : string
->t.title : string
->t : Task
->title : string
->": " : ": "
->t.state : "done"
->t : Task
->state : "done"
-}
-

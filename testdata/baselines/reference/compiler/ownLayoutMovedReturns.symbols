@@ -1,118 +1,199 @@
 //// [tests/cases/compiler/ownLayoutMovedReturns.ts] ////
 
-=== own.d.mts ===
-type Entry<K, V> = [key: K, value: V];
->Entry : Symbol(Entry, Decl(own.d.mts, 0, 0))
->K : Symbol(K, Decl(own.d.mts, 0, 11))
->V : Symbol(V, Decl(own.d.mts, 0, 13))
->K : Symbol(K, Decl(own.d.mts, 0, 11))
->V : Symbol(V, Decl(own.d.mts, 0, 13))
+=== threads.d.mts ===
+// The parts of the threads runtime (threads.mjs, from github.com/arv/threads) this test uses.
+declare const cellBrand: unique symbol;
+>cellBrand : Symbol(cellBrand, Decl(threads.d.mts, 1, 13))
 
-type Computed<K, V> = [key: K, callback: (key: K) => sending V];
->Computed : Symbol(Computed, Decl(own.d.mts, 0, 38))
->K : Symbol(K, Decl(own.d.mts, 1, 14))
->V : Symbol(V, Decl(own.d.mts, 1, 16))
->K : Symbol(K, Decl(own.d.mts, 1, 14))
->key : Symbol(key, Decl(own.d.mts, 1, 42))
->K : Symbol(K, Decl(own.d.mts, 1, 14))
->V : Symbol(V, Decl(own.d.mts, 1, 16))
+declare const fieldBrand: unique symbol;
+>fieldBrand : Symbol(fieldBrand, Decl(threads.d.mts, 2, 13))
+
+/** A cell: shared and mutable. Any number of threads may hold the same one. */
+export interface Cell {
+>Cell : Symbol(Cell, Decl(threads.d.mts, 2, 40))
+
+  readonly [cellBrand]: true;
+>[cellBrand] : Symbol(Cell[cellBrand], Decl(threads.d.mts, 5, 23))
+>cellBrand : Symbol(cellBrand, Decl(threads.d.mts, 1, 13))
+}
+/** A value whose ownership moves, on a parameter or a result. To TypeScript it is just T. */
+export type Sending<T> = T;
+>Sending : Symbol(Sending, Decl(threads.d.mts, 7, 1))
+>T : Symbol(T, Decl(threads.d.mts, 9, 20))
+>T : Symbol(T, Decl(threads.d.mts, 9, 20))
+
+/** A field of a shared struct. */
+export interface Field<T> {
+>Field : Symbol(Field, Decl(threads.d.mts, 9, 27))
+>T : Symbol(T, Decl(threads.d.mts, 12, 23))
+
+  readonly [fieldBrand]: T;
+>[fieldBrand] : Symbol(Field[fieldBrand], Decl(threads.d.mts, 12, 27))
+>fieldBrand : Symbol(fieldBrand, Decl(threads.d.mts, 2, 13))
+>T : Symbol(T, Decl(threads.d.mts, 12, 23))
+}
+/** A number field: an f64 in shared memory. */
+export declare const f64: Field<number>;
+>f64 : Symbol(f64, Decl(threads.d.mts, 16, 20))
+>Field : Symbol(Field, Decl(threads.d.mts, 9, 27))
+
+/** What `struct(...)` returns: `new S()` makes a zeroed struct in shared memory. */
+export interface StructType<T> {
+>StructType : Symbol(StructType, Decl(threads.d.mts, 16, 40))
+>T : Symbol(T, Decl(threads.d.mts, 18, 28))
+
+  new (): T & Cell;
+>T : Symbol(T, Decl(threads.d.mts, 18, 28))
+>Cell : Symbol(Cell, Decl(threads.d.mts, 2, 40))
+
+  readonly fields: readonly string[];
+>fields : Symbol(StructType.fields, Decl(threads.d.mts, 19, 19))
+}
+/** The value type of a struct type: `type Body = Struct<typeof Body>`. */
+export type Struct<S> = S extends StructType<infer T> ? T & Cell : never;
+>Struct : Symbol(Struct, Decl(threads.d.mts, 21, 1))
+>S : Symbol(S, Decl(threads.d.mts, 23, 19))
+>S : Symbol(S, Decl(threads.d.mts, 23, 19))
+>StructType : Symbol(StructType, Decl(threads.d.mts, 16, 40))
+>T : Symbol(T, Decl(threads.d.mts, 23, 50))
+>T : Symbol(T, Decl(threads.d.mts, 23, 50))
+>Cell : Symbol(Cell, Decl(threads.d.mts, 2, 40))
+
+/** Declares a shared struct. */
+export declare function struct<F extends Record<string, Field<any>>>(
+>struct : Symbol(struct, Decl(threads.d.mts, 23, 73))
+>F : Symbol(F, Decl(threads.d.mts, 25, 31))
+>Record : Symbol(Record, Decl(lib.es5.d.ts, --, --))
+>Field : Symbol(Field, Decl(threads.d.mts, 9, 27))
+
+  fields: F,
+>fields : Symbol(fields, Decl(threads.d.mts, 25, 69))
+>F : Symbol(F, Decl(threads.d.mts, 25, 31))
+
+): StructType<{ -readonly [K in keyof F]: F[K] extends Field<infer V> ? V : never }>;
+>StructType : Symbol(StructType, Decl(threads.d.mts, 16, 40))
+>K : Symbol(K, Decl(threads.d.mts, 27, 27))
+>F : Symbol(F, Decl(threads.d.mts, 25, 31))
+>F : Symbol(F, Decl(threads.d.mts, 25, 31))
+>K : Symbol(K, Decl(threads.d.mts, 27, 27))
+>Field : Symbol(Field, Decl(threads.d.mts, 9, 27))
+>V : Symbol(V, Decl(threads.d.mts, 27, 66))
+>V : Symbol(V, Decl(threads.d.mts, 27, 66))
 
 /** A map in shared memory. */
-export declare class SharedMap<K, V> {
->SharedMap : Symbol(SharedMap, Decl(own.d.mts, 1, 64))
->K : Symbol(K, Decl(own.d.mts, 3, 31))
->V : Symbol(V, Decl(own.d.mts, 3, 33))
+export declare class SharedMap<K, V> implements Cell {
+>SharedMap : Symbol(SharedMap, Decl(threads.d.mts, 27, 85))
+>K : Symbol(K, Decl(threads.d.mts, 30, 31))
+>V : Symbol(V, Decl(threads.d.mts, 30, 33))
+>Cell : Symbol(Cell, Decl(threads.d.mts, 2, 40))
 
-    get(key: K): V | undefined;
->get : Symbol(SharedMap.get, Decl(own.d.mts, 3, 38))
->key : Symbol(key, Decl(own.d.mts, 4, 8))
->K : Symbol(K, Decl(own.d.mts, 3, 31))
->V : Symbol(V, Decl(own.d.mts, 3, 33))
+  readonly [cellBrand]: true;
+>[cellBrand] : Symbol(SharedMap[cellBrand], Decl(threads.d.mts, 30, 54))
+>cellBrand : Symbol(cellBrand, Decl(threads.d.mts, 1, 13))
 
-    set(...entry: sending Entry<K, V>): this;
->set : Symbol(SharedMap.set, Decl(own.d.mts, 4, 31))
->entry : Symbol(entry, Decl(own.d.mts, 5, 8))
->Entry : Symbol(Entry, Decl(own.d.mts, 0, 0))
->K : Symbol(K, Decl(own.d.mts, 3, 31))
->V : Symbol(V, Decl(own.d.mts, 3, 33))
+  get(key: K): V | undefined;
+>get : Symbol(SharedMap.get, Decl(threads.d.mts, 31, 29))
+>key : Symbol(key, Decl(threads.d.mts, 32, 6))
+>K : Symbol(K, Decl(threads.d.mts, 30, 31))
+>V : Symbol(V, Decl(threads.d.mts, 30, 33))
 
-    getOrInsertComputed(...entry: sending Computed<K, V>): V;
->getOrInsertComputed : Symbol(SharedMap.getOrInsertComputed, Decl(own.d.mts, 5, 45))
->entry : Symbol(entry, Decl(own.d.mts, 6, 24))
->Computed : Symbol(Computed, Decl(own.d.mts, 0, 38))
->K : Symbol(K, Decl(own.d.mts, 3, 31))
->V : Symbol(V, Decl(own.d.mts, 3, 33))
->V : Symbol(V, Decl(own.d.mts, 3, 33))
+  set(...entry: Sending<[key: K, value: V]>): this;
+>set : Symbol(SharedMap.set, Decl(threads.d.mts, 32, 29))
+>entry : Symbol(entry, Decl(threads.d.mts, 33, 6))
+>Sending : Symbol(Sending, Decl(threads.d.mts, 7, 1))
+>K : Symbol(K, Decl(threads.d.mts, 30, 31))
+>V : Symbol(V, Decl(threads.d.mts, 30, 33))
+
+  getOrInsertComputed(...entry: Sending<[key: K, callback: (key: K) => Sending<V>]>): V;
+>getOrInsertComputed : Symbol(SharedMap.getOrInsertComputed, Decl(threads.d.mts, 33, 51))
+>entry : Symbol(entry, Decl(threads.d.mts, 34, 22))
+>Sending : Symbol(Sending, Decl(threads.d.mts, 7, 1))
+>K : Symbol(K, Decl(threads.d.mts, 30, 31))
+>key : Symbol(key, Decl(threads.d.mts, 34, 60))
+>K : Symbol(K, Decl(threads.d.mts, 30, 31))
+>Sending : Symbol(Sending, Decl(threads.d.mts, 7, 1))
+>V : Symbol(V, Decl(threads.d.mts, 30, 33))
+>V : Symbol(V, Decl(threads.d.mts, 30, 33))
 }
 /** A callback whose result is not sent. */
 export declare function peek<V>(f: () => V): void;
->peek : Symbol(peek, Decl(own.d.mts, 7, 1))
->V : Symbol(V, Decl(own.d.mts, 9, 29))
->f : Symbol(f, Decl(own.d.mts, 9, 32))
->V : Symbol(V, Decl(own.d.mts, 9, 29))
+>peek : Symbol(peek, Decl(threads.d.mts, 35, 1))
+>V : Symbol(V, Decl(threads.d.mts, 37, 29))
+>f : Symbol(f, Decl(threads.d.mts, 37, 32))
+>V : Symbol(V, Decl(threads.d.mts, 37, 29))
 
 === main.mts ===
-import { SharedMap, peek } from "./own.mjs";
->SharedMap : Symbol(SharedMap, Decl(main.mts, 0, 8))
->peek : Symbol(peek, Decl(main.mts, 0, 19))
+import { f64, peek, SharedMap, struct, type Struct } from "./threads.mjs";
+>f64 : Symbol(f64, Decl(main.mts, 0, 8))
+>peek : Symbol(peek, Decl(main.mts, 0, 13))
+>SharedMap : Symbol(SharedMap, Decl(main.mts, 0, 19))
+>struct : Symbol(struct, Decl(main.mts, 0, 30))
+>Struct : Symbol(Struct, Decl(main.mts, 0, 38))
 
-shared struct Count { n: number; }
->Count : Symbol(Count, Decl(main.mts, 0, 44))
->n : Symbol(Count.n, Decl(main.mts, 2, 21))
+const Count = struct({ n: f64 });
+>Count : Symbol(Count, Decl(main.mts, 2, 5), Decl(main.mts, 2, 33))
+>struct : Symbol(struct, Decl(main.mts, 0, 30))
+>n : Symbol(n, Decl(main.mts, 2, 22))
+>f64 : Symbol(f64, Decl(main.mts, 0, 8))
+
+type Count = Struct<typeof Count>;
+>Count : Symbol(Count, Decl(main.mts, 2, 5), Decl(main.mts, 2, 33))
+>Struct : Symbol(Struct, Decl(main.mts, 0, 38))
+>Count : Symbol(Count, Decl(main.mts, 2, 5), Decl(main.mts, 2, 33))
 
 export function count(counts: SharedMap<string, Count>, word: string) {
->count : Symbol(count, Decl(main.mts, 2, 34))
->counts : Symbol(counts, Decl(main.mts, 4, 22))
->SharedMap : Symbol(SharedMap, Decl(main.mts, 0, 8))
->Count : Symbol(Count, Decl(main.mts, 0, 44))
->word : Symbol(word, Decl(main.mts, 4, 55))
+>count : Symbol(count, Decl(main.mts, 3, 34))
+>counts : Symbol(counts, Decl(main.mts, 5, 22))
+>SharedMap : Symbol(SharedMap, Decl(main.mts, 0, 19))
+>Count : Symbol(Count, Decl(main.mts, 2, 5), Decl(main.mts, 2, 33))
+>word : Symbol(word, Decl(main.mts, 5, 55))
 
     counts.getOrInsertComputed(word, () => new Count()).n++;
->counts.getOrInsertComputed(word, () => new Count()).n : Symbol(Count.n, Decl(main.mts, 2, 21))
->counts.getOrInsertComputed : Symbol(SharedMap.getOrInsertComputed, Decl(own.d.mts, 5, 45))
->counts : Symbol(counts, Decl(main.mts, 4, 22))
->getOrInsertComputed : Symbol(SharedMap.getOrInsertComputed, Decl(own.d.mts, 5, 45))
->word : Symbol(word, Decl(main.mts, 4, 55))
->Count : Symbol(Count, Decl(main.mts, 0, 44))
->n : Symbol(Count.n, Decl(main.mts, 2, 21))
+>counts.getOrInsertComputed(word, () => new Count()).n : Symbol(n, Decl(main.mts, 2, 22))
+>counts.getOrInsertComputed : Symbol(SharedMap.getOrInsertComputed, Decl(threads.d.mts, 33, 51))
+>counts : Symbol(counts, Decl(main.mts, 5, 22))
+>getOrInsertComputed : Symbol(SharedMap.getOrInsertComputed, Decl(threads.d.mts, 33, 51))
+>word : Symbol(word, Decl(main.mts, 5, 55))
+>Count : Symbol(Count, Decl(main.mts, 2, 5), Decl(main.mts, 2, 33))
+>n : Symbol(n, Decl(main.mts, 2, 22))
 
     counts.getOrInsertComputed(word, function () { return new Count(); }).n++;
->counts.getOrInsertComputed(word, function () { return new Count(); }).n : Symbol(Count.n, Decl(main.mts, 2, 21))
->counts.getOrInsertComputed : Symbol(SharedMap.getOrInsertComputed, Decl(own.d.mts, 5, 45))
->counts : Symbol(counts, Decl(main.mts, 4, 22))
->getOrInsertComputed : Symbol(SharedMap.getOrInsertComputed, Decl(own.d.mts, 5, 45))
->word : Symbol(word, Decl(main.mts, 4, 55))
->Count : Symbol(Count, Decl(main.mts, 0, 44))
->n : Symbol(Count.n, Decl(main.mts, 2, 21))
+>counts.getOrInsertComputed(word, function () { return new Count(); }).n : Symbol(n, Decl(main.mts, 2, 22))
+>counts.getOrInsertComputed : Symbol(SharedMap.getOrInsertComputed, Decl(threads.d.mts, 33, 51))
+>counts : Symbol(counts, Decl(main.mts, 5, 22))
+>getOrInsertComputed : Symbol(SharedMap.getOrInsertComputed, Decl(threads.d.mts, 33, 51))
+>word : Symbol(word, Decl(main.mts, 5, 55))
+>Count : Symbol(Count, Decl(main.mts, 2, 5), Decl(main.mts, 2, 33))
+>n : Symbol(n, Decl(main.mts, 2, 22))
 
     counts.getOrInsertComputed(word, () => {
->counts.getOrInsertComputed : Symbol(SharedMap.getOrInsertComputed, Decl(own.d.mts, 5, 45))
->counts : Symbol(counts, Decl(main.mts, 4, 22))
->getOrInsertComputed : Symbol(SharedMap.getOrInsertComputed, Decl(own.d.mts, 5, 45))
->word : Symbol(word, Decl(main.mts, 4, 55))
+>counts.getOrInsertComputed : Symbol(SharedMap.getOrInsertComputed, Decl(threads.d.mts, 33, 51))
+>counts : Symbol(counts, Decl(main.mts, 5, 22))
+>getOrInsertComputed : Symbol(SharedMap.getOrInsertComputed, Decl(threads.d.mts, 33, 51))
+>word : Symbol(word, Decl(main.mts, 5, 55))
 
         const c = new Count();
->c : Symbol(c, Decl(main.mts, 8, 13))
->Count : Symbol(Count, Decl(main.mts, 0, 44))
+>c : Symbol(c, Decl(main.mts, 9, 13))
+>Count : Symbol(Count, Decl(main.mts, 2, 5), Decl(main.mts, 2, 33))
 
         c.n = 1;
->c.n : Symbol(Count.n, Decl(main.mts, 2, 21))
->c : Symbol(c, Decl(main.mts, 8, 13))
->n : Symbol(Count.n, Decl(main.mts, 2, 21))
+>c.n : Symbol(n, Decl(main.mts, 2, 22))
+>c : Symbol(c, Decl(main.mts, 9, 13))
+>n : Symbol(n, Decl(main.mts, 2, 22))
 
         return c;
->c : Symbol(c, Decl(main.mts, 8, 13))
+>c : Symbol(c, Decl(main.mts, 9, 13))
 
     });
     counts.set(word, new Count());
->counts.set : Symbol(SharedMap.set, Decl(own.d.mts, 4, 31))
->counts : Symbol(counts, Decl(main.mts, 4, 22))
->set : Symbol(SharedMap.set, Decl(own.d.mts, 4, 31))
->word : Symbol(word, Decl(main.mts, 4, 55))
->Count : Symbol(Count, Decl(main.mts, 0, 44))
+>counts.set : Symbol(SharedMap.set, Decl(threads.d.mts, 32, 29))
+>counts : Symbol(counts, Decl(main.mts, 5, 22))
+>set : Symbol(SharedMap.set, Decl(threads.d.mts, 32, 29))
+>word : Symbol(word, Decl(main.mts, 5, 55))
+>Count : Symbol(Count, Decl(main.mts, 2, 5), Decl(main.mts, 2, 33))
 
     peek(() => new Count());
->peek : Symbol(peek, Decl(main.mts, 0, 19))
->Count : Symbol(Count, Decl(main.mts, 0, 44))
+>peek : Symbol(peek, Decl(main.mts, 0, 13))
+>Count : Symbol(Count, Decl(main.mts, 2, 5), Decl(main.mts, 2, 33))
 }
 

@@ -76,11 +76,3 @@ export function viaStructTypeParam(S: typeof A | typeof B) {
     const m = new S();
     m.u = 2;                                // error
 }
-
-// Through `shared struct` declarations.
-shared struct SA { u: number }
-shared struct SB { v: number; u: number }
-export function viaSharedStruct() {
-    const m = new (flag ? SA : SB)();
-    return m.u;                             // error
-}

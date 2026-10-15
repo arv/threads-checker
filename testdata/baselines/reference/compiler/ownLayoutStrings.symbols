@@ -611,30 +611,3 @@ export function labels(n: number): number {
 >length : Symbol(SharedArray.length, Decl(threads.d.mts, 87, 46))
 }
 
-=== syntax.mts ===
-// The syntax's shared structs take string fields as well, string literal types included.
-shared struct Task { id: number; state: "todo" | "done"; title: string }
->Task : Symbol(Task, Decl(syntax.mts, 0, 0))
->id : Symbol(Task.id, Decl(syntax.mts, 1, 20))
->state : Symbol(Task.state, Decl(syntax.mts, 1, 32))
->title : Symbol(Task.title, Decl(syntax.mts, 1, 56))
-
-export function finish(t: Task): string {
->finish : Symbol(finish, Decl(syntax.mts, 1, 72))
->t : Symbol(t, Decl(syntax.mts, 2, 23))
->Task : Symbol(Task, Decl(syntax.mts, 0, 0))
-
-    t.state = "done";
->t.state : Symbol(Task.state, Decl(syntax.mts, 1, 32))
->t : Symbol(t, Decl(syntax.mts, 2, 23))
->state : Symbol(Task.state, Decl(syntax.mts, 1, 32))
-
-    return t.title + ": " + t.state;
->t.title : Symbol(Task.title, Decl(syntax.mts, 1, 56))
->t : Symbol(t, Decl(syntax.mts, 2, 23))
->title : Symbol(Task.title, Decl(syntax.mts, 1, 56))
->t.state : Symbol(Task.state, Decl(syntax.mts, 1, 32))
->t : Symbol(t, Decl(syntax.mts, 2, 23))
->state : Symbol(Task.state, Decl(syntax.mts, 1, 32))
-}
-

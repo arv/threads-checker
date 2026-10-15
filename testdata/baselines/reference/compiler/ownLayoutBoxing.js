@@ -1,81 +1,62 @@
 //// [tests/cases/compiler/ownLayoutBoxing.ts] ////
 
-//// [own.d.mts]
-// Types for the own/shared threads runtime own.mjs (now own.ts in github.com/arv/threads). Programs
-// import their API from "./own.mjs"; the compiler adds the imports of the helpers it emits
-// (`__sharedStruct`, `__register`) when `ownRuntime` is set.
-//
-// `sending T` marks a value whose ownership moves to the receiver: the sender must not use it
-// afterwards. `shared T` marks a value any number of threads may read at once: deeply immutable, or
-// a cell that synchronizes internally (Slots, Barrier, a shared struct).
+//// [threads.d.mts]
+// The parts of the threads runtime (threads.mjs, from github.com/arv/threads) this test uses.
+// Programs import their API from "./threads.mjs"; the compiler adds the imports of the helpers it
+// emits (`__sharedStruct`, `__register`, ...) when `ownRuntime` is set.
 
-/** One slot per thread: a thread publishes into its own slot, and everyone reads every slot. */
-export interface SlotsCell<T> {
-    readonly length: number;
-    /** Publishes `value` in slot `index`, replacing what was there. */
-    set(index: number, value: T): void;
-    /** The value in slot `index`. */
-    get(index: number): shared T;
-    /** The arrays in all slots, concatenated in slot order. */
-    flat(): shared (T extends readonly (infer E)[] ? E : T)[];
-}
-export declare const Slots: new <T>(count: number) => shared SlotsCell<T>;
+declare const cellBrand: unique symbol;
+declare const fieldBrand: unique symbol;
 
-/** A reusable barrier for a fixed number of threads. */
-export interface BarrierCell {
-    /** Blocks until all threads have called `wait`. */
-    wait(): void;
-}
-export declare const Barrier: new (threads: number) => shared BarrierCell;
-
-/** Freezes a value the caller owns into a deeply immutable value every thread can read. */
-export declare function share<T>(value: sending T): shared T;
-
-/** A thread started inside a `scope`; joining it moves the thread's result back. */
-export interface Thread<R> {
-    join(): sending R;
+/** A cell: shared and mutable. Any number of threads may hold the same one. */
+export interface Cell {
+  readonly [cellBrand]: true;
 }
 
-/** Spawns threads that cannot outlive the scope. Every argument is sent to the new thread. */
-export interface Scope {
-    spawn<A extends unknown[], R>(f: (...args: A) => sending R, ...args: sending A): shared Thread<R>;
+/** A field of a shared struct, declared with `f64` or `ref<T>()`. */
+export interface Field<T> {
+  readonly [fieldBrand]: T;
 }
+/** A number field: an f64 in shared memory. */
+export declare const f64: Field<number>;
+/** A reference field: a shared struct or a SharedArray, or null. */
+export declare function ref<T>(): Field<T | null>;
 
-/** Runs `body` and joins every thread it spawned before returning. */
-export declare function scope<R>(body: (s: shared Scope) => R): R;
+/** What `struct(...)` returns: `new S()` makes a zeroed struct in shared memory. */
+export interface StructType<T> {
+  new (): T & Cell;
+  readonly fields: readonly string[];
+}
+/** The value type of a struct type: `type Body = Struct<typeof Body>`. */
+export type Struct<S> = S extends StructType<infer T> ? T & Cell : never;
 
-/** Splits an owned array into `parts` owned, disjoint chunks of nearly equal size. Trusted. */
-export declare function partition<T>(items: sending T[], parts: number): (sending T[])[];
+/** Declares a shared struct: fields at fixed places in shared memory. */
+export declare function struct<F extends Record<string, Field<any>>>(
+  fields: F,
+): StructType<{ -readonly [K in keyof F]: F[K] extends Field<infer V> ? V : never }>;
+export declare function struct<T>(fields: { [K in keyof T]-?: Field<T[K]> }): StructType<T>;
 
-/** Takes element `index` out of an array of owned values, so the caller owns it. Trusted. */
-export declare function take<T>(items: (sending T)[], index: number): sending T;
+/**
+ * A fixed-length array in shared memory, of numbers or of shared structs stored inline. With
+ * `ownRuntime` the compiler turns `a[i]` and `a.length` into typed-array accesses.
+ */
+export interface SharedArray<T> extends Cell {
+  readonly length: number;
+  [index: number]: T;
+}
+export declare const SharedArray: {
+  new (type: NumberConstructor, length: number): SharedArray<number>;
+  new <T>(type: StructType<T>, length: number): SharedArray<T & Cell>;
+};
 
 /** Prints a line, synchronously, from any thread. */
 export declare function log(...args: unknown[]): void;
 
-/** A shared struct's value as a type: what `new SharedArray(Struct, n)` takes. */
-export interface SharedStructType<T> {
-    new (): T;
-}
-
-/**
- * A fixed-length array in the shared heap, of numbers or of shared structs stored inline. Threads
- * share it with no copying. With `ownRuntime` the compiler lays it out in the shared heap and turns
- * `a[i]` and `a.length` into typed-array accesses.
- */
-export interface SharedArray<T> {
-    readonly length: number;
-    [index: number]: T;
-}
-export declare const SharedArray: {
-    new (type: NumberConstructor, length: number): SharedArray<number>;
-    new <T>(type: SharedStructType<T>, length: number): SharedArray<T>;
-};
-
 //// [boxing.mts]
-import { log, SharedArray } from "./own.mjs";
+import { f64, log, SharedArray, struct, type Struct } from "./threads.mjs";
 
-export shared struct Vec { x: number; y: number }
+export const Vec = struct({ x: f64, y: f64 });
+export type Vec = Struct<typeof Vec>;
 
 declare function takeVec(v: Vec): void;
 declare function takeUnknown(u: unknown): void;
@@ -138,8 +119,8 @@ export function angleBracket(u: unknown) {
 
 
 //// [boxing.mjs]
-import { F64 as __F64, box as __box, register as __register, release as __release, retain as __retain, sharedStruct as __sharedStruct, unbox as __unbox } from "./own.mjs";
-import { log } from "./own.mjs";
+import { F64 as __F64, box as __box, register as __register, release as __release, retain as __retain, sharedStruct as __sharedStruct, unbox as __unbox } from "./threads.mjs";
+import { f64, log, struct } from "./threads.mjs";
 export const Vec = __sharedStruct("Vec", ["x", "y"], []);
 export function roundTrip(v) {
     const u = __box(v); // box
@@ -190,7 +171,7 @@ export function returnsVec(u) {
 }
 __register(import.meta.url, { roundTrip, boxed, unboxed, isVec, returns, returnsVec });
 //// [assertion.js]
-import { F64 as __F64, unbox as __unbox } from "./own.mjs";
+import { F64 as __F64, unbox as __unbox } from "./threads.mjs";
 export function angleBracket(u) {
     return __F64[(__unbox(u) >> 3) + 1]; // unbox (angle-bracket assertion)
 }

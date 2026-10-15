@@ -175,7 +175,7 @@ const Node = struct<Node>({ value: f64, next: ref<Node>() });
 const Box = struct({ item: ref<Node>(), bodies: ref<SharedArray<Body>>() });
 type Box = Struct<typeof Box>;
 
-// Typed layouts and reference counting, as with `shared struct`.
+// Typed layouts and reference counting.
 export function makeList(n: number): Node | null {
     let head: Node | null = null;
     for (let i = 0; i < n; i++) {
@@ -244,7 +244,7 @@ import { Barrier, Channel, consume, f64, go, ref, scope, share, SharedArray, spa
 const Body = __sharedStruct("Body", ["x", "y", "m"], []);
 const Node = __sharedStruct("Node", ["value", "next"], [1]);
 const Box = __sharedStruct("Box", ["item", "bodies"], [0, 1]);
-// Typed layouts and reference counting, as with `shared struct`.
+// Typed layouts and reference counting.
 export function makeList(n) {
     var _a, _b;
     let head = 0;

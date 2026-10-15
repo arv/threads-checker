@@ -339,15 +339,6 @@ export function wait(b: Barrier) {
     } else while (b.round === round) changed.wait(lock);
 }
 
-//// [syntax.mts]
-// The syntax's shared structs take channel fields as well.
-import { Channel } from "./threads.mjs";
-shared struct Mailbox { count: number; inbox: Channel<string> | null }
-export function post(m: Mailbox, text: string) {
-    (m.inbox ??= new Channel<string>(8)).send(text);
-    m.count++;
-}
-
 
 //// [replica.mjs]
 import { I32 as __I32, box as __box, cellAddress as __cellAddress, newStruct as __newStruct, quiescent as __quiescent, register as __register, release as __release, retain as __retain, sharedStruct as __sharedStruct, store as __store } from "./threads.mjs";
@@ -493,14 +484,3 @@ export function wait(b) {
     }
 }
 __register(import.meta.url, { barrier, wait });
-//// [syntax.mjs]
-import { F64 as __F64, I32 as __I32, box as __box, cellAddress as __cellAddress, register as __register, sharedStruct as __sharedStruct } from "./threads.mjs";
-// The syntax's shared structs take channel fields as well.
-import { Channel } from "./threads.mjs";
-const Mailbox = __sharedStruct("Mailbox", ["count", "inbox"], [], "fc");
-export function post(m, text) {
-    var _a, _b;
-    (_a = (m >> 2) + 4, __box(__I32[_a]) ?? ((__I32[_a] = __cellAddress(_b = new Channel(8)), _b))).send(text);
-    __F64[(m >> 3) + 1]++;
-}
-__register(import.meta.url, { post });

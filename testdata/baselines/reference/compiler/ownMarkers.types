@@ -348,7 +348,7 @@ type Box = Struct<typeof Box>;
 >Box : { item: Node | null; bodies: SharedArray<{ x: number; y: number; m: number; } & import("./threads.mjs").Cell> | null; } & import("./threads.mjs").Cell
 >Box : import("./threads.mjs").StructType<{ item: Node | null; bodies: SharedArray<{ x: number; y: number; m: number; } & import("./threads.mjs").Cell> | null; }>
 
-// Typed layouts and reference counting, as with `shared struct`.
+// Typed layouts and reference counting.
 export function makeList(n: number): Node | null {
 >makeList : (n: number) => Node | null
 >n : number
